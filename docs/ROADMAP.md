@@ -9,7 +9,7 @@ Each step is sized for one Claude Code session. Tick it off when `npm run build`
 
 ## Phase 2 — Workspace
 - [x] **2.1 Store**: Zustand schema store (tables, positions, selection, dirty flag) + undo/redo (zundo). Load the ecommerce sample.
-- [ ] **2.2 Canvas**: port TableNode + ERCanvas (drag, pan, zoom, edges, minimap, legend, context menu).
+- [x] **2.2 Canvas**: port TableNode + ERCanvas (drag, pan, zoom, edges, minimap, legend, context menu).
 - [ ] **2.3 Inspector**: port Inspector, TypeSelect, ColumnEditor; edits go through the store.
 - [ ] **2.4 Toolbar + StatusBar**: save state, undo/redo, zoom, search, shortcuts (⌘S/⌘Z/⌘K/F2/⌫/Esc).
 - [ ] **2.5 Dialogs**: Modal, ConfirmDialog (delete table), Toast.
