@@ -1,0 +1,15 @@
+<!-- @dsCard group="Screens" height=900 width=1440 page subtitle="3 · Table inspector / editor — adding a column" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Screen3TableEditor — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+var T = S.sample.tables.map(function(t){ return t.name==='orders' ? Object.assign({}, t, { columns: t.columns.concat([{ name:'', type:'JSON', nullable:true, draft:true }]) }) : t; });
+function App(){ return h('div',{className:'ss-screen'}, h(S.AppShell,{sidebar:h(S.Sidebar,{activeSchema:'ecommerce'})}, h(S.Workspace,{tables:T,selected:'orders',selectedColumn:5,dirty:true,dirtyTables:['orders'],typeMenuOpen:true}))); }
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

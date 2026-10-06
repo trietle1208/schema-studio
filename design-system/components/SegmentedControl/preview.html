@@ -1,0 +1,20 @@
+<!-- @dsCard group="Forms" height=100 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SegmentedControl — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  var _v = useState('file'), v = _v[0], setV = _v[1];
+  var _w = useState('split'), w = _w[0], setW = _w[1];
+  return h('div',{className:'ss-demo ss-demo--col',style:{gap:12,maxWidth:560}},
+    h(S.SegmentedControl,{block:true,value:v,onChange:setV,options:[{value:'file',label:'Upload SQL file',icon:'upload'},{value:'paste',label:'Paste SQL',icon:'clipboard'},{value:'connect',label:'Connect to database',icon:'plug',badge:'Soon',disabled:true}]}),
+    h('div',null, h(S.SegmentedControl,{value:w,onChange:setW,options:[{value:'split',label:'Side by side'},{value:'unified',label:'Unified'}]})));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

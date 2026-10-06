@@ -1,0 +1,21 @@
+<!-- @dsCard group="Forms" height=132 subtitle="Checkbox, Radio, Switch" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Checkbox — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  var _s = useState({a:true,b:true,c:false,f:'sql',u:false}), s = _s[0], set = _s[1];
+  function t(k){ return function(v){ var n=Object.assign({},s); n[k]=v; set(n); }; }
+  return h('div',{className:'ss-demo',style:{alignItems:'flex-start',gap:40}},
+    h('div',{style:{display:'flex',flexDirection:'column',gap:8}}, h(S.Checkbox,{label:'Include indexes',checked:s.a,onChange:t('a')}), h(S.Checkbox,{label:'Include foreign keys',checked:s.b,onChange:t('b')}), h(S.Checkbox,{label:'Nullable',checked:false,disabled:true})),
+    h('div',{style:{display:'flex',flexDirection:'column',gap:8}}, h(S.Radio,{name:'f',label:'SQL',description:'DDL for the target database',checked:s.f==='sql',onChange:function(){t('f')('sql');}}), h(S.Radio,{name:'f',label:'JSON',description:'Schema Studio model',checked:s.f==='json',onChange:function(){t('f')('json');}})),
+    h('div',{style:{display:'flex',flexDirection:'column',gap:10}}, h(S.Switch,{label:'Unlogged table',checked:s.u,onChange:t('u')}), h(S.Switch,{label:'Snap to grid',checked:true})));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

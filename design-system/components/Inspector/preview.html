@@ -1,0 +1,19 @@
+<!-- @dsCard group="Editing" height=860 width=352 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Inspector — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  var _t = useState(S.sample.tables), t = _t[0], setT = _t[1];
+  var _c = useState(1), c = _c[0], setC = _c[1];
+  var table = t[0];
+  return h('div',{style:{height:860,display:'flex',justifyContent:'flex-end'}}, h(S.Inspector,{table:table,tables:t,selectedColumn:c,onSelectColumn:setC,onChange:function(nt){ setT([nt].concat(t.slice(1))); },settingsCollapsed:false}));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

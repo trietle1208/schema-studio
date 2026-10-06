@@ -1,0 +1,18 @@
+<!-- @dsCard group="Navigation" height=720 width=248 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Sidebar — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  var _s = useState('ecommerce'), s = _s[0], setS = _s[1];
+  var _n = useState('schemas'), n = _n[0], setN = _n[1];
+  return h('div',{style:{height:720,display:'flex'}}, h(S.Sidebar,{activeSchema:s,onSelectSchema:setS,active:n,onNavigate:setN}));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

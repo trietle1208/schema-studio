@@ -1,0 +1,42 @@
+<!-- @dsCard group="Screens" height=900 width=1440 page subtitle="1 · Schema list" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Screen1SchemaList — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+var DESC = { ecommerce:'Orders, catalogue, payments', blog:'Posts, authors, comments, tags', analytics:'Event ingestion and daily rollups', inventory:'Warehouses and stock movements', billing:'Invoices and subscriptions', auth_service:'Sessions and refresh tokens' };
+function App(){
+  var _q = useState(''), q = _q[0], setQ = _q[1];
+  var _e = useState('all'), eng = _e[0], setEng = _e[1];
+  var _s = useState({key:'updatedRank',dir:'asc'}), sort = _s[0], setSort = _s[1];
+  var _sel = useState('ecommerce'), sel = _sel[0], setSel = _sel[1];
+  var rows = S.sample.schemas.filter(function(r){ return (eng==='all'||r.engine===eng) && (!q || r.name.indexOf(q.toLowerCase())>=0 || DESC[r.name].toLowerCase().indexOf(q.toLowerCase())>=0); })
+    .sort(function(a,b){ var x=a[sort.key], y=b[sort.key]; if (sort.key==='version'){ x=+x.slice(1); y=+y.slice(1);} var r=x<y?-1:x>y?1:0; return sort.dir==='asc'?r:-r; });
+  return h('div',{className:'ss-screen'}, h(S.AppShell,{sidebar:h(S.Sidebar,{active:'schemas'})},
+    h('div',{className:'ss-page'},
+      h('div',{className:'ss-page-head'}, h('div',{className:'ss-page-title'},'Schemas'), h('span',{className:'ss-page-count'}, rows.length+' of '+S.sample.schemas.length), h('span',{className:'ss-spacer'}),
+        h(S.Button,{icon:'upload',kbd:['⌘','I']},'Import'), h(S.Button,{variant:'primary',icon:'plus',kbd:['⌘','N']},'New Schema')),
+      h('div',{className:'ss-page-tools'},
+        h('div',{style:{width:320}}, h(S.Input,{icon:'search',placeholder:'Search schemas…',value:q,onChange:function(e){setQ(e.target.value);},suffix:h(S.Kbd,null,'/')})),
+        h(S.SegmentedControl,{value:eng,onChange:setEng,options:[{value:'all',label:'All'},{value:'PostgreSQL',label:'PostgreSQL'},{value:'MySQL',label:'MySQL'},{value:'ClickHouse',label:'ClickHouse'},{value:'SQLite',label:'SQLite'}]}),
+        h('span',{className:'ss-spacer'}),
+        h('span',{className:'ss-faint',style:{fontSize:12}},'Sort'), h('div',{style:{width:150}}, h(S.Select,{size:'sm',value:sort.key,onChange:function(v){setSort({key:v,dir:v==='name'?'asc':(v==='updatedRank'?'asc':'desc')});},options:[{value:'updatedRank',label:'Last updated'},{value:'name',label:'Name'},{value:'tables',label:'Table count'},{value:'version',label:'Version'}]})),
+        h(S.IconButton,{icon:'filter',label:'More filters'})),
+      h('div',{className:'ss-page-body'}, h(S.DataTable,{rowKey:'name',selectedKey:sel,onRowClick:function(r){setSel(r.name);},sort:sort,onSort:setSort,rows:rows,columns:[
+        {key:'name',label:'Name',render:function(r){ return h('div',{className:'ss-row',style:{gap:10}}, h('span',{className:'ss-drop-icon',style:{width:28,height:28,margin:0,background:'var(--bg-4)'}},h(S.Icon,{name:'database',size:14})),
+          h('div',null, h('div',{className:'ss-row',style:{gap:6}}, h('span',{className:'ss-mono',style:{fontWeight:600,fontSize:12.5}},r.name), r.favorite&&h(S.Icon,{name:'star',size:12,style:{color:'var(--pk)'}})), h('div',{className:'ss-faint',style:{fontSize:12,lineHeight:'16px'}},DESC[r.name]))); }},
+        {key:'engine',label:'Database',width:150,render:function(r){ return h(S.Badge,{dot:true},r.engine); }},
+        {key:'tables',label:'Tables',width:110,numeric:true,align:'right',render:function(r){ return h('span',null,r.tables,h('span',{className:'ss-faint'},' tables')); }},
+        {key:'relationships',label:'Relations',width:110,numeric:true,align:'right'},
+        {key:'version',label:'Version',width:100,render:function(r){ return h(S.Badge,{tone:r.name===sel?'accent':'neutral'},r.version); }},
+        {key:'updatedRank',label:'Updated',width:140,render:function(r){ return h('span',{className:'ss-muted'},r.updated); }},
+        {key:'actions',label:'',width:120,sortable:false,render:function(){ return h('div',{className:'ss-table-actions'}, h(S.IconButton,{icon:'history',label:'Version history',size:'sm'}), h(S.IconButton,{icon:'download',label:'Export',size:'sm'}), h(S.IconButton,{icon:'more',label:'More',size:'sm'})); }}]}),
+        h('div',{className:'ss-row ss-faint',style:{fontSize:12,padding:'14px 12px'}}, h(S.Icon,{name:'folder',size:14}), 'Stored locally in ', h('span',{className:'ss-mono'},'~/SchemaStudio/personal'), h('span',{className:'ss-spacer'}), h(S.Kbd,null,'↑'),h(S.Kbd,null,'↓'),' to move · ', h(S.Kbd,null,'⏎'), ' to open')))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<!-- @dsCard group="Lists & history" height=480 width=1000 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>DdlDiff — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+var ROWS = [
+  ['CREATE TABLE users ('],['  id          BIGSERIAL PRIMARY KEY,'],['  email       VARCHAR(255) NOT NULL UNIQUE,'],
+  [null,'  avatar_url  TEXT,','add'],['  created_at  TIMESTAMP NOT NULL DEFAULT now()'],[');'],[''],
+  ['CREATE TABLE orders ('],['  user_id     BIGINT NOT NULL REFERENCES users(id),'],
+  ['  total       DECIMAL(10,2) NOT NULL,','  total       DECIMAL(12,2) NOT NULL,','mod'],[');'],[''],
+  ['CREATE TABLE legacy_orders (',null,'del'],['  id          INTEGER PRIMARY KEY,',null,'del'],['  user_id     INTEGER REFERENCES users(id)',null,'del'],[');',null,'del']
+];
+function App(){ return h('div',{className:'ss-demo',style:{display:'block'}}, h(S.DdlDiff,{rows:ROWS,leftMeta:'2 hours ago',rightMeta:'Current'})); }
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

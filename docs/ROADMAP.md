@@ -1,0 +1,38 @@
+# Roadmap
+
+Each step is sized for one Claude Code session. Tick it off when `npm run build` and `npm test` pass.
+
+## Phase 1 — Foundation
+- [ ] **1.1 Scaffold**: Vite + React + TS, ESLint, Vitest, folder layout from CLAUDE.md. Import `tokens.css` + `bundle.css`, copy fonts. Show an empty `AppShell` with `Sidebar`.
+- [ ] **1.2 Primitives**: port Icon, Logo, Button, IconButton, Badge, Kbd, Avatar, Input, Field, Select, Checkbox, Radio, Switch, SegmentedControl to `.tsx`.
+- [ ] **1.3 Model**: `src/core/model.ts` from `index.d.ts`; `validate.ts` (column/table name rules) with tests.
+
+## Phase 2 — Workspace
+- [ ] **2.1 Store**: Zustand schema store (tables, positions, selection, dirty flag) + undo/redo (zundo). Load the ecommerce sample.
+- [ ] **2.2 Canvas**: port TableNode + ERCanvas (drag, pan, zoom, edges, minimap, legend, context menu).
+- [ ] **2.3 Inspector**: port Inspector, TypeSelect, ColumnEditor; edits go through the store.
+- [ ] **2.4 Toolbar + StatusBar**: save state, undo/redo, zoom, search, shortcuts (⌘S/⌘Z/⌘K/F2/⌫/Esc).
+- [ ] **2.5 Dialogs**: Modal, ConfirmDialog (delete table), Toast.
+
+## Phase 3 — Persistence & list
+- [ ] **3.1 Dexie**: schemas + versions tables; save creates a new immutable version snapshot.
+- [ ] **3.2 Schema list screen**: DataTable with search, engine filter, sort; New Schema; Empty state.
+- [ ] **3.3 Routing**: list ↔ workspace ↔ history ↔ diff (react-router or simple state router).
+
+## Phase 4 — Import / Export (MVP done here)
+- [ ] **4.1 Parser**: PostgreSQL `CREATE TABLE / ALTER TABLE ADD CONSTRAINT / CREATE INDEX` → model; errors with line numbers. Tests with good and broken fixtures.
+- [ ] **4.2 Import dialog**: DropZone, SqlEditor, live ParseStatus summary, auto-layout new tables in a grid.
+- [ ] **4.3 SQL generator**: model → PostgreSQL DDL with options (indexes, FKs, comments, DROP IF EXISTS). Round-trip test: parse(generate(x)) == x.
+- [ ] **4.4 Export dialog**: SQL / JSON, preview, download file.
+
+## Phase 5 — Versions
+- [ ] **5.1 Diff engine**: compare two snapshots → DiffGroup[] (tables, columns, indexes, relationships). Tests.
+- [ ] **5.2 Version history screen**.
+- [ ] **5.3 Schema diff screen** (side-by-side DdlDiff).
+- [ ] **5.4 Migration generator**: diff → ALTER statements in a transaction; flag destructive changes.
+
+## Phase 6 — Later
+- [ ] MySQL dialect (parser + generator)
+- [ ] Light/dark toggle in Settings
+- [ ] Desktop app with Tauri (open/save `.sql` files on disk)
+- [ ] Connect to a live database (read-only introspection)

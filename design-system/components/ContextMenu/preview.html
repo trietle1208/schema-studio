@@ -1,0 +1,18 @@
+<!-- @dsCard group="Overlays" height=320 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ContextMenu — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  return h('div',{className:'ss-demo',style:{alignItems:'flex-start',background:'var(--bg-1)'}}, h(S.ContextMenu,{label:'public.orders',items:[
+    {icon:'pencil',label:'Rename table',shortcut:'F2'},{icon:'plus',label:'Add column',shortcut:'⌘⏎',active:true},{icon:'link',label:'Add foreign key…'},{icon:'copy',label:'Duplicate',shortcut:'⌘D'},'-',
+    {icon:'code',label:'Copy CREATE TABLE',shortcut:'⇧⌘C'},{icon:'eye',label:'Focus related tables'},'-',{icon:'trash',label:'Delete table',shortcut:'⌫',danger:true}]}));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

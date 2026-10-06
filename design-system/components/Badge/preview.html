@@ -1,0 +1,19 @@
+<!-- @dsCard group="Data display" height=112 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Badge — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  return h('div',{className:'ss-demo ss-demo--col',style:{gap:12}},
+    h('div',{className:'ss-row'}, h(S.Badge,{dot:true},'PostgreSQL'), h(S.Badge,{dot:true},'ClickHouse'), h(S.Badge,{tone:'accent'},'v12'), h(S.Badge,{tone:'accent',sans:true},'Current'), h(S.Badge,null,'CASCADE'), h(S.Badge,{sans:true},'Soon')),
+    h('div',{className:'ss-row'}, h(S.Badge,{tone:'pk',icon:'key'},'PK'), h(S.Badge,{tone:'fk',icon:'link'},'FK'), h(S.Badge,{tone:'added'},'+ added'), h(S.Badge,{tone:'modified'},'~ changed'), h(S.Badge,{tone:'removed'},'− removed'), h(S.Badge,{tone:'outline'},'UNIQUE')),
+    h('div',{className:'ss-row'}, h(S.Kbd,{keys:['⌘','K']}), h(S.Kbd,{keys:['⇧','⌘','Z']}), h(S.Kbd,null,'Esc'), h(S.Avatar,{initials:'LH',name:'Luong Hoang'})));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

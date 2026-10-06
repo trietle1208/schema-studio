@@ -1,0 +1,14 @@
+<!-- @dsCard group="Screens" height=900 width=1440 page subtitle="2 · Main ER diagram workspace" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Screen2Workspace — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){ return h('div',{className:'ss-screen'}, h(S.AppShell,{sidebar:h(S.Sidebar,{activeSchema:'ecommerce'})}, h(S.Workspace,{selected:'users',selectedColumn:1}))); }
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

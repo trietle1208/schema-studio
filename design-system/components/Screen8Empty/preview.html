@@ -1,0 +1,16 @@
+<!-- @dsCard group="Screens" height=900 width=1440 page subtitle="8 · Empty state (new workspace)" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Screen8Empty — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){ return h('div',{className:'ss-screen'}, h(S.AppShell,{sidebar:h(S.Sidebar,{empty:true,active:'schemas'})},
+  h('header',{className:'ss-toolbar'}, h('div',{className:'ss-tb-crumb'}, h('span',{style:{color:'var(--ink-1)'}},'Schemas')), h('span',{className:'ss-page-count'},'0'), h('span',{className:'ss-spacer'}), h(S.Button,{variant:'ghost',icon:'keyboard'},'Shortcuts')),
+  h(S.EmptyState,null))); }
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

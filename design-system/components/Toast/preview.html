@@ -1,0 +1,26 @@
+<!-- @dsCard group="Feedback" height=420 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Toast — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  return h('div',{className:'ss-demo',style:{alignItems:'flex-start',gap:20}},
+    h('div',{style:{display:'flex',flexDirection:'column',gap:8}},
+      h(S.Toast,{tone:'success',title:'Saved as v13',description:'ecommerce · 24 tables · just now',actions:[{label:'View changes'},{label:'Undo'}]}),
+      h(S.Toast,{tone:'success',title:'Imported ecommerce_v2',description:'24 tables · 31 relationships · 18 indexes'}),
+      h(S.Toast,{tone:'error',title:'Import failed',description:'Unable to parse SQL near line 42.',actions:[{label:'Go to line 42'}]}),
+      h(S.Toast,{tone:'info',title:'Deleted table legacy_orders',description:'Not saved yet. Press ⌘Z to restore it.',actions:[{label:'Undo'}]})),
+    h('div',{style:{display:'flex',flexDirection:'column',gap:8,width:380}},
+      h(S.Alert,{tone:'error',title:'Unable to parse SQL near line 42.'},'Expected , or ) after column definition product_id.'),
+      h(S.Alert,{tone:'success',title:'Ready to import'},'24 tables · 31 relationships · 18 indexes'),
+      h(S.Alert,{tone:'warn',title:'2 foreign keys will be dropped'},'order_items, payments reference this table.'),
+      h(S.Alert,{tone:'info',title:'v11 is read-only'},'Restore it to edit, or compare it with v12.')));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

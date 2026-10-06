@@ -1,0 +1,24 @@
+<!-- @dsCard group="Forms" height=220 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Input — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  var _a = useState(''), a = _a[0], setA = _a[1];
+  return h('div',{className:'ss-demo',style:{alignItems:'flex-start',gap:20}},
+    h('div',{style:{width:260,display:'flex',flexDirection:'column',gap:12}},
+      h(S.Input,{icon:'search',placeholder:'Search schemas…',suffix:h(S.Kbd,{keys:['⌘','K']})}),
+      h(S.Field,{label:'Default',hint:'SQL expression, e.g. now()'}, h(S.Input,{mono:true,defaultValue:"'pending'"})),
+      h(S.Field,{label:'Fillfactor'}, h(S.Input,{mono:true,size:'sm',defaultValue:'100'}))),
+    h('div',{style:{width:260,display:'flex',flexDirection:'column',gap:12}},
+      h(S.Field,{label:'Column name',error:a.trim()?null:'Column name cannot be empty.'}, h(S.Input,{mono:true,value:a,placeholder:'column_name',error:!a.trim(),onChange:function(e){setA(e.target.value);}})),
+      h(S.Field,{label:'Table name',error:'Use letters, digits and underscores; start with a letter.'}, h(S.Input,{mono:true,defaultValue:'order items',error:true}))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

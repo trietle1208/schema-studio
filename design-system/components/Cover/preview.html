@@ -1,0 +1,46 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Schema Studio — cover</title>
+<style>
+  html, body { margin: 0; height: 100%; background: var(--bg-1); }
+  .cv { position: relative; width: 960px; height: 288px; overflow: hidden; background: var(--bg-1); font-family: var(--font-sans); }
+  .cv svg { position: absolute; left: 0; top: 0; }
+  .accent { fill: var(--accent); }
+  .ink { fill: var(--ink-1); }
+  .fk { fill: var(--fk); }
+  .pk { fill: var(--pk); }
+  .tint { fill: var(--bg-5); }
+  .dot { fill: var(--line-3); }
+  .blk { rx: var(--radius-lg); ry: var(--radius-lg); }
+  .blk-sm { rx: var(--radius-sm); ry: var(--radius-sm); }
+  .name { position: absolute; left: 40px; bottom: 64px; max-width: 440px; font: 600 88px/0.95 var(--font-sans); letter-spacing: -0.035em; color: var(--ink-1); margin: 0; }
+  .tag { position: absolute; left: 42px; bottom: 32px; max-width: 440px; font: 400 14px/20px var(--font-sans); color: var(--ink-2); margin: 0; }
+</style></head>
+<body>
+<div class="cv">
+  <!--
+    blocks: accent 224×112, ink-1 160×168 (bleeds off the top), fk 112×96, pk 96×48, bg-5 96×32 — sides are multiples of space-4 (16px), corners radius-lg / radius-sm
+    arrangement: a flush modular grid with space-4 gutters, like table nodes laid out on the canvas, one slab bleeding off the top edge
+    pattern: dot grid — "precise, technical, mono, a 4px grid": the canvas's own 16px dot grid, in line-3, filling the one empty cell (44 dots)
+    scales: space-4 pitch and gutter; radius-lg on blocks, radius-sm on the small tint; dots r=1.5
+  -->
+  <svg width="960" height="288" viewBox="0 0 960 288" aria-hidden="true">
+    <rect class="accent blk" x="512" y="40" width="224" height="112"/>
+    <rect class="ink blk" x="752" y="-16" width="160" height="168"/>
+    <rect class="fk blk" x="512" y="168" width="112" height="96"/>
+    <rect class="pk blk" x="640" y="168" width="96" height="48"/>
+    <rect class="tint blk-sm" x="640" y="232" width="96" height="32"/>
+    <g id="dots"></g>
+  </svg>
+  <h1 class="name">Schema<br>Studio</h1>
+  <p class="tag">Import, diagram, edit, version and export database schemas.</p>
+</div>
+<script>
+  var g = document.getElementById('dots'), ns = 'http://www.w3.org/2000/svg';
+  for (var x = 760; x <= 920; x += 16) for (var y = 184; y <= 232; y += 16) {
+    var c = document.createElementNS(ns, 'circle'); c.setAttribute('class', 'dot'); c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 1.5); g.appendChild(c);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!-- @dsCard group="Overlays" height=340 width=900 subtitle="Shown as ConfirmDialog" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Modal — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  return h('div',{style:{position:'relative',height:340}}, h(S.ConfirmDialog,{title:'Delete table "orders"?',danger:true,confirmLabel:'Delete table',onCancel:function(){},onConfirm:function(){}},
+    h('div',{style:{color:'var(--ink-2)'}},'This removes ',h('code',{className:'ss-mono',style:{color:'var(--ink-1)'}},'public.orders'),' with its 5 columns and 3 indexes from the working copy.'),
+    h(S.Alert,{tone:'warn',title:'2 foreign keys will be dropped'},'order_items, payments reference this table.')));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

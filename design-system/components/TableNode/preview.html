@@ -1,0 +1,23 @@
+<!-- @dsCard group="Canvas" height=300 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>TableNode — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  var T = S.sample.tables;
+  var _c = useState(1), c = _c[0], setC = _c[1];
+  var draft = Object.assign({}, T[1], { columns: T[1].columns.concat([{ name: '', type: 'JSONB', nullable: true, draft: true }]) });
+  return h('div',{className:'ss-demo',style:{alignItems:'flex-start',gap:24,background:'var(--bg-1)'}},
+    h(S.TableNode,{static:true,table:T[0]}),
+    h(S.TableNode,{static:true,table:T[0],selected:true,selectedColumn:c,onSelectColumn:setC}),
+    h(S.TableNode,{static:true,table:draft,selected:true,selectedColumn:5,invalidColumns:[5],dirty:true}),
+    h(S.TableNode,{static:true,table:{name:'legacy_orders',columns:[{name:'id',type:'INTEGER',pk:true},{name:'user_id',type:'INTEGER',nullable:true,fk:{table:'users',column:'id'}},{name:'placed_on',type:'DATE'}]},state:'removed'}));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

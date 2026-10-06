@@ -1,0 +1,53 @@
+<!-- @dsCard group="Screens" height=900 width=1440 page subtitle="5 · Version history" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Screen5VersionHistory — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+var CHANGES = {
+  v12: S.sample.diff,
+  v11: [{group:'Columns',items:[{op:'mod',path:'orders.status',detail:'VARCHAR(32) → VARCHAR(50)'}]}],
+  v10: [{group:'Tables',items:[{op:'add',path:'payments',detail:'5 columns · 1 foreign key'}]},{group:'Relationships',items:[{op:'add',path:'payments.order_id → orders.id',detail:'ON DELETE RESTRICT'}]}],
+  v9: [{group:'Indexes',items:[{op:'add',path:'users_created_at_idx',detail:'btree (created_at)'}]}],
+  v8: [{group:'Tables',items:[{op:'del',path:'guest_checkouts',detail:'7 columns'}]},{group:'Columns',items:[{op:'mod',path:'orders.user_id',detail:'NULL → NOT NULL'},{op:'mod',path:'users.email',detail:'added UNIQUE'}]}],
+  v7: [{group:'Tables',items:[{op:'add',path:'24 tables',detail:'Initial import from ecommerce_prod.sql'}]}]
+};
+function App(){
+  var _v = useState('v12'), v = _v[0], setV = _v[1];
+  var ver = S.sample.versions.find(function(x){ return x.version===v; });
+  var prev = 'v' + (parseInt(v.slice(1)) - 1);
+  return h('div',{className:'ss-screen'}, h(S.AppShell,{sidebar:h(S.Sidebar,{activeSchema:'ecommerce'})},
+    h('header',{className:'ss-toolbar'}, h('div',{className:'ss-tb-crumb'}, 'Schemas', h(S.Icon,{name:'chevron-right',size:12}), h('span',{className:'ss-tb-name'},'ecommerce'), h(S.Icon,{name:'chevron-right',size:12}), h('span',{style:{color:'var(--ink-1)'}},'Version history')),
+      h(S.Badge,{dot:true},'PostgreSQL'), h('span',{className:'ss-spacer'}), h(S.Button,{icon:'arrow-right',variant:'ghost'},'Back to diagram')),
+    h('div',{className:'ss-work'},
+      h('div',{style:{width:340,borderRight:'1px solid var(--line-1)',background:'var(--bg-2)',display:'flex',flexDirection:'column'}},
+        h('div',{style:{padding:'14px 16px 10px'}}, h('div',{className:'ss-row'}, h('div',{style:{font:'600 14px/20px var(--font-sans)'}},'Version history'), h('span',{className:'ss-page-count'},'12 versions')),
+          h('div',{style:{marginTop:10}}, h(S.Input,{icon:'search',size:'sm',placeholder:'Filter by message or table'}))),
+        h('div',{style:{flex:1,overflow:'auto'}}, h(S.VersionList,{selected:v,onSelect:setV}),
+          h('div',{className:'ss-faint',style:{fontSize:12,padding:'8px 24px'}}, '6 older versions · ', h('a',{style:{color:'var(--accent-text)',cursor:'pointer'}},'Load more')))),
+      h('div',{style:{flex:1,minWidth:0,overflow:'auto',background:'var(--bg-1)'}},
+        h('div',{style:{padding:'20px 24px 16px',borderBottom:'1px solid var(--line-1)',background:'var(--bg-2)'}},
+          h('div',{className:'ss-row',style:{gap:10}}, h('span',{style:{font:'600 18px/24px var(--font-mono)'}},'ecommerce '+v), ver.current&&h(S.Badge,{tone:'accent',sans:true},'Current'), h('span',{className:'ss-spacer'}),
+            h(S.Button,{icon:'diff',disabled:v==='v7'},'Compare with '+(v==='v7'?'—':prev)), h(S.Button,{icon:'restore',disabled:ver.current},'Restore'), h(S.Button,{variant:'primary',icon:'download'},'Export')),
+          h('div',{style:{marginTop:4,color:'var(--ink-2)'}}, ver.message),
+          h('div',{className:'ss-stats',style:{marginTop:16}},
+            h('div',{className:'ss-stat'},h('span',{className:'ss-stat-k'},'Tables'),h('span',{className:'ss-stat-v'},ver.tables)),
+            h('div',{className:'ss-stat'},h('span',{className:'ss-stat-k'},'Relationships'),h('span',{className:'ss-stat-v'},ver.relationships)),
+            h('div',{className:'ss-stat'},h('span',{className:'ss-stat-k'},'Author'),h('span',{className:'ss-stat-v ss-row',style:{fontFamily:'var(--font-sans)',gap:6}},h(S.Avatar,{initials:ver.initials,size:18}),ver.author)),
+            h('div',{className:'ss-stat'},h('span',{className:'ss-stat-k'},'Saved'),h('span',{className:'ss-stat-v',style:{fontSize:13}},ver.timestamp)))),
+        h('div',{style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,1.1fr)',gap:16,padding:16}},
+          h('div',{style:{background:'var(--bg-2)',border:'1px solid var(--line-1)',borderRadius:8,overflow:'hidden'}},
+            h('div',{className:'ss-row',style:{padding:'10px 12px',borderBottom:'1px solid var(--line-1)'}}, h('span',{style:{fontWeight:600}},'Change summary'), h('span',{className:'ss-faint',style:{fontSize:12}}, v==='v7'?'initial version':'vs '+prev), h('span',{className:'ss-spacer'}),
+              h('span',{className:'ss-ver-stats'}, ver.added?h('span',{className:'a'},'+'+ver.added):null, ver.modified?h('span',{className:'m'},'~'+ver.modified):null, ver.removed?h('span',{className:'r'},'−'+ver.removed):null)),
+            h('div',{style:{padding:'2px 0 8px'}}, h(S.DiffList,{groups:CHANGES[v]}))),
+          h('div',{style:{background:'var(--bg-2)',border:'1px solid var(--line-1)',borderRadius:8,overflow:'hidden',display:'flex',flexDirection:'column',height:540}},
+            h('div',{className:'ss-row',style:{padding:'10px 12px',borderBottom:'1px solid var(--line-1)'}}, h('span',{style:{fontWeight:600}},'Snapshot'), h('span',{className:'ss-faint',style:{fontSize:12}},'read-only · 5 of '+ver.tables+' tables'), h('span',{className:'ss-spacer'}), h(S.IconButton,{icon:'external',size:'sm',label:'Open snapshot'})),
+            h('div',{style:{flex:1,display:'flex'}}, h(S.ERCanvas,{key:v,tables:S.sample.tables,zoom:0.5,offset:{x:10,y:10},showLegend:false,showMinimap:false,selected:v==='v12'?'order_items':null}))))))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

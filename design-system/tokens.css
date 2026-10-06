@@ -1,0 +1,113 @@
+/* Generated from tokens.json — do not edit by hand. */
+@font-face { font-family: "Geist"; font-weight: 400; font-display: swap; src: url("./fonts/Geist-Regular.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-weight: 500; font-display: swap; src: url("./fonts/Geist-Medium.woff2") format("woff2"); }
+@font-face { font-family: "Geist"; font-weight: 600; font-display: swap; src: url("./fonts/Geist-SemiBold.woff2") format("woff2"); }
+@font-face { font-family: "Geist Mono"; font-weight: 400; font-display: swap; src: url("./fonts/GeistMono-Regular.woff2") format("woff2"); }
+@font-face { font-family: "Geist Mono"; font-weight: 500; font-display: swap; src: url("./fonts/GeistMono-Medium.woff2") format("woff2"); }
+@font-face { font-family: "Geist Mono"; font-weight: 600; font-display: swap; src: url("./fonts/GeistMono-SemiBold.woff2") format("woff2"); }
+:root, [data-theme="dark"] {
+  --bg-0: #0e0f11;
+  --bg-1: #131416;
+  --bg-2: #17181b;
+  --bg-3: #1d1e22;
+  --bg-4: #25262b;
+  --bg-5: #2c2e35;
+  --line-1: #232428;
+  --line-2: #30323a;
+  --line-3: #686d79;
+  --ink-1: #e7e8eb;
+  --ink-2: #a4a8b1;
+  --ink-3: #8b909a;
+  --accent: #6b9bff;
+  --accent-hover: #86adff;
+  --on-accent: #0a1226;
+  --accent-text: #8fb3ff;
+  --accent-subtle: rgba(107,155,255,0.14);
+  --accent-line: rgba(107,155,255,0.5);
+  --focus-ring: #8fb3ff;
+  --pk: #e3b341;
+  --fk: #4cc2b0;
+  --added: #5dc48a;
+  --added-subtle: rgba(93,196,138,0.13);
+  --removed: #ff7b72;
+  --removed-subtle: rgba(255,123,114,0.13);
+  --modified: #e0a84e;
+  --modified-subtle: rgba(224,168,78,0.14);
+  --danger: #ff7b72;
+  --on-danger: #1c0907;
+  --canvas-dot: #2a2c32;
+  --relation: #6b717c;
+  --relation-active: var(--accent);
+  --overlay: rgba(4,5,7,0.6);
+  --syn-keyword: #8fb3ff;
+  --syn-type: #4cc2b0;
+  --syn-string: #d6b36a;
+  --syn-number: #e0a84e;
+  --syn-comment: #7d828c;
+  --shadow-node: 0 1px 2px rgba(0,0,0,0.4), 0 6px 16px rgba(0,0,0,0.25);
+  --shadow-pop: 0 8px 24px rgba(0,0,0,0.5);
+  --shadow-modal: 0 24px 64px rgba(0,0,0,0.6);
+}
+[data-theme="light"] {
+  --bg-0: #eceef1;
+  --bg-1: #f6f7f9;
+  --bg-2: #ffffff;
+  --bg-3: #ffffff;
+  --bg-4: #eef0f3;
+  --bg-5: #e3e7ee;
+  --line-1: #e6e8ec;
+  --line-2: #d5d9df;
+  --line-3: #868c98;
+  --ink-1: #16181c;
+  --ink-2: #4b515c;
+  --ink-3: #626874;
+  --accent: #2f5fd0;
+  --accent-hover: #264fb2;
+  --on-accent: #ffffff;
+  --accent-text: #2a56c0;
+  --accent-subtle: rgba(47,95,208,0.09);
+  --accent-line: rgba(47,95,208,0.45);
+  --focus-ring: #2f5fd0;
+  --pk: #8a6100;
+  --fk: #0b7568;
+  --added: #1a7f45;
+  --added-subtle: rgba(26,127,69,0.09);
+  --removed: #c4312a;
+  --removed-subtle: rgba(196,49,42,0.08);
+  --modified: #9a5a00;
+  --modified-subtle: rgba(154,90,0,0.09);
+  --danger: #c4312a;
+  --on-danger: #ffffff;
+  --canvas-dot: #d3d7de;
+  --relation: #868c98;
+  --relation-active: var(--accent);
+  --overlay: rgba(18,22,30,0.3);
+  --syn-keyword: #2a56c0;
+  --syn-type: #0b7568;
+  --syn-string: #8a5a00;
+  --syn-number: #a3412a;
+  --syn-comment: #6a707b;
+  --shadow-node: 0 1px 2px rgba(16,24,40,0.06), 0 2px 8px rgba(16,24,40,0.06);
+  --shadow-pop: 0 8px 24px rgba(16,24,40,0.14);
+  --shadow-modal: 0 24px 64px rgba(16,24,40,0.2);
+}
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --h-row: 24px;
+  --h-control: 28px;
+  --h-control-sm: 22px;
+  --h-toolbar: 44px;
+  --w-sidebar: 248px;
+  --w-inspector: 352px;
+  --w-node: 228px;
+  --font-sans: Geist, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}

@@ -1,0 +1,55 @@
+<!-- @dsCard group="Screens" height=900 width=1440 page subtitle="9 · Interaction states" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Screen9States — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function Cell(p){ return h('div',{style:Object.assign({background:'var(--bg-2)',border:'1px solid var(--line-1)',borderRadius:8,padding:14,display:'flex',flexDirection:'column',gap:10,minWidth:0,position:'relative',overflow:'hidden'},p.style)},
+  h('div',{className:'ss-row'}, h('span',{className:'ss-caption'},p.title), p.note&&h('span',{className:'ss-faint',style:{fontSize:11}},p.note)), p.children); }
+var T = S.sample.tables;
+function App(){
+  var products = T[3];
+  var draftOrders = Object.assign({}, T[1], { columns: T[1].columns.concat([{ name: '', type: 'JSON', nullable: true, draft: true }]) });
+  return h('div',{className:'ss-screen ss-root',style:{background:'var(--bg-1)',padding:20,display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gridTemplateRows:'auto auto auto',gap:14,alignContent:'start'}},
+    h(Cell,{title:'Table node',note:'hover · selected + selected column · dragging',style:{gridColumn:'span 2'}},
+      h('div',{className:'ss-row',style:{alignItems:'flex-start',gap:20,background:'var(--bg-1)',backgroundImage:'radial-gradient(var(--canvas-dot) 1px, transparent 1.2px)',backgroundSize:'16px 16px',padding:16,borderRadius:6,height:228}},
+        h(S.TableNode,{static:true,table:T[0],style:{borderColor:'var(--line-3)'}}),
+        h(S.TableNode,{static:true,table:T[0],selected:true,selectedColumn:1}),
+        h('div',{style:{position:'relative',width:228,height:150}},
+          h('div',{style:{position:'absolute',left:0,top:0,width:228,height:134,border:'1px dashed var(--accent-line)',borderRadius:8}}),
+          h(S.TableNode,{table:products,x:24,y:18,dragging:true,selected:true}),
+          h('span',{className:'ss-badge ss-badge--accent',style:{position:'absolute',left:24,top:180}},'x 360 · y 352')))),
+    h(Cell,{title:'Context menu',note:'right-click a table'},
+      h(S.ContextMenu,{label:'public.orders',items:[{icon:'pencil',label:'Rename table',shortcut:'F2'},{icon:'plus',label:'Add column',shortcut:'⌘⏎'},{icon:'copy',label:'Duplicate',shortcut:'⌘D',active:true},'-',{icon:'code',label:'Copy CREATE TABLE',shortcut:'⇧⌘C'},'-',{icon:'trash',label:'Delete table',shortcut:'⌫',danger:true}]})),
+    h(Cell,{title:'Inline editing & validation'},
+      h('div',{style:{border:'1px solid var(--line-1)',borderRadius:6,overflow:'hidden',background:'var(--bg-2)'}},
+        h('div',{className:'ss-colrow'}, h(S.Icon,{name:'grip',size:14,className:'ss-colrow-grip'}), h('input',{className:'ss-cell-input',defaultValue:'status'}), h('span',{className:'ss-cell-input ss-cell-type',style:{display:'flex',alignItems:'center'}},'VARCHAR(50)'), h('button',{className:'ss-flag is-on'},'NN'), h('button',{className:'ss-flag ss-flag--pk'},'PK'), h('button',{className:'ss-flag'},'UQ')),
+        h('div',{className:'ss-colrow is-selected'}, h(S.Icon,{name:'grip',size:14,className:'ss-colrow-grip'}), h('input',{className:'ss-cell-input',defaultValue:'shipping_note',style:{borderColor:'var(--focus-ring)',background:'var(--bg-1)',boxShadow:'0 0 0 1px var(--focus-ring)'}}), h('span',{className:'ss-cell-input ss-cell-type',style:{display:'flex',alignItems:'center'}},'TEXT'), h('button',{className:'ss-flag'},'NN'), h('button',{className:'ss-flag ss-flag--pk'},'PK'), h('button',{className:'ss-flag'},'UQ')),
+        h('div',{className:'ss-colrow is-invalid'}, h(S.Icon,{name:'grip',size:14,className:'ss-colrow-grip'}), h('input',{className:'ss-cell-input is-error',placeholder:'column_name'}), h('span',{className:'ss-cell-input ss-cell-type',style:{display:'flex',alignItems:'center'}},'JSON'), h('button',{className:'ss-flag'},'NN'), h('button',{className:'ss-flag ss-flag--pk'},'PK'), h('button',{className:'ss-flag'},'UQ')),
+        h('div',{className:'ss-colrow-error'}, h('div',{className:'ss-field-error'}, h(S.Icon,{name:'alert',size:13}), 'Column name cannot be empty.'))),
+      h(S.Field,{label:'Table name',error:'Use letters, digits and underscores; start with a letter.'}, h(S.Input,{mono:true,size:'sm',defaultValue:'order items',error:true}))),
+    h(Cell,{title:'Unsaved changes → saved'},
+      h('div',{style:{display:'flex',flexDirection:'column',gap:12}},
+        h('div',{className:'ss-row',style:{padding:'8px 10px',border:'1px solid var(--line-1)',borderRadius:6,background:'var(--bg-2)'}}, h('span',{className:'ss-mono',style:{fontWeight:600}},'ecommerce'), h(S.Badge,{tone:'accent'},'v12'), h(S.SaveStatus,{state:'dirty'}), h(S.Button,{size:'sm',kbd:['⌘','S']},'Save')),
+        h('div',{className:'ss-row',style:{padding:'8px 10px',border:'1px solid var(--line-1)',borderRadius:6,background:'var(--bg-2)'}}, h('span',{className:'ss-mono',style:{fontWeight:600}},'ecommerce'), h(S.Badge,{tone:'accent'},'v12'), h(S.SaveStatus,{state:'saving'})),
+        h('div',{className:'ss-row',style:{padding:'8px 10px',border:'1px solid var(--line-1)',borderRadius:6,background:'var(--bg-2)'}}, h('span',{className:'ss-mono',style:{fontWeight:600}},'ecommerce'), h(S.Badge,{tone:'accent'},'v13'), h(S.SaveStatus,{state:'saved'})),
+        h(S.Toast,{tone:'success',title:'Saved as v13',description:'3 tables changed · just now',actions:[{label:'View changes'},{label:'Undo'}]}))),
+    h(Cell,{title:'Delete confirmation'},
+      h('div',{style:{position:'relative',height:268,margin:'0 -14px -14px',borderTop:'1px solid var(--line-1)'}}, h(S.ConfirmDialog,{title:'Delete table "orders"?',danger:true,width:392,confirmLabel:'Delete table',onCancel:function(){},onConfirm:function(){}},
+        h('div',{style:{color:'var(--ink-2)'}},'Removes ',h('code',{className:'ss-mono',style:{color:'var(--ink-1)'}},'public.orders'),' and 3 indexes from the working copy.'),
+        h(S.Alert,{tone:'warn',title:'2 foreign keys will be dropped'},'order_items, payments')))),
+    h(Cell,{title:'Import success'},
+      h(S.Toast,{tone:'success',title:'Imported ecommerce_v2',description:'24 tables · 31 relationships · 18 indexes',actions:[{label:'Open diagram'}]}),
+      h(S.Alert,{tone:'success',title:'Ready to import'},'2 warnings: legacy_orders has no primary key.')),
+    h(Cell,{title:'Import error',style:{gridColumn:'span 2'}},
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 340px',gap:14,alignItems:'start'}},
+        h('div',{style:{display:'flex',flexDirection:'column',gap:8}}, h(S.SqlEditor,{defaultValue:S.sample.badSql,height:128,firstLine:39,errorLine:42}), h(S.ParseStatus,{state:'error',message:'Unable to parse SQL near line 42.',onJump:function(){}})),
+        h(S.Toast,{tone:'error',title:'Import failed',description:'Unable to parse SQL near line 42. Expected , after product_id.',actions:[{label:'Go to line 42'},{label:'Import the rest'}]}))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

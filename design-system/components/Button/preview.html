@@ -1,0 +1,19 @@
+<!-- @dsCard group="Actions" height=148 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Button — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  return h('div',{className:'ss-demo ss-demo--col',style:{gap:14}},
+    h('div',{className:'ss-row'}, h(S.Button,{variant:'primary',icon:'download'},'Export'), h(S.Button,{icon:'share'},'Share'), h(S.Button,{variant:'ghost',icon:'plus'},'Add column'), h(S.Button,{variant:'danger'},'Delete table'), h(S.Button,{variant:'danger-ghost',icon:'trash'},'Delete column'), h(S.Button,{disabled:true},'Restore')),
+    h('div',{className:'ss-row'}, h(S.Button,{variant:'primary',kbd:['⌘','⏎']},'Import Schema'), h(S.Button,{kbd:['⌘','S'],size:'sm'},'Save'), h(S.Button,{size:'sm',icon:'diff'},'Compare'), h(S.Button,{variant:'ghost',size:'sm',icon:'plus'},'Add index')),
+    h('div',{className:'ss-row',style:{gap:2}}, h(S.IconButton,{icon:'undo',label:'Undo'}), h(S.IconButton,{icon:'redo',label:'Redo',disabled:true}), h(S.IconButton,{icon:'zoom-out',label:'Zoom out'}), h(S.IconButton,{icon:'zoom-in',label:'Zoom in'}), h(S.IconButton,{icon:'fit',label:'Fit to screen'}), h(S.IconButton,{icon:'history',label:'History',active:true}), h(S.IconButton,{icon:'more',label:'More',size:'sm'})));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

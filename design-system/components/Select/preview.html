@@ -1,0 +1,20 @@
+<!-- @dsCard group="Forms" height=96 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Select — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  var _v = useState('PostgreSQL'), v = _v[0], setV = _v[1];
+  return h('div',{className:'ss-demo',style:{gap:12}},
+    h('div',{style:{width:200}}, h(S.Select,{value:v,onChange:setV,options:['PostgreSQL','MySQL','SQLite','ClickHouse','SQL Server'],label:'Dialect'})),
+    h('div',{style:{width:160}}, h(S.Select,{mono:true,size:'sm',value:'public',options:['public','sales','catalog','audit'],label:'Schema'})),
+    h('div',{style:{width:120}}, h(S.Select,{mono:true,size:'sm',value:'v11',options:['v11','v10','v9'],label:'Base version'})));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

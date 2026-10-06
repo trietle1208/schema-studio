@@ -1,0 +1,20 @@
+<!-- @dsCard group="Import & export" height=420 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SqlEditor — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function App(){
+  return h('div',{className:'ss-demo ss-demo--col',style:{gap:10,maxWidth:680}},
+    h(S.SqlEditor,{defaultValue:S.sample.sql,height:180}),
+    h(S.ParseStatus,{state:'ok',summary:'2 tables · 1 relationship · 4 indexes'}),
+    h(S.SqlEditor,{defaultValue:S.sample.badSql,height:128,firstLine:39,errorLine:42}),
+    h(S.ParseStatus,{state:'error',message:'Unable to parse SQL near line 42.',onJump:function(){}}));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

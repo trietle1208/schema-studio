@@ -1,0 +1,49 @@
+<!-- @dsCard group="Screens" height=900 width=1440 page subtitle="6 · Schema diff" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Screen6SchemaDiff — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+var ROWS = [
+  ['CREATE TABLE users ('],['  id         BIGSERIAL PRIMARY KEY,'],['  email      VARCHAR(255) NOT NULL UNIQUE,'],['  name       VARCHAR(255),'],
+  [null,'  avatar_url TEXT,','add'],['  created_at TIMESTAMP NOT NULL DEFAULT now()'],[');'],[''],
+  ['CREATE TABLE orders ('],['  id         BIGSERIAL PRIMARY KEY,'],['  user_id    BIGINT NOT NULL REFERENCES users(id),'],["  status     VARCHAR(50) NOT NULL DEFAULT 'pending',"],
+  ['  total      DECIMAL(10,2) NOT NULL,','  total      DECIMAL(12,2) NOT NULL,','mod'],['  created_at TIMESTAMP NOT NULL DEFAULT now()'],[');'],[''],
+  ['CREATE TABLE products ('],['  id         BIGSERIAL PRIMARY KEY,'],['  name       VARCHAR(255) NOT NULL,'],[null,'  sku        VARCHAR(100) NOT NULL UNIQUE,','add'],['  price      DECIMAL(12,2) NOT NULL'],[');'],[''],
+  [null,'CREATE TABLE order_items (','add'],[null,'  id         BIGSERIAL PRIMARY KEY,','add'],[null,'  order_id   BIGINT NOT NULL REFERENCES orders(id),','add'],[null,'  product_id BIGINT NOT NULL REFERENCES products(id),','add'],[null,'  quantity   INTEGER NOT NULL DEFAULT 1,','add'],[null,'  price      DECIMAL(12,2) NOT NULL','add'],[null,');','add'],[null,'','add'],
+  ['CREATE TABLE legacy_orders (',null,'del'],['  id         INTEGER PRIMARY KEY,',null,'del'],['  user_id    INTEGER REFERENCES users(id),',null,'del'],['  items_json TEXT,',null,'del'],['  placed_on  DATE NOT NULL',null,'del'],[');',null,'del'],
+  ['⋯ 18 unchanged tables · 142 lines',undefined,'fold',142],
+  [null,'CREATE INDEX order_items_order_id_idx','add'],[null,'  ON order_items (order_id);','add'],
+  ['CREATE INDEX legacy_orders_user_id_idx',null,'del'],['  ON legacy_orders (user_id);',null,'del']
+];
+function App(){
+  var _s = useState('orders.total'), sel = _s[0], setSel = _s[1];
+  var _m = useState('split'), mode = _m[0], setMode = _m[1];
+  var _g = useState('All'), grp = _g[0], setGrp = _g[1];
+  var groups = S.sample.diff.filter(function(g){ return grp==='All' || g.group===grp; });
+  return h('div',{className:'ss-screen'}, h(S.AppShell,{sidebar:h(S.Sidebar,{activeSchema:'ecommerce'})},
+    h('header',{className:'ss-toolbar'},
+      h('div',{className:'ss-tb-crumb'}, 'Schemas', h(S.Icon,{name:'chevron-right',size:12}), h('span',{className:'ss-tb-name'},'ecommerce'), h(S.Icon,{name:'chevron-right',size:12}), h('span',{style:{color:'var(--ink-1)'}},'Compare')),
+      h('span',{className:'ss-tb-sep'}),
+      h('div',{style:{width:84}}, h(S.Select,{size:'sm',mono:true,value:'v11',options:['v11','v10','v9','v8'],label:'Base'})), h(S.Icon,{name:'arrow-right',size:14,style:{color:'var(--ink-3)'}}), h('div',{style:{width:84}}, h(S.Select,{size:'sm',mono:true,value:'v12',options:['v12','v11'],label:'Target'})),
+      h(S.IconButton,{icon:'migration',label:'Swap versions',size:'sm'}),
+      h('span',{className:'ss-ver-stats',style:{marginLeft:6},title:'8 added, 1 changed, 3 removed'}, h('span',{className:'a'},'+8'), h('span',{className:'m'},'~1'), h('span',{className:'r'},'−3')),
+      h('span',{className:'ss-spacer'}),
+      h(S.SegmentedControl,{value:mode,onChange:setMode,options:[{value:'split',label:'Side by side'},{value:'unified',label:'Unified'}]}),
+      h(S.IconButton,{icon:'download',label:'Export diff'}),
+      h(S.Button,{variant:'primary',icon:'migration',kbd:['⌘','⏎']},'Generate Migration')),
+    h('div',{className:'ss-work'},
+      h('div',{style:{width:320,borderRight:'1px solid var(--line-1)',background:'var(--bg-2)',display:'flex',flexDirection:'column',minHeight:0}},
+        h('div',{style:{padding:'12px 12px 6px'}}, h(S.SegmentedControl,{block:true,value:grp,onChange:setGrp,options:[{value:'All',label:'All'},{value:'Tables',label:'Tables'},{value:'Columns',label:'Cols'},{value:'Indexes',label:'Idx'},{value:'Relationships',label:'Rels'}]})),
+        h('div',{style:{flex:1,overflow:'auto',padding:'0 4px'}}, h(S.DiffList,{groups:groups,selected:sel,onSelect:setSel})),
+        h('div',{style:{borderTop:'1px solid var(--line-1)',padding:12}}, h(S.Alert,{tone:'warn',title:'1 destructive change'},'Dropping legacy_orders deletes its data. The migration wraps it in a transaction.'))),
+      h('div',{style:{flex:1,minWidth:0,overflow:'auto',padding:16,background:'var(--bg-1)'}},
+        h(S.DdlDiff,{rows:ROWS,leftTitle:'Version 11',leftMeta:'2 hours ago · Luong Hoang',rightTitle:'Version 12',rightMeta:'Current · Luong Hoang'})))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

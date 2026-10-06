@@ -1,0 +1,20 @@
+<!-- @dsCard group="Foundations" height=196 subtitle="24px grid, 1.75 stroke, currentColor" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Icon — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+var NAMES = ['table','database','key','link','search','plus','minus','undo','redo','zoom-in','zoom-out','fit','download','upload','share','settings','keyboard','chevron-down','chevron-right','chevrons-ud','arrow-right','star','clock','layers','history','diff','file','file-code','clipboard','plug','check','check-circle','x','alert','warning','info','trash','copy','pencil','more','filter','grip','hash','columns','folder','code','eye','restore','migration','sidebar','panel','move','lock','external'];
+function App(){
+  return h('div',{className:'ss-demo',style:{gap:4,alignContent:'flex-start'}}, NAMES.map(function(n){
+    return h('div',{key:n,title:n,style:{width:76,height:52,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:6,borderRadius:6,color:'var(--ink-2)'}},
+      h(S.Icon,{name:n,size:16}), h('span',{style:{font:'400 10px/12px var(--font-mono)',color:'var(--ink-3)'}},n));
+  }));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>
