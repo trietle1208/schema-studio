@@ -5,7 +5,7 @@ Each step is sized for one Claude Code session. Tick it off when `npm run build`
 ## Phase 1 — Foundation
 - [x] **1.1 Scaffold**: Vite + React + TS, ESLint, Vitest, folder layout from CLAUDE.md. Import `tokens.css` + `bundle.css`, copy fonts. Show an empty `AppShell` with `Sidebar`.
 - [x] **1.2 Primitives**: port Icon, Logo, Button, IconButton, Badge, Kbd, Avatar, Input, Field, Select, Checkbox, Radio, Switch, SegmentedControl to `.tsx`.
-- [ ] **1.3 Model**: `src/core/model.ts` from `index.d.ts`; `validate.ts` (column/table name rules) with tests.
+- [x] **1.3 Model**: `src/core/model.ts` from `index.d.ts`; `validate.ts` (column/table name rules) with tests.
 
 ## Phase 2 — Workspace
 - [ ] **2.1 Store**: Zustand schema store (tables, positions, selection, dirty flag) + undo/redo (zundo). Load the ecommerce sample.

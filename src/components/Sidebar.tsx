@@ -1,19 +1,10 @@
+import type { SchemaSummary } from '../core/model';
 import { Avatar } from './Avatar';
 import { cx } from './cx';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import type { IconName } from './icons';
 import { Logo } from './Logo';
-
-export interface SchemaSummary {
-  name: string;
-  engine: string;
-  tables: number;
-  relationships?: number;
-  version: string;
-  updated: string;
-  favorite?: boolean;
-}
 
 type NavId = 'schemas' | 'recent' | 'favorites';
 
