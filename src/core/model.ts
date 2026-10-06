@@ -42,6 +42,12 @@ export interface Position {
 
 export type Positions = Record<string, Position>;
 
+/** The editable content of a schema: what undo/redo tracks and what a saved version stores. */
+export interface SchemaSnapshot {
+  tables: Table[];
+  positions: Positions;
+}
+
 export interface SchemaSummary {
   name: string;
   engine: string;

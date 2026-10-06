@@ -1,4 +1,4 @@
-import type { Table } from '../model';
+import type { Positions, Table } from '../model';
 
 // The ecommerce sample from design-system/components/bundle.js (`sample.tables`).
 export const ecommerceTables: Table[] = [
@@ -83,3 +83,12 @@ export const ecommerceTables: Table[] = [
     ],
   },
 ];
+
+// Canvas positions for the sample (`sample.positions`).
+export const ecommercePositions: Positions = {
+  users: { x: 24, y: 48 },
+  orders: { x: 304, y: 24 },
+  order_items: { x: 584, y: 160 },
+  products: { x: 304, y: 328 },
+  payments: { x: 24, y: 336 },
+};

@@ -1,0 +1,218 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
+import { ecommerceSnapshot, tableNamed } from '../core/fixtures/testing';
+import {
+  createSchemaStore,
+  selectDirty,
+  selectDirtyTables,
+  selectTable,
+  useSchemaStore,
+  type SchemaStore,
+} from './schema';
+
+let store: SchemaStore;
+const state = () => store.getState();
+const history = () => store.temporal.getState();
+const names = () => state().tables.map((t) => t.name);
+
+beforeEach(() => {
+  store = createSchemaStore({ name: 'ecommerce', engine: 'PostgreSQL', ...ecommerceSnapshot() });
+});
+
+describe('schema store', () => {
+  it('starts the app on the ecommerce sample, saved and with nothing selected', () => {
+    const s = useSchemaStore.getState();
+    expect(s.name).toBe('ecommerce');
+    expect(s.engine).toBe('PostgreSQL');
+    expect(s.tables).toBe(ecommerceTables);
+    expect(s.positions).toBe(ecommercePositions);
+    expect(s.selected).toBeNull();
+    expect(s.selectedColumn).toBeNull();
+    expect(selectDirty(s)).toBe(false);
+    expect(useSchemaStore.temporal.getState().pastStates).toEqual([]);
+  });
+
+  it('selects a table and clears the column selection when the table changes', () => {
+    state().select('orders');
+    state().selectColumn(2);
+    expect(selectTable(state())?.name).toBe('orders');
+    expect(state().selectedColumn).toBe(2);
+
+    state().select('orders');
+    expect(state().selectedColumn).toBe(2);
+
+    state().select('users');
+    expect(state().selectedColumn).toBeNull();
+
+    state().select(null);
+    expect(selectTable(state())).toBeNull();
+  });
+
+  it('does not add undo steps for selection', () => {
+    state().select('orders');
+    state().selectColumn(1);
+    state().select(null);
+    expect(history().pastStates).toEqual([]);
+    expect(selectDirty(state())).toBe(false);
+  });
+
+  it('edits a table, becomes dirty, and is clean again after undo', () => {
+    const orders = tableNamed(state(), 'orders');
+    state().updateTable('orders', { ...orders, comment: 'One row per checkout.' });
+
+    expect(tableNamed(state(), 'orders').comment).toBe('One row per checkout.');
+    expect(selectDirty(state())).toBe(true);
+    expect(selectDirtyTables(state())).toEqual(['orders']);
+    expect(history().pastStates).toHaveLength(1);
+
+    history().undo();
+    expect(tableNamed(state(), 'orders')).toBe(orders);
+    expect(selectDirty(state())).toBe(false);
+    expect(history().futureStates).toHaveLength(1);
+
+    history().redo();
+    expect(tableNamed(state(), 'orders').comment).toBe('One row per checkout.');
+    expect(selectDirty(state())).toBe(true);
+  });
+
+  it('keeps the selection on a renamed table, and undo restores the old name and selection', () => {
+    state().select('orders');
+    state().selectColumn(3);
+    state().renameTable('orders', 'purchases');
+
+    expect(state().selected).toBe('purchases');
+    expect(state().selectedColumn).toBe(3);
+    expect(tableNamed(state(), 'order_items').columns[1].fk?.table).toBe('purchases');
+    expect(state().positions.purchases).toEqual({ x: 304, y: 24 });
+
+    history().undo();
+    expect(names()).toEqual(['users', 'orders', 'order_items', 'products', 'payments']);
+    expect(state().selected).toBe('orders');
+    expect(state().selectedColumn).toBe(3);
+    expect(selectTable(state())?.name).toBe('orders');
+
+    history().redo();
+    expect(state().selected).toBe('purchases');
+  });
+
+  it('ignores a rename to a name that is taken', () => {
+    state().select('orders');
+    state().renameTable('orders', 'users');
+    expect(names()).toEqual(['users', 'orders', 'order_items', 'products', 'payments']);
+    expect(state().selected).toBe('orders');
+    expect(history().pastStates).toEqual([]);
+  });
+
+  it('selects the copy after duplicating, and undo returns to the original', () => {
+    state().select('products');
+    state().selectColumn(1);
+    state().duplicateTable('products');
+
+    expect(names()).toEqual(['users', 'orders', 'order_items', 'products', 'payments', 'products_copy']);
+    expect(state().selected).toBe('products_copy');
+    expect(state().selectedColumn).toBeNull();
+
+    state().duplicateTable('products');
+    expect(state().selected).toBe('products_copy2');
+
+    history().undo();
+    history().undo();
+    expect(names()).toEqual(['users', 'orders', 'order_items', 'products', 'payments']);
+    expect(state().selected).toBe('products');
+    expect(state().selectedColumn).toBe(1);
+  });
+
+  it('clears the selection when the selected table is deleted, and undo brings both back', () => {
+    state().select('orders');
+    state().deleteTable('orders');
+
+    expect(names()).toEqual(['users', 'order_items', 'products', 'payments']);
+    expect(state().selected).toBeNull();
+    expect(tableNamed(state(), 'payments').columns[1].fk).toBeNull();
+    expect(selectDirty(state())).toBe(true);
+
+    history().undo();
+    expect(names()).toEqual(['users', 'orders', 'order_items', 'products', 'payments']);
+    expect(state().selected).toBe('orders');
+    expect(tableNamed(state(), 'payments').columns[1].fk?.table).toBe('orders');
+    expect(selectDirty(state())).toBe(false);
+  });
+
+  it('keeps the selection when another table is deleted', () => {
+    state().select('users');
+    state().deleteTable('payments');
+    expect(state().selected).toBe('users');
+  });
+
+  it('records a whole drag as one undo step', () => {
+    state().moveTable('users', { x: 32, y: 48 });
+    state().moveTable('users', { x: 64, y: 72 });
+    state().moveTable('users', { x: 96, y: 120 });
+    state().endMove();
+
+    expect(state().positions.users).toEqual({ x: 96, y: 120 });
+    expect(history().pastStates).toHaveLength(1);
+    expect(selectDirtyTables(state())).toEqual(['users']);
+
+    history().undo();
+    expect(state().positions.users).toEqual({ x: 24, y: 48 });
+    expect(selectDirty(state())).toBe(false);
+
+    history().redo();
+    expect(state().positions.users).toEqual({ x: 96, y: 120 });
+  });
+
+  it('records the next edit after a drag, and a drag that goes nowhere records nothing', () => {
+    state().moveTable('users', { x: 24, y: 48 });
+    state().endMove();
+    expect(history().pastStates).toEqual([]);
+
+    state().moveTable('users', { x: 40, y: 48 });
+    state().endMove();
+    state().moveTable('orders', { x: 320, y: 24 });
+    state().endMove();
+    state().deleteTable('payments');
+    expect(history().pastStates).toHaveLength(3);
+  });
+
+  it('is clean after saving, and dirty again when the save is undone past', () => {
+    state().renameTable('orders', 'purchases');
+    expect(selectDirty(state())).toBe(true);
+
+    state().markSaved();
+    expect(selectDirty(state())).toBe(false);
+    expect(selectDirtyTables(state())).toEqual([]);
+    expect(history().pastStates).toHaveLength(1);
+
+    history().undo();
+    expect(names()).toContain('orders');
+    expect(selectDirty(state())).toBe(true);
+
+    history().redo();
+    expect(selectDirty(state())).toBe(false);
+  });
+
+  it('keeps at most 50 undo steps', () => {
+    for (let i = 1; i <= 60; i++) {
+      state().moveTable('users', { x: 24 + i * 8, y: 48 });
+      state().endMove();
+    }
+    expect(history().pastStates).toHaveLength(50);
+  });
+
+  it('loads another schema as saved, with no selection and no history', () => {
+    state().select('orders');
+    state().deleteTable('users');
+    const { tables, positions } = ecommerceSnapshot();
+
+    state().load({ name: 'blog', engine: 'MySQL', tables: tables.slice(0, 2), positions });
+
+    expect(state().name).toBe('blog');
+    expect(state().engine).toBe('MySQL');
+    expect(names()).toEqual(['users', 'orders']);
+    expect(state().selected).toBeNull();
+    expect(selectDirty(state())).toBe(false);
+    expect(history().pastStates).toEqual([]);
+    expect(history().futureStates).toEqual([]);
+  });
+});
