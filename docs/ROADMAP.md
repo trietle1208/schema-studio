@@ -12,7 +12,7 @@ Each step is sized for one Claude Code session. Tick it off when `npm run build`
 - [x] **2.2 Canvas**: port TableNode + ERCanvas (drag, pan, zoom, edges, minimap, legend, context menu).
 - [x] **2.3 Inspector**: port Inspector, TypeSelect, ColumnEditor; edits go through the store.
 - [x] **2.4 Toolbar + StatusBar**: save state, undo/redo, zoom, search, shortcuts (⌘S/⌘Z/⌘K/F2/⌫/Esc).
-- [ ] **2.5 Dialogs**: Modal, ConfirmDialog (delete table), Toast.
+- [x] **2.5 Dialogs**: Modal, ConfirmDialog (delete table), Toast.
 
 ## Phase 3 — Persistence & list
 - [ ] **3.1 Dexie**: schemas + versions tables; save creates a new immutable version snapshot.

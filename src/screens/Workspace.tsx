@@ -1,8 +1,9 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { ERCanvas, type ERCanvasActions } from '../components/ERCanvas';
 import { Inspector } from '../components/Inspector';
 import { StatusBar } from '../components/StatusBar';
+import { Toast } from '../components/Toast';
 import { Toolbar } from '../components/Toolbar';
 import { outgoingRelations } from '../core/relations';
 import { searchTables } from '../core/search';
@@ -18,7 +19,11 @@ import {
   useSchemaStore,
 } from '../store/schema';
 import { useUiStore } from '../store/ui';
+import { DeleteTableDialog } from './DeleteTableDialog';
 import { useWorkspaceShortcuts } from './useWorkspaceShortcuts';
+import { requestDeleteTable, saveSchema } from './workspaceActions';
+
+const TOAST_MS = 5000;
 
 export function Workspace() {
   const name = useSchemaStore((s) => s.name);
@@ -37,8 +42,6 @@ export function Workspace() {
   const updateTable = useSchemaStore((s) => s.updateTable);
   const renameTable = useSchemaStore((s) => s.renameTable);
   const duplicateTable = useSchemaStore((s) => s.duplicateTable);
-  const deleteTable = useSchemaStore((s) => s.deleteTable);
-  const save = useSchemaStore((s) => s.save);
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
   const zoom = useUiStore((s) => s.zoom);
@@ -47,10 +50,20 @@ export function Workspace() {
   const setSearch = useUiStore((s) => s.setSearch);
   const renameSignal = useUiStore((s) => s.renameSignal);
   const requestRename = useUiStore((s) => s.requestRename);
+  const dialog = useUiStore((s) => s.dialog);
+  const toast = useUiStore((s) => s.toast);
+  const dismissToast = useUiStore((s) => s.dismissToast);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const canvas = useRef<ERCanvasActions>(null);
   useWorkspaceShortcuts(searchRef);
+
+  const toastId = toast?.id;
+  useEffect(() => {
+    if (toastId === undefined) return;
+    const timer = setTimeout(() => dismissToast(toastId), TOAST_MS);
+    return () => clearTimeout(timer);
+  }, [toastId, dismissToast]);
 
   const visible = useMemo(() => searchTables(tables, search), [tables, search]);
   // A selected table that the search hides stays in the inspector, but the canvas has nothing to highlight.
@@ -73,7 +86,7 @@ export function Workspace() {
         schema={name}
         engine={engine}
         saveState={dirty ? 'dirty' : 'saved'}
-        onSave={save}
+        onSave={saveSchema}
         zoom={zoom}
         onZoom={setZoom}
         onFit={() => canvas.current?.fit()}
@@ -105,7 +118,7 @@ export function Workspace() {
           invalidColumns={invalidColumns}
           onRenameTable={requestRename}
           onDuplicateTable={duplicateTable}
-          onDeleteTable={deleteTable}
+          onDeleteTable={requestDeleteTable}
           actionsRef={canvas}
         />
         <Inspector
@@ -117,7 +130,7 @@ export function Workspace() {
           onChange={(t, field) => updateTable(t.name, t, field)}
           onRename={renameTable}
           onDuplicate={duplicateTable}
-          onDelete={deleteTable}
+          onDelete={requestDeleteTable}
           renameSignal={renameSignal}
           autoFocusDraft
           settingsCollapsed
@@ -135,6 +148,18 @@ export function Workspace() {
           `${Math.round(zoom * 100)}%`,
         ]}
       />
+      {toast && (
+        <div className="ss-toasts">
+          <Toast
+            tone={toast.tone}
+            title={toast.title}
+            description={toast.description}
+            actions={toast.actions}
+            onClose={() => dismissToast(toast.id)}
+          />
+        </div>
+      )}
+      {dialog?.kind === 'delete-table' && <DeleteTableDialog table={dialog.table} />}
     </>
   );
 }

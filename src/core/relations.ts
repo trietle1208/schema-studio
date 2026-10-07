@@ -40,6 +40,11 @@ export function incomingRelations(table: Table, tables: readonly Table[]): Relat
   return tables.flatMap(outgoingRelations).filter((r) => r.to.table === table.name);
 }
 
+/** The foreign keys that deleting `table` drops: those other tables hold on it. Its own go with it. */
+export function droppedRelations(table: Table, tables: readonly Table[]): Relation[] {
+  return incomingRelations(table, tables).filter((r) => r.from.table !== table.name);
+}
+
 /** The columns a foreign key on `table` can reference: the primary key of every other table. */
 export function referenceTargets(table: Table, tables: readonly Table[]): ColumnRef[] {
   return tables.flatMap((t) => {

@@ -2,6 +2,7 @@ import { useEffect, type RefObject } from 'react';
 import { matchShortcut } from '../core/shortcuts';
 import { redo, undo, useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
+import { requestDeleteTable, saveSchema } from './workspaceActions';
 
 // ⌫ only deletes when no control has focus, so it can never fire while a field or button is in use.
 const CONTROL = 'input, textarea, select, button, [role="button"], [contenteditable]';
@@ -15,6 +16,13 @@ export function useWorkspaceShortcuts(searchRef: RefObject<HTMLInputElement | nu
     const onKey = (e: KeyboardEvent) => {
       const shortcut = matchShortcut(e);
       if (!shortcut) return;
+      // An open dialog owns the keyboard, Esc included. This listener is added before any dialog's,
+      // so it still sees the dialog as open on the key press that closes it.
+      if (useUiStore.getState().dialog) {
+        // The browser's own ⌘S and ⌘K stay off all the same.
+        if (shortcut === 'save' || shortcut === 'search') e.preventDefault();
+        return;
+      }
       const target = e.target instanceof Element ? e.target : null;
       const local = !!target?.closest(LOCAL_EDIT);
       const schema = useSchemaStore.getState();
@@ -22,7 +30,7 @@ export function useWorkspaceShortcuts(searchRef: RefObject<HTMLInputElement | nu
       switch (shortcut) {
         case 'save':
           e.preventDefault();
-          schema.save();
+          saveSchema();
           break;
         case 'undo':
         case 'redo':
@@ -44,7 +52,7 @@ export function useWorkspaceShortcuts(searchRef: RefObject<HTMLInputElement | nu
         case 'delete':
           if (!schema.selected || target?.closest(CONTROL)) return;
           e.preventDefault();
-          schema.deleteTable(schema.selected);
+          requestDeleteTable(schema.selected);
           break;
         case 'cancel':
           if (local || schema.selectedColumn === null) return;

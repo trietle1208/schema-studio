@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ecommerceSnapshot, tableNamed } from './fixtures/testing';
 import type { Table } from './model';
 import {
+  droppedRelations,
   incomingRelations,
   outgoingRelations,
   qualifiedName,
@@ -52,6 +53,35 @@ describe('incomingRelations', () => {
     const expected = ['categories.parent_id -> categories.id SET NULL'];
     expect(arrows(outgoingRelations(categories))).toEqual(expected);
     expect(arrows(incomingRelations(categories, [categories]))).toEqual(expected);
+  });
+});
+
+describe('droppedRelations', () => {
+  it('lists the foreign keys other tables lose when a table is deleted', () => {
+    const snapshot = ecommerceSnapshot();
+    expect(arrows(droppedRelations(tableNamed(snapshot, 'orders'), snapshot.tables))).toEqual([
+      'order_items.order_id -> orders.id CASCADE',
+      'payments.order_id -> orders.id RESTRICT',
+    ]);
+    expect(arrows(droppedRelations(tableNamed(snapshot, 'users'), snapshot.tables))).toEqual(['orders.user_id -> users.id CASCADE']);
+    expect(droppedRelations(tableNamed(snapshot, 'payments'), snapshot.tables)).toEqual([]);
+  });
+
+  it('leaves out a self-reference, which goes with the table itself', () => {
+    const categories: Table = {
+      name: 'categories',
+      columns: [
+        { name: 'id', type: 'BIGSERIAL', pk: true },
+        { name: 'parent_id', type: 'BIGINT', nullable: true, fk: { table: 'categories', column: 'id', onDelete: 'SET NULL' } },
+      ],
+    };
+    const products: Table = {
+      name: 'products',
+      columns: [{ name: 'category_id', type: 'BIGINT', fk: { table: 'categories', column: 'id' } }],
+    };
+    expect(arrows(droppedRelations(categories, [categories, products]))).toEqual([
+      'products.category_id -> categories.id RESTRICT',
+    ]);
   });
 });
 
