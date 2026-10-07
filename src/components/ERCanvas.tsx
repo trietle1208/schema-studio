@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties, MouseEvent, PointerEvent, ReactNode } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import type { CSSProperties, MouseEvent, PointerEvent, ReactNode, Ref } from 'react';
 import {
   clampZoom,
   computeEdges,
   edgePath,
+  fitView,
   minimapLayout,
   snap,
   viewRect,
@@ -28,6 +29,11 @@ export interface CanvasMenu {
   y: number;
 }
 
+export interface ERCanvasActions {
+  /** Zooms and pans so that every table is in view. */
+  fit: () => void;
+}
+
 export interface ERCanvasProps {
   tables: Table[];
   positions: Positions;
@@ -46,6 +52,7 @@ export interface ERCanvasProps {
   dirtyTables?: string[];
   invalidColumns?: number[];
   menuItems?: (table: string, close: () => void) => (MenuItem | '-')[];
+  onRenameTable?: (name: string) => void;
   onDuplicateTable?: (name: string) => void;
   onDeleteTable?: (name: string) => void;
   initialMenu?: CanvasMenu;
@@ -53,6 +60,7 @@ export interface ERCanvasProps {
   showLegend?: boolean;
   showMinimap?: boolean;
   style?: CSSProperties;
+  actionsRef?: Ref<ERCanvasActions>;
 }
 
 interface DragState {
@@ -122,6 +130,7 @@ export function ERCanvas({
   dirtyTables,
   invalidColumns,
   menuItems,
+  onRenameTable,
   onDuplicateTable,
   onDeleteTable,
   initialMenu,
@@ -129,6 +138,7 @@ export function ERCanvas({
   showLegend,
   showMinimap,
   style,
+  actionsRef,
 }: ERCanvasProps) {
   const [offset, setOffset] = useState<Position>(initialOffset ?? { x: 0, y: 0 });
   const [draggingTable, setDraggingTable] = useState<string | null>(null);
@@ -143,6 +153,16 @@ export function ERCanvas({
     setSeenFit(fitSignal);
     setOffset({ x: 0, y: 0 });
   }
+
+  useImperativeHandle(actionsRef, () => ({
+    fit() {
+      const el = ref.current;
+      if (!el) return;
+      const view = fitView(tables, positions, { w: el.clientWidth, h: el.clientHeight });
+      setOffset(view.offset);
+      onZoom?.(view.zoom);
+    },
+  }));
 
   useEffect(() => {
     const el = ref.current;
@@ -190,6 +210,9 @@ export function ERCanvas({
     if (!q) return;
     e.preventDefault();
     e.stopPropagation();
+    // preventDefault also stops the browser from taking focus away from a field or button elsewhere,
+    // which would keep the keyboard (and block ⌫ on the table just clicked).
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     onSelect?.(name);
     drag.current = { table: name, sx: e.clientX, sy: e.clientY, ox: q.x, oy: q.y, moved: false };
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -261,7 +284,7 @@ export function ERCanvas({
     items = menuItems
       ? menuItems(table, closeMenu)
       : [
-          { icon: 'pencil', label: 'Rename table', shortcut: 'F2' },
+          { icon: 'pencil', label: 'Rename table', shortcut: 'F2', onSelect: () => onRenameTable?.(table) },
           { icon: 'plus', label: 'Add column', shortcut: '⌘⏎' },
           { icon: 'link', label: 'Add foreign key…' },
           { icon: 'copy', label: 'Duplicate', shortcut: '⌘D', onSelect: () => onDuplicateTable?.(table) },

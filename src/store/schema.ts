@@ -1,9 +1,11 @@
 import { temporal, type TemporalState } from 'zundo';
 import { create, useStore, type StoreApi } from 'zustand';
+import { clearDrafts } from '../core/columns';
 import { dirtyTables, isDirty } from '../core/dirty';
 import { copyName, deleteTable, duplicateTable, moveTable, renameTable, updateTable } from '../core/edit';
 import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
 import type { Position, SchemaSnapshot, Table } from '../core/model';
+import { findProblems } from '../core/validate';
 
 const HISTORY_LIMIT = 50;
 
@@ -32,6 +34,12 @@ export interface SchemaState extends SchemaSource {
   /** Call on every pointer move of a drag; the whole drag becomes one undo step once `endMove` runs. */
   moveTable: (name: string, position: Position) => void;
   endMove: () => void;
+  /**
+   * Saves the working copy. A schema with validation problems is not saved: the first problem is
+   * selected instead, so its message shows in the inspector. Returns whether the schema is saved.
+   */
+  save: () => boolean;
+  /** Makes the working copy the saved snapshot. Columns added since the last save stop being drafts. */
   markSaved: () => void;
 }
 
@@ -146,9 +154,25 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample) {
             history().resume();
           },
 
+          save: () => {
+            const state = get();
+            const problem = findProblems(state.tables)[0];
+            if (problem) {
+              typing = null;
+              set({ selected: problem.table, selectedColumn: problem.column });
+              return false;
+            }
+            if (isDirty(state, state.saved)) state.markSaved();
+            return true;
+          },
+
           markSaved: () => {
             const { tables, positions } = get();
-            set({ saved: { tables, positions } });
+            const cleared = clearDrafts(tables);
+            // Dropping the draft marks is part of saving, not an edit to undo.
+            if (!dragging) history().pause();
+            set({ tables: cleared, saved: { tables: cleared, positions } });
+            if (!dragging) history().resume();
           },
         };
       },

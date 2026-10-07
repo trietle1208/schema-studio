@@ -31,6 +31,8 @@ export interface InspectorProps {
   onAddForeignKey?: (name: string) => void;
   typeMenuOpen?: boolean;
   renaming?: boolean;
+  /** Each change puts the table title into rename mode (F2). */
+  renameSignal?: number;
   autoFocusDraft?: boolean;
   settingsCollapsed?: boolean;
   schemaName?: string;
@@ -79,15 +81,29 @@ interface TableTitleProps {
   table: Table;
   tables: Table[];
   renaming?: boolean;
+  renameSignal?: number;
   onRename?: (from: string, to: string) => void;
   onDuplicate?: (name: string) => void;
   onDelete?: (name: string) => void;
 }
 
 // Keyed by table name, so an unfinished rename never carries over to another table.
-function TableTitle({ table: t, tables, renaming: initiallyRenaming, onRename, onDuplicate, onDelete }: TableTitleProps) {
+function TableTitle({
+  table: t,
+  tables,
+  renaming: initiallyRenaming,
+  renameSignal,
+  onRename,
+  onDuplicate,
+  onDelete,
+}: TableTitleProps) {
   /** The name being typed, or null when the title is not being renamed. */
   const [draft, setDraft] = useState<string | null>(initiallyRenaming ? t.name : null);
+  const [seenSignal, setSeenSignal] = useState(renameSignal);
+  if (renameSignal !== seenSignal) {
+    setSeenSignal(renameSignal);
+    if (draft === null) setDraft(t.name);
+  }
   const name = draft?.trim() ?? t.name;
   const error =
     draft === null
@@ -113,6 +129,8 @@ function TableTitle({ table: t, tables, renaming: initiallyRenaming, onRename, o
             autoFocus={!initiallyRenaming}
             value={draft}
             spellCheck={false}
+            data-local-edit
+            onFocus={(e) => e.target.select()}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => {
@@ -154,6 +172,7 @@ export function Inspector({
   onAddForeignKey,
   typeMenuOpen,
   renaming,
+  renameSignal,
   autoFocusDraft,
   settingsCollapsed,
   schemaName,
@@ -238,6 +257,7 @@ export function Inspector({
           table={t}
           tables={tables}
           renaming={renaming}
+          renameSignal={renameSignal}
           onRename={onRename}
           onDuplicate={onDuplicate}
           onDelete={onDelete}

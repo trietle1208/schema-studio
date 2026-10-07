@@ -29,6 +29,11 @@ export function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 }
 
+/** The zoom after one toolbar step of `delta`, kept to whole percents and within the limits. */
+export function stepZoom(zoom: number, delta: number): number {
+  return clampZoom(Math.round((zoom + delta) * 100) / 100);
+}
+
 /** Where an edge meets a node: a point on its left (-1) or right (+1) side. */
 export interface Anchor extends Position {
   side: 1 | -1;
@@ -99,6 +104,37 @@ export function zoomAt(offset: Position, zoom: number, nextZoom: number, point: 
   return { x: point.x - (point.x - offset.x) * k, y: point.y - (point.y - offset.y) * k };
 }
 
+/** The canvas rectangle of every table that has a position. */
+export function nodeRects(tables: readonly Table[], positions: Positions): (Rect & { name: string })[] {
+  return tables.flatMap((t) => {
+    const p = positionOf(positions, t.name);
+    return p ? [{ name: t.name, x: p.x, y: p.y, w: NODE_WIDTH, h: nodeHeight(t) }] : [];
+  });
+}
+
+export interface View {
+  zoom: number;
+  offset: Position;
+}
+
+/**
+ * The zoom and pan that centre every placed table in a canvas of `view` screen px, `pad` px from its edges.
+ * Small diagrams are not enlarged past 100%. With no placed table the view resets.
+ */
+export function fitView(tables: readonly Table[], positions: Positions, view: Size, pad: number = 48): View {
+  const placed = nodeRects(tables, positions);
+  if (!placed.length) return { zoom: 1, offset: { x: 0, y: 0 } };
+  const minX = Math.min(...placed.map((r) => r.x));
+  const minY = Math.min(...placed.map((r) => r.y));
+  const w = Math.max(...placed.map((r) => r.x + r.w)) - minX;
+  const h = Math.max(...placed.map((r) => r.y + r.h)) - minY;
+  const zoom = clampZoom(Math.min(1, (view.w - pad * 2) / w, (view.h - pad * 2) / h));
+  return {
+    zoom,
+    offset: { x: Math.round((view.w - w * zoom) / 2 - minX * zoom), y: Math.round((view.h - h * zoom) / 2 - minY * zoom) },
+  };
+}
+
 export interface MinimapLayout {
   nodes: (Rect & { name: string })[];
   viewport: Rect;
@@ -112,10 +148,7 @@ export function minimapLayout(
   size: Size,
   pad: number = 8,
 ): MinimapLayout | null {
-  const placed = tables.flatMap((t) => {
-    const p = positionOf(positions, t.name);
-    return p ? [{ name: t.name, x: p.x, y: p.y, w: NODE_WIDTH, h: nodeHeight(t) }] : [];
-  });
+  const placed = nodeRects(tables, positions);
   if (!placed.length) return null;
 
   const all: Rect[] = [...placed, view];

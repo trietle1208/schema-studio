@@ -20,6 +20,20 @@ export function validateColumns(table: Table): ColumnErrors {
   return errors;
 }
 
+export interface Problem {
+  table: string;
+  /** Index of the invalid column in its table. */
+  column: number;
+  message: string;
+}
+
+/** Every column problem in the schema, in table and column order. */
+export function findProblems(tables: readonly Table[]): Problem[] {
+  return tables.flatMap((t) =>
+    Object.entries(validateColumns(t)).map(([column, message]) => ({ table: t.name, column: Number(column), message })),
+  );
+}
+
 /**
  * Returns the problem with a table name, or null when it is valid.
  * `otherNames` are the names of the other tables in the schema; when renaming, leave out the table's current name.

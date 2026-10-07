@@ -33,3 +33,21 @@ export function setPrimaryKey(column: Column, pk: boolean): Column {
 export function setNullable(column: Column, nullable: boolean): Column {
   return column.pk ? column : { ...column, nullable };
 }
+
+/** Drops the draft mark from every column, once the schema is saved. Tables without drafts keep their identity. */
+export function clearDrafts(tables: Table[]): Table[] {
+  if (!tables.some((t) => t.columns.some((c) => c.draft))) return tables;
+  return tables.map((t) =>
+    t.columns.some((c) => c.draft)
+      ? {
+          ...t,
+          columns: t.columns.map((c) => {
+            if (!c.draft) return c;
+            const column = { ...c };
+            delete column.draft;
+            return column;
+          }),
+        }
+      : t,
+  );
+}

@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { deleteTable, moveTable, updateTable } from './edit';
 import { ecommerceSnapshot, tableNamed } from './fixtures/testing';
-import { clampZoom, computeEdges, edgePath, minimapLayout, nodeHeight, snap, viewRect, zoomAt } from './layout';
+import {
+  clampZoom,
+  computeEdges,
+  edgePath,
+  fitView,
+  minimapLayout,
+  nodeHeight,
+  nodeRects,
+  snap,
+  stepZoom,
+  viewRect,
+  zoomAt,
+} from './layout';
 
 describe('nodeHeight', () => {
   it('is the header plus one row per column', () => {
@@ -179,5 +191,84 @@ describe('minimapLayout', () => {
     expect(minimapLayout(tables, partial, view, size)?.nodes.map((n) => n.name)).toEqual(['users', 'orders']);
     expect(minimapLayout(tables, {}, view, size)).toBeNull();
     expect(minimapLayout([], positions, view, size)).toBeNull();
+  });
+});
+
+describe('stepZoom', () => {
+  it('steps by whole percents without drifting', () => {
+    let zoom = 1;
+    for (let i = 0; i < 3; i++) zoom = stepZoom(zoom, -0.1);
+    expect(zoom).toBe(0.7);
+    for (let i = 0; i < 3; i++) zoom = stepZoom(zoom, 0.1);
+    expect(zoom).toBe(1);
+  });
+
+  it('stops at the zoom limits', () => {
+    expect(stepZoom(0.3, -0.1)).toBe(0.25);
+    expect(stepZoom(0.25, -0.1)).toBe(0.25);
+    expect(stepZoom(1.95, 0.1)).toBe(2);
+    expect(stepZoom(2, 0.1)).toBe(2);
+  });
+});
+
+describe('nodeRects', () => {
+  it('gives a rectangle for each placed table and skips the others', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const rects = nodeRects(tables, { users: positions.users, products: positions.products });
+    expect(rects).toEqual([
+      { name: 'users', x: 24, y: 48, w: 228, h: 159 },
+      { name: 'products', x: positions.products.x, y: positions.products.y, w: 228, h: 135 },
+    ]);
+  });
+});
+
+describe('fitView', () => {
+  // The ecommerce sample spans x 24..812 and y 24..495 on the canvas.
+  const bounds = { x: 24, y: 24, w: 788, h: 471 };
+
+  it('describes the sample bounds this test relies on', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const rects = nodeRects(tables, positions);
+    expect(Math.min(...rects.map((r) => r.x))).toBe(bounds.x);
+    expect(Math.min(...rects.map((r) => r.y))).toBe(bounds.y);
+    expect(Math.max(...rects.map((r) => r.x + r.w))).toBe(bounds.x + bounds.w);
+    expect(Math.max(...rects.map((r) => r.y + r.h))).toBe(bounds.y + bounds.h);
+  });
+
+  it('centres the diagram at 100% when it fits', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const view = fitView(tables, positions, { w: 1200, h: 800 });
+    expect(view.zoom).toBe(1);
+    expect(view.offset).toEqual({ x: Math.round((1200 - 788) / 2 - 24), y: Math.round((800 - 471) / 2 - 24) });
+  });
+
+  it('zooms out until the diagram fits inside the padding', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const size = { w: 600, h: 500 };
+    const view = fitView(tables, positions, size, 48);
+    expect(view.zoom).toBeCloseTo((600 - 96) / 788, 10);
+    const left = bounds.x * view.zoom + view.offset.x;
+    const right = (bounds.x + bounds.w) * view.zoom + view.offset.x;
+    const top = bounds.y * view.zoom + view.offset.y;
+    const bottom = (bounds.y + bounds.h) * view.zoom + view.offset.y;
+    expect(left).toBeGreaterThanOrEqual(47);
+    expect(size.w - right).toBeGreaterThanOrEqual(47);
+    expect(Math.abs(top - (size.h - bottom))).toBeLessThanOrEqual(1);
+  });
+
+  it('does not zoom below the minimum', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    expect(fitView(tables, positions, { w: 200, h: 150 }).zoom).toBe(0.25);
+  });
+
+  it('fits only the tables it is given', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const view = fitView([tables[0]], positions, { w: 1000, h: 600 });
+    expect(view).toEqual({ zoom: 1, offset: { x: Math.round((1000 - 228) / 2 - 24), y: Math.round((600 - 159) / 2 - 48) } });
+  });
+
+  it('resets the view when no table is placed', () => {
+    expect(fitView([], {}, { w: 800, h: 600 })).toEqual({ zoom: 1, offset: { x: 0, y: 0 } });
+    expect(fitView(ecommerceSnapshot().tables, {}, { w: 800, h: 600 })).toEqual({ zoom: 1, offset: { x: 0, y: 0 } });
   });
 });

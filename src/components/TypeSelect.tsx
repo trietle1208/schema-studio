@@ -77,6 +77,7 @@ export function TypeSelect({ value, onChange, size, error, defaultOpen, placemen
         value={query ?? value}
         placeholder="Type"
         spellCheck={false}
+        data-local-edit
         error={error}
         size={size}
         className={inputClassName}

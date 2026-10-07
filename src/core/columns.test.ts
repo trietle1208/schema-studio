@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addColumn, draftColumn, removeColumn, setColumn, setNullable, setPrimaryKey } from './columns';
+import { addColumn, clearDrafts, draftColumn, removeColumn, setColumn, setNullable, setPrimaryKey } from './columns';
 import { ecommerceSnapshot, tableNamed } from './fixtures/testing';
 import { validateColumns } from './validate';
 
@@ -89,5 +89,26 @@ describe('setNullable', () => {
   it('does not make a primary key nullable', () => {
     const id = orders().columns[0];
     expect(setNullable(id, true)).toBe(id);
+  });
+});
+
+describe('clearDrafts', () => {
+  it('returns the same tables when no column is a draft', () => {
+    const { tables } = ecommerceSnapshot();
+    expect(clearDrafts(tables)).toBe(tables);
+  });
+
+  it('drops the draft mark and keeps the identity of everything else', () => {
+    const { tables } = ecommerceSnapshot();
+    const edited = tables.map((t) => (t.name === 'orders' ? addColumn(t, { name: 'note', type: 'TEXT', nullable: true, draft: true }) : t));
+
+    const cleared = clearDrafts(edited);
+
+    expect(cleared[1].columns[5]).toEqual({ name: 'note', type: 'TEXT', nullable: true });
+    expect('draft' in cleared[1].columns[5]).toBe(false);
+    expect(cleared[1].columns[0]).toBe(edited[1].columns[0]);
+    expect(cleared[0]).toBe(edited[0]);
+    expect(cleared[2]).toBe(edited[2]);
+    expect(edited[1].columns[5].draft).toBe(true);
   });
 });

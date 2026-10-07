@@ -252,6 +252,48 @@ describe('schema store', () => {
     expect(selectDirty(state())).toBe(false);
   });
 
+  it('saves a valid schema and clears the draft mark without adding an undo step', () => {
+    const orders = tableNamed(state(), 'orders');
+    state().updateTable('orders', { ...orders, columns: [...orders.columns, { name: 'note', type: 'TEXT', nullable: true, draft: true }] });
+    expect(history().pastStates).toHaveLength(1);
+
+    expect(state().save()).toBe(true);
+
+    expect(selectDirty(state())).toBe(false);
+    expect(tableNamed(state(), 'orders').columns[5]).toEqual({ name: 'note', type: 'TEXT', nullable: true });
+    expect(history().pastStates).toHaveLength(1);
+
+    history().undo();
+    expect(tableNamed(state(), 'orders')).toBe(orders);
+    expect(selectDirty(state())).toBe(true);
+
+    history().redo();
+    expect(tableNamed(state(), 'orders').columns[5].draft).toBeUndefined();
+    expect(selectDirty(state())).toBe(false);
+  });
+
+  it('does not save a schema with problems and selects the first one instead', () => {
+    const payments = tableNamed(state(), 'payments');
+    state().updateTable('payments', { ...payments, columns: [...payments.columns, { name: '', type: 'TEXT', nullable: true, draft: true }] });
+    state().select('users');
+    state().selectColumn(1);
+
+    expect(state().save()).toBe(false);
+
+    expect(selectDirty(state())).toBe(true);
+    expect(state().selected).toBe('payments');
+    expect(state().selectedColumn).toBe(5);
+    expect(tableNamed(state(), 'payments').columns[5].draft).toBe(true);
+    expect(history().pastStates).toHaveLength(1);
+  });
+
+  it('saving a clean schema changes nothing', () => {
+    const before = state();
+    expect(state().save()).toBe(true);
+    expect(state().tables).toBe(before.tables);
+    expect(state().saved).toBe(before.saved);
+  });
+
   it('keeps at most 50 undo steps', () => {
     for (let i = 1; i <= 60; i++) {
       state().moveTable('users', { x: 24 + i * 8, y: 48 });

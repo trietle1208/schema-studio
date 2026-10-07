@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ecommerceTables } from './fixtures/ecommerce';
 import type { Column, Table } from './model';
-import { validateColumns, validateTableName } from './validate';
+import { findProblems, validateColumns, validateTableName } from './validate';
 
 function sample(name: string): Table {
   const table = ecommerceTables.find((t) => t.name === name);
@@ -146,5 +146,24 @@ describe('validateTableName', () => {
 
   it('does not mistake Object.prototype members for existing tables', () => {
     expect(validateTableName('constructor', names)).toBeNull();
+  });
+});
+
+describe('findProblems', () => {
+  it('finds nothing in the ecommerce sample', () => {
+    expect(findProblems(ecommerceTables)).toEqual([]);
+  });
+
+  it('lists every invalid column with its table, in schema order', () => {
+    const tables = ecommerceTables.map((t) => {
+      if (t.name === 'orders') return { ...t, columns: [...t.columns, { name: '', type: 'TEXT', nullable: true, draft: true }] };
+      if (t.name === 'users') return { ...t, columns: t.columns.map((c, i) => (i === 2 ? { ...c, name: 'email' } : i === 4 ? { ...c, type: '' } : c)) };
+      return t;
+    });
+    expect(findProblems(tables)).toEqual([
+      { table: 'users', column: 2, message: 'Column "email" already exists in users.' },
+      { table: 'users', column: 4, message: 'Choose a data type.' },
+      { table: 'orders', column: 5, message: 'Column name cannot be empty.' },
+    ]);
   });
 });
