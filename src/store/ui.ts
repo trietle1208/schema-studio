@@ -1,9 +1,7 @@
 import { create } from 'zustand';
 import type { ToastProps } from '../components/Toast';
 import { clampZoom } from '../core/layout';
-
-/** The screen in the main area. */
-export type Screen = 'schemas' | 'workspace';
+import { SCHEMAS_ROUTE, type Route } from '../core/routes';
 
 /** The dialog open over the screen. */
 export type Dialog =
@@ -22,7 +20,8 @@ export interface ToastMessage extends ToastContent {
 }
 
 export interface UiState {
-  screen: Screen;
+  /** What the main area shows. Change it through `go` in screens/navigation, which keeps the address in step. */
+  route: Route;
   zoom: number;
   /** The toolbar search text; it filters the tables shown on the canvas. */
   search: string;
@@ -32,7 +31,7 @@ export interface UiState {
   dialog: Dialog | null;
   /** One toast shows at a time; a new one replaces it. */
   toast: ToastMessage | null;
-  showScreen: (screen: Screen) => void;
+  setRoute: (route: Route) => void;
   setZoom: (zoom: number) => void;
   setSearch: (search: string) => void;
   requestRename: () => void;
@@ -47,13 +46,13 @@ export interface UiState {
 let toastId = 0;
 
 export const useUiStore = create<UiState>()((set, get) => ({
-  screen: 'workspace',
+  route: SCHEMAS_ROUTE,
   zoom: 1,
   search: '',
   renameSignal: 0,
   dialog: null,
   toast: null,
-  showScreen: (screen) => set({ screen }),
+  setRoute: (route) => set({ route }),
   setZoom: (zoom) => set({ zoom: clampZoom(zoom) }),
   setSearch: (search) => set({ search }),
   requestRename: () => set((s) => ({ renameSignal: s.renameSignal + 1 })),

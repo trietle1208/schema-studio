@@ -11,6 +11,7 @@ import {
   listVersions,
   openLatestSchema,
   openSchema,
+  openSchemaNamed,
   saveVersion,
   schemaSummary,
 } from './schemas';
@@ -213,6 +214,24 @@ describe('openSchema', () => {
 
   it('is undefined for an id that is not stored', async () => {
     expect(await openSchema(99)).toBeUndefined();
+  });
+});
+
+describe('openSchemaNamed', () => {
+  it('finds a schema by its name', async () => {
+    await createSchema({ name: 'blog', engine: 'MySQL' }, { tables: [], positions: {} });
+    const shop = await createSchema(ecommerce, ecommerceSnapshot());
+    const v2 = deleteTable(ecommerceSnapshot(), 'payments');
+    const saved = await saveVersion(shop.id, v2);
+
+    expect(await openSchemaNamed('ecommerce')).toEqual({ schema: saved, snapshot: v2 });
+    expect((await openSchemaNamed('blog'))?.snapshot).toEqual({ tables: [], positions: {} });
+  });
+
+  it('is undefined for a name that is not stored', async () => {
+    await createSchema(ecommerce, ecommerceSnapshot());
+    expect(await openSchemaNamed('Ecommerce')).toBeUndefined();
+    expect(await openSchemaNamed('')).toBeUndefined();
   });
 });
 

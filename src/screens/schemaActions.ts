@@ -1,66 +1,17 @@
 import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
 import type { SchemaSnapshot } from '../core/model';
 import { plural } from '../core/plural';
+import { SCHEMAS_ROUTE } from '../core/routes';
 import type { SchemaRecord } from '../db/db';
-import {
-  createSchema,
-  deleteSchema as removeSchema,
-  openSchema as readSchema,
-  type NewSchema,
-  type StoredSchema,
-} from '../db/schemas';
+import { createSchema, deleteSchema as removeSchema, type NewSchema } from '../db/schemas';
 import { ecommerceSample, selectDirty, useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
-
-/** Shows the schema list. The open schema stays open, with its unsaved changes. */
-export function showSchemas() {
-  useUiStore.getState().showScreen('schemas');
-}
-
-/** Puts a stored schema in the workspace as the open one. */
-function show({ schema, snapshot }: StoredSchema) {
-  const ui = useUiStore.getState();
-  useSchemaStore.getState().load({
-    id: schema.id,
-    name: schema.name,
-    engine: schema.engine,
-    version: schema.version,
-    ...snapshot,
-  });
-  // The search filtered the tables of the schema that was open.
-  ui.setSearch('');
-  ui.showScreen('workspace');
-}
+import { go, openStored } from './navigation';
 
 /** Runs `then` once the open schema may be replaced: at once, or after its unsaved changes are given up. */
 function leaveOpenSchema(then: () => void) {
   if (!selectDirty(useSchemaStore.getState())) then();
   else useUiStore.getState().openDialog({ kind: 'discard-changes', onDiscard: then });
-}
-
-async function load(id: number): Promise<void> {
-  const ui = useUiStore.getState();
-  try {
-    const stored = await readSchema(id);
-    if (!stored) throw new Error('Schema no longer exists.');
-    show(stored);
-  } catch (error) {
-    console.error(error);
-    ui.showToast({
-      tone: 'error',
-      title: 'Could not open schema',
-      description: 'It could not be read from browser storage.',
-    });
-  }
-}
-
-/**
- * A row of the schema list or the sidebar: opens the current version of a schema in the workspace.
- * Unsaved changes to another schema are confirmed away first.
- */
-export function openSchema(id: number) {
-  if (useSchemaStore.getState().id === id) useUiStore.getState().showScreen('workspace');
-  else leaveOpenSchema(() => void load(id));
 }
 
 /** ⌘N and the New Schema buttons: asks for the name of a new schema. */
@@ -85,7 +36,8 @@ export async function createNewSchema({ sample, ...schema }: NewSchemaInput): Pr
   try {
     const stored = await createSchema(schema, snapshot, sample ? 'Ecommerce sample' : 'New schema');
     ui.closeDialog();
-    show({ schema: stored, snapshot });
+    openStored({ schema: stored, snapshot });
+    go({ screen: 'workspace', schema: stored.name });
     return true;
   } catch (error) {
     console.error(error);
@@ -123,7 +75,7 @@ export async function deleteSchema(id: number): Promise<void> {
   // The open schema is gone with its unsaved changes: nothing is open, as on first run.
   if (useSchemaStore.getState().id === id) {
     useSchemaStore.getState().load(ecommerceSample);
-    ui.showScreen('schemas');
+    go(SCHEMAS_ROUTE);
   }
   ui.showToast({
     tone: 'info',

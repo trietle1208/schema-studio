@@ -6,6 +6,7 @@ import { StatusBar } from '../components/StatusBar';
 import { Toolbar } from '../components/Toolbar';
 import { newTablePosition } from '../core/layout';
 import { countRelations } from '../core/relations';
+import { SCHEMAS_ROUTE } from '../core/routes';
 import { searchTables } from '../core/search';
 import { findProblems } from '../core/validate';
 import { versionLabel } from '../core/versions';
@@ -21,6 +22,7 @@ import {
 } from '../store/schema';
 import { useUiStore } from '../store/ui';
 import { useWorkspaceShortcuts } from './useWorkspaceShortcuts';
+import { go } from './navigation';
 import { newTable, requestDeleteTable, saveSchema } from './workspaceActions';
 
 export function Workspace() {
@@ -95,6 +97,8 @@ export function Workspace() {
           if (search.trim() && visible[0]) select(visible[0].name);
         }}
         searchRef={searchRef}
+        onSchemas={() => go(SCHEMAS_ROUTE)}
+        onHistory={() => go({ screen: 'history', schema: name })}
       />
       <div className="ss-work">
         <ERCanvas

@@ -25,7 +25,8 @@ import { versionLabel } from '../core/versions';
 import type { SchemaRecord } from '../db/db';
 import { useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
-import { openSchema, requestDeleteSchema, requestNewSchema } from './schemaActions';
+import { go } from './navigation';
+import { requestDeleteSchema, requestNewSchema } from './schemaActions';
 
 const ALL_ENGINES = 'all';
 // The menu's minimum width in bundle.css; it opens under the More button, right edges aligned.
@@ -110,7 +111,7 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
         setSelectedId((current) => stepSelection(ids, current, e.key === 'ArrowDown' ? 1 : -1));
       } else if (e.key === 'Enter') {
         const selected = rows.find((r) => r.id === selectedId);
-        if (selected) openSchema(selected.id);
+        if (selected) go({ screen: 'workspace', schema: selected.name });
       } else if ((e.key === 'Backspace' || e.key === 'Delete') && !inSearch) {
         const selected = rows.find((r) => r.id === selectedId);
         if (!selected) return;
@@ -201,11 +202,16 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
       label: '',
       width: 120,
       sortable: false,
-      // Version history and export arrive with their screens (roadmap 5.2 and 4.4).
+      // Export arrives with its dialog (roadmap 4.4).
       render: (r) => (
         // A double click on a button is not a double click on the row.
         <div className="ss-table-actions" onDoubleClick={(e) => e.stopPropagation()}>
-          <IconButton icon="history" label="Version history" size="sm" disabled />
+          <IconButton
+            icon="history"
+            label="Version history"
+            size="sm"
+            onClick={() => go({ screen: 'history', schema: r.name })}
+          />
           <IconButton icon="download" label="Export" size="sm" disabled />
           <IconButton
             icon="more"
@@ -283,7 +289,7 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
           rowKey="id"
           selectedKey={selectedId}
           onRowClick={(r) => setSelectedId(r.id)}
-          onRowDoubleClick={(r) => openSchema(r.id)}
+          onRowDoubleClick={(r) => go({ screen: 'workspace', schema: r.name })}
           sort={sort}
           onSort={(next) => {
             if (next.key === 'actions') return;
@@ -315,7 +321,7 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
             label={menuFor.name}
             onClose={() => setMenu(null)}
             items={[
-              { icon: 'external', label: 'Open', shortcut: '⏎', onSelect: () => openSchema(menuFor.id) },
+              { icon: 'external', label: 'Open', shortcut: '⏎', onSelect: () => go({ screen: 'workspace', schema: menuFor.name }) },
               '-',
               {
                 icon: 'trash',

@@ -4,8 +4,9 @@ import { db } from '../db/db';
 import { createSchema, listSchemas, listVersions } from '../db/schemas';
 import { resetDatabase } from '../db/testing';
 import { selectDirty, undo, useSchemaStore } from '../store/schema';
-import { openLastSchema } from '../store/startup';
+import { memoryAddress } from '../store/testing';
 import { useUiStore } from '../store/ui';
+import { startRouting } from './navigation';
 import { deleteTable, newTable, requestDeleteTable, saveSchema } from './workspaceActions';
 
 const schema = () => useSchemaStore.getState();
@@ -16,7 +17,7 @@ const names = () => schema().tables.map((t) => t.name);
 beforeEach(async () => {
   await resetDatabase();
   await createSchema({ name: 'ecommerce', engine: 'PostgreSQL' }, ecommerceSnapshot());
-  await openLastSchema();
+  await startRouting(memoryAddress());
   useUiStore.setState({ dialog: null, toast: null });
 });
 

@@ -19,7 +19,7 @@ Each step is sized for one Claude Code session. Tick it off when `npm run build`
 - [x] **3.2 Schema list screen**: DataTable with search, engine filter, sort; New Schema; Empty state.
 - [x] **3.2a New table**: "New table" in the canvas menu (right-click) and in the inspector; the table is selected and its name put into rename mode.
 - [x] **3.2b Delete schema**: row menu and ⌫ in the schema list, confirmed in a dialog; removes the schema with all its versions.
-- [ ] **3.3 Routing**: list ↔ workspace ↔ history ↔ diff (react-router or simple state router).
+- [x] **3.3 Routing**: list ↔ workspace ↔ history ↔ diff (react-router or simple state router).
 
 ## Phase 4 — Import / Export (MVP done here)
 - [ ] **4.1 Parser**: PostgreSQL `CREATE TABLE / ALTER TABLE ADD CONSTRAINT / CREATE INDEX` → model; errors with line numbers. Tests with good and broken fixtures.

@@ -103,6 +103,14 @@ export function openSchema(id: number): Promise<StoredSchema | undefined> {
   });
 }
 
+/** The schema called `name`, with the snapshot of its current version. */
+export function openSchemaNamed(name: string): Promise<StoredSchema | undefined> {
+  return db.transaction('r', db.schemas, db.versions, async () => {
+    const schema = await db.schemas.where('name').equals(name).first();
+    return schema && openSchema(schema.id);
+  });
+}
+
 /** The schema saved last, with the snapshot of its current version. Undefined while nothing is stored. */
 export function openLatestSchema(): Promise<StoredSchema | undefined> {
   return db.transaction('r', db.schemas, db.versions, async () => {

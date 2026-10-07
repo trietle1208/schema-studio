@@ -1,4 +1,4 @@
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { stepZoom } from '../core/layout';
 import { Badge } from './Badge';
 import { Button } from './Button';
@@ -40,6 +40,32 @@ export function SaveStatus({ state = 'saved', label }: SaveStatusProps) {
   );
 }
 
+export interface CrumbProps {
+  /** Makes the crumb a link. */
+  onClick?: () => void;
+  className?: string;
+  children?: ReactNode;
+}
+
+/** A step of the toolbar breadcrumb. With a handler it works as a link, for the mouse and the keyboard. */
+export function Crumb({ onClick, className, children }: CrumbProps) {
+  if (!onClick) return <span className={className}>{children}</span>;
+  return (
+    <span
+      className={className}
+      role="link"
+      tabIndex={0}
+      style={{ cursor: 'pointer' }}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onClick();
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 export interface ToolbarProps {
   schema?: string;
   engine?: string;
@@ -59,6 +85,8 @@ export interface ToolbarProps {
   /** Enter in the search box. */
   onSearchSubmit?: () => void;
   searchRef?: Ref<HTMLInputElement>;
+  /** Makes "Schemas" in the breadcrumb a link to the schema list. */
+  onSchemas?: () => void;
   // History, Share and Export stay disabled without a handler.
   onHistory?: () => void;
   onShare?: () => void;
@@ -82,6 +110,7 @@ export function Toolbar({
   onSearch,
   onSearchSubmit,
   searchRef,
+  onSchemas,
   onHistory,
   onShare,
   onExport,
@@ -89,7 +118,7 @@ export function Toolbar({
   return (
     <header className="ss-toolbar">
       <div className="ss-tb-crumb">
-        <span>Schemas</span>
+        <Crumb onClick={onSchemas}>Schemas</Crumb>
         <Icon name="chevron-right" size={12} />
         <span className="ss-tb-name">
           {schema}

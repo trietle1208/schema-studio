@@ -4,16 +4,10 @@ import { db, type SchemaRecord } from '../db/db';
 import { createSchema, listSchemas, listVersions } from '../db/schemas';
 import { resetDatabase } from '../db/testing';
 import { selectDirty, useSchemaStore } from '../store/schema';
-import { openLastSchema } from '../store/startup';
+import { memoryAddress, type MemoryAddress } from '../store/testing';
 import { useUiStore, type Dialog } from '../store/ui';
-import {
-  createNewSchema,
-  deleteSchema,
-  openSchema,
-  requestDeleteSchema,
-  requestNewSchema,
-  showSchemas,
-} from './schemaActions';
+import { go, startRouting } from './navigation';
+import { createNewSchema, deleteSchema, requestDeleteSchema, requestNewSchema } from './schemaActions';
 
 const schema = () => useSchemaStore.getState();
 const ui = () => useUiStore.getState();
@@ -32,93 +26,20 @@ function confirmDiscard() {
 
 let shop: SchemaRecord;
 let blog: SchemaRecord;
+let address: MemoryAddress;
 
 // Two stored schemas, with ecommerce (saved last) open in the workspace.
 beforeEach(async () => {
   await resetDatabase();
   blog = await createSchema({ name: 'blog', engine: 'MySQL' }, { tables: ecommerceSnapshot().tables.slice(0, 2), positions: {} });
   shop = await createSchema({ name: 'ecommerce', engine: 'PostgreSQL' }, ecommerceSnapshot());
-  useUiStore.setState({ screen: 'schemas', dialog: null, toast: null, search: '' });
-  await openLastSchema();
+  useUiStore.setState({ dialog: null, toast: null, search: '' });
+  address = memoryAddress();
+  await startRouting(address);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-});
-
-describe('showSchemas', () => {
-  it('shows the list and keeps the open schema with its unsaved changes', () => {
-    schema().deleteTable('payments');
-    showSchemas();
-    expect(ui().screen).toBe('schemas');
-    expect(schema().id).toBe(shop.id);
-    expect(selectDirty(schema())).toBe(true);
-  });
-});
-
-describe('openSchema', () => {
-  it('opens the current version of another schema in the workspace', async () => {
-    showSchemas();
-    ui().setSearch('orders');
-    openSchema(blog.id);
-    await until(() => schema().id === blog.id);
-
-    expect(schema()).toMatchObject({ name: 'blog', engine: 'MySQL', version: 1, selected: null });
-    expect(names()).toEqual(['users', 'orders']);
-    expect(selectDirty(schema())).toBe(false);
-    expect(useSchemaStore.temporal.getState().pastStates).toEqual([]);
-    expect(ui().screen).toBe('workspace');
-    expect(ui().search).toBe('');
-  });
-
-  it('goes back to the schema that is open without reading it again', () => {
-    schema().deleteTable('payments');
-    showSchemas();
-    openSchema(shop.id);
-
-    expect(ui().screen).toBe('workspace');
-    expect(ui().dialog).toBeNull();
-    expect(names()).not.toContain('payments');
-    expect(selectDirty(schema())).toBe(true);
-  });
-
-  it('asks before dropping unsaved changes, and keeps them when the answer is no', async () => {
-    schema().deleteTable('payments');
-    showSchemas();
-    openSchema(blog.id);
-
-    expect(ui().dialog?.kind).toBe('discard-changes');
-    ui().closeDialog();
-    expect(schema().id).toBe(shop.id);
-    expect(selectDirty(schema())).toBe(true);
-    expect(ui().screen).toBe('schemas');
-  });
-
-  it('opens the other schema once the changes are given up; the saved version is untouched', async () => {
-    schema().deleteTable('payments');
-    openSchema(blog.id);
-    confirmDiscard();
-    await until(() => schema().id === blog.id);
-
-    expect(ui().dialog).toBeNull();
-    expect(names()).toEqual(['users', 'orders']);
-
-    openSchema(shop.id);
-    await until(() => schema().id === shop.id);
-    expect(names()).toContain('payments');
-    expect(schema().version).toBe(1);
-  });
-
-  it('says so when the schema cannot be read, and leaves the open one alone', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    showSchemas();
-    openSchema(99);
-    await until(() => ui().toast !== null);
-
-    expect(ui().toast).toMatchObject({ tone: 'error', title: 'Could not open schema' });
-    expect(schema().id).toBe(shop.id);
-    expect(ui().screen).toBe('schemas');
-  });
 });
 
 describe('requestNewSchema', () => {
@@ -141,12 +62,13 @@ describe('requestNewSchema', () => {
 
 describe('createNewSchema', () => {
   it('stores a blank schema as v1 and opens it in the workspace', async () => {
-    showSchemas();
+    go({ screen: 'schemas' });
     requestNewSchema();
     expect(await createNewSchema({ name: 'crm', engine: 'SQLite', description: 'Leads and accounts' })).toBe(true);
 
     expect(ui().dialog).toBeNull();
-    expect(ui().screen).toBe('workspace');
+    expect(ui().route).toEqual({ screen: 'workspace', schema: 'crm' });
+    expect(address.read()).toBe('#/schemas/crm');
     expect(schema()).toMatchObject({ name: 'crm', engine: 'SQLite', version: 1, tables: [], positions: {} });
     expect(selectDirty(schema())).toBe(false);
 
@@ -162,6 +84,16 @@ describe('createNewSchema', () => {
     const stored = (await listSchemas()).find((s) => s.name === 'shop_v2');
     expect(stored).toMatchObject({ tables: 5, relationships: 4, version: 1 });
     expect((await listVersions(stored!.id))[0].snapshot).toEqual(ecommerceSnapshot());
+  });
+
+  it('adds the new schema to the history, so Back returns to where it was created from', async () => {
+    go({ screen: 'schemas' });
+    await createNewSchema({ name: 'crm', engine: 'SQLite' });
+    expect(address.entries).toEqual(['#/schemas/ecommerce', '#/schemas', '#/schemas/crm']);
+
+    address.back();
+    expect(ui().route).toEqual({ screen: 'schemas' });
+    expect(schema().name).toBe('crm');
   });
 
   it('saves the new schema under its own id afterwards', async () => {
@@ -201,7 +133,7 @@ describe('requestDeleteSchema', () => {
 describe('deleteSchema', () => {
   it('removes another schema with its versions and leaves the open one alone', async () => {
     schema().deleteTable('payments');
-    showSchemas();
+    go({ screen: 'schemas' });
     requestDeleteSchema(blog);
     await deleteSchema(blog.id);
 
@@ -222,7 +154,8 @@ describe('deleteSchema', () => {
     await deleteSchema(shop.id);
 
     expect(ui().toast).toMatchObject({ title: 'Deleted schema ecommerce', description: '2 versions removed from this browser.' });
-    expect(ui().screen).toBe('schemas');
+    expect(ui().route).toEqual({ screen: 'schemas' });
+    expect(address.read()).toBe('#/schemas');
     expect(schema().id).toBeNull();
     expect(schema().version).toBeNull();
     expect(selectDirty(schema())).toBe(false);
@@ -230,7 +163,7 @@ describe('deleteSchema', () => {
     expect(await db.versions.count()).toBe(1);
 
     // Nothing stands in the way of opening or creating a schema afterwards.
-    openSchema(blog.id);
+    go({ screen: 'workspace', schema: 'blog' });
     await until(() => schema().id === blog.id);
     expect(ui().dialog).toBeNull();
   });
@@ -240,9 +173,8 @@ describe('deleteSchema', () => {
     await deleteSchema(blog.id);
     expect(await listSchemas()).toEqual([]);
 
-    useUiStore.setState({ screen: 'workspace' });
-    await openLastSchema();
-    expect(ui().screen).toBe('schemas');
+    await startRouting(memoryAddress('#/schemas/ecommerce'));
+    expect(ui().route).toEqual({ screen: 'schemas' });
   });
 
   it('says so when the schema cannot be removed, and keeps it open', async () => {
@@ -254,6 +186,6 @@ describe('deleteSchema', () => {
     expect(ui().dialog).toBeNull();
     expect(ui().toast).toMatchObject({ tone: 'error', title: 'Could not delete schema' });
     expect(schema().id).toBe(shop.id);
-    expect(ui().screen).toBe('workspace');
+    expect(ui().route).toEqual({ screen: 'workspace', schema: 'ecommerce' });
   });
 });
