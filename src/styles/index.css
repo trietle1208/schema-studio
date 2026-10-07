@@ -11,3 +11,17 @@ body {
   margin: 0;
   background: var(--bg-1);
 }
+
+/* Native scrollbars and select menus follow the theme. */
+:root {
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+/* The four ON DELETE actions do not fit the column editor at the default segment padding. */
+.ss-coledit .ss-seg-item {
+  padding: 0 4px;
+}

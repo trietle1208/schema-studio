@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { ERCanvas } from '../components/ERCanvas';
+import { Inspector } from '../components/Inspector';
 import { validateColumns } from '../core/validate';
 import { selectDirtyTables, selectTable, useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
 
 export function Workspace() {
+  const name = useSchemaStore((s) => s.name);
   const tables = useSchemaStore((s) => s.tables);
   const positions = useSchemaStore((s) => s.positions);
   const selected = useSchemaStore((s) => s.selected);
@@ -16,6 +18,8 @@ export function Workspace() {
   const selectColumn = useSchemaStore((s) => s.selectColumn);
   const moveTable = useSchemaStore((s) => s.moveTable);
   const endMove = useSchemaStore((s) => s.endMove);
+  const updateTable = useSchemaStore((s) => s.updateTable);
+  const renameTable = useSchemaStore((s) => s.renameTable);
   const duplicateTable = useSchemaStore((s) => s.duplicateTable);
   const zoom = useUiStore((s) => s.zoom);
   const setZoom = useUiStore((s) => s.setZoom);
@@ -39,6 +43,18 @@ export function Workspace() {
         dirtyTables={dirtyTables}
         invalidColumns={invalidColumns}
         onDuplicateTable={duplicateTable}
+      />
+      <Inspector
+        table={table}
+        tables={tables}
+        schemaName={name}
+        selectedColumn={selectedColumn}
+        onSelectColumn={selectColumn}
+        onChange={(t, field) => updateTable(t.name, t, field)}
+        onRename={renameTable}
+        onDuplicate={duplicateTable}
+        autoFocusDraft
+        settingsCollapsed
       />
     </div>
   );

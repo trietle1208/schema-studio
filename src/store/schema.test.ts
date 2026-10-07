@@ -75,6 +75,66 @@ describe('schema store', () => {
     expect(selectDirty(state())).toBe(true);
   });
 
+  it('undoes typing into one field in a single step', () => {
+    const before = tableNamed(state(), 'orders');
+    const type = (text: string, field: string) =>
+      state().updateTable('orders', { ...tableNamed(state(), 'orders'), comment: text }, field);
+
+    type('O', 'comment');
+    type('On', 'comment');
+    type('One', 'comment');
+    expect(tableNamed(state(), 'orders').comment).toBe('One');
+    expect(history().pastStates).toHaveLength(1);
+
+    history().undo();
+    expect(tableNamed(state(), 'orders')).toBe(before);
+    expect(selectDirty(state())).toBe(false);
+
+    history().redo();
+    expect(tableNamed(state(), 'orders').comment).toBe('One');
+  });
+
+  it('starts a new undo step for another field, another table, a new selection or an edit in between', () => {
+    const edit = (table: string, comment: string, field?: string) =>
+      state().updateTable(table, { ...tableNamed(state(), table), comment }, field);
+
+    edit('orders', 'a', 'comment');
+    edit('orders', 'ab', 'columns.0.comment');
+    expect(history().pastStates).toHaveLength(2);
+
+    edit('users', 'c', 'columns.0.comment');
+    expect(history().pastStates).toHaveLength(3);
+
+    edit('users', 'cd', 'columns.0.comment');
+    state().selectColumn(1);
+    edit('users', 'cde', 'columns.0.comment');
+    expect(history().pastStates).toHaveLength(4);
+
+    state().moveTable('users', { x: 40, y: 48 });
+    state().endMove();
+    edit('users', 'cdef', 'columns.0.comment');
+    expect(history().pastStates).toHaveLength(6);
+
+    edit('users', 'x');
+    edit('users', 'xy');
+    expect(history().pastStates).toHaveLength(8);
+  });
+
+  it('does not merge typing into a step that was undone', () => {
+    const type = (text: string) => state().updateTable('orders', { ...tableNamed(state(), 'orders'), comment: text }, 'comment');
+
+    type('a');
+    type('ab');
+    history().undo();
+    type('x');
+    type('xy');
+
+    expect(history().pastStates).toHaveLength(1);
+    expect(history().futureStates).toEqual([]);
+    history().undo();
+    expect(tableNamed(state(), 'orders').comment).toBe('Customer orders. Totals are stored, not derived.');
+  });
+
   it('keeps the selection on a renamed table, and undo restores the old name and selection', () => {
     state().select('orders');
     state().selectColumn(3);

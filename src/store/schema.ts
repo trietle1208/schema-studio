@@ -21,7 +21,11 @@ export interface SchemaState extends SchemaSource {
   load: (schema: SchemaSource) => void;
   select: (name: string | null) => void;
   selectColumn: (index: number | null) => void;
-  updateTable: (name: string, table: Table) => void;
+  /**
+   * Replaces a table. Consecutive calls with the same `coalesce` key are one undo step, so typing
+   * into a field is undone at once; changing the selection or making any other edit ends the run.
+   */
+  updateTable: (name: string, table: Table, coalesce?: string) => void;
   renameTable: (from: string, to: string) => void;
   duplicateTable: (name: string) => void;
   deleteTable: (name: string) => void;
@@ -47,6 +51,8 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample) {
       (set, get, api) => {
         const history = () => (api.temporal as StoreApi<TemporalState<Tracked>>).getState();
         let dragging = false;
+        /** The last coalescing edit and the snapshot it produced. */
+        let typing: { key: string; snapshot: SchemaSnapshot } | null = null;
 
         return {
           name: initial.name,
@@ -71,13 +77,35 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample) {
           },
 
           select: (name) => {
+            typing = null;
             if (name === get().selected) return;
             set({ selected: name, selectedColumn: null });
           },
 
-          selectColumn: (index) => set({ selectedColumn: index }),
+          selectColumn: (index) => {
+            typing = null;
+            set({ selectedColumn: index });
+          },
 
-          updateTable: (name, table) => set(updateTable(get(), name, table)),
+          updateTable: (name, table, coalesce) => {
+            const state = get();
+            const next = updateTable(state, name, table);
+            if (next === state) return;
+            const key = coalesce === undefined ? null : `${name}:${coalesce}`;
+            const continues =
+              typing !== null &&
+              typing.key === key &&
+              typing.snapshot.tables === state.tables &&
+              typing.snapshot.positions === state.positions;
+            if (continues && !dragging) {
+              history().pause();
+              set(next);
+              history().resume();
+            } else {
+              set(next);
+            }
+            typing = key === null ? null : { key, snapshot: next };
+          },
 
           renameTable: (from, to) => {
             const state = get();
