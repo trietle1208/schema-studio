@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { ecommerceSnapshot } from './fixtures/testing';
 import { ecommerceDump, ecommerceSql, missingCommaSql } from './fixtures/sql';
-import { availableName, byteLength, countLines, excerptAround, exportFileName, formatBytes, schemaNameFromFile } from './files';
+import {
+  availableName,
+  byteLength,
+  countLines,
+  diffFileName,
+  excerptAround,
+  exportFileName,
+  formatBytes,
+  migrationFileName,
+  schemaNameFromFile,
+} from './files';
 import { postgresGenerator } from './generate/postgres';
 import { postgresParser } from './parse/postgres';
 import { validateSchemaName } from './validate';
@@ -14,6 +24,18 @@ describe('exportFileName', () => {
 
   it('leaves the version out for a schema that is not saved', () => {
     expect(exportFileName('draft', null, 'sql')).toBe('draft.sql');
+  });
+});
+
+describe('migrationFileName and diffFileName', () => {
+  it('name both versions', () => {
+    expect(migrationFileName('ecommerce', 11, 12)).toBe('ecommerce_v11_to_v12.sql');
+    expect(migrationFileName('ecommerce', 12, 8)).toBe('ecommerce_v12_to_v8.sql');
+    expect(diffFileName('ecommerce', 11, 12)).toBe('ecommerce_v11_v12.diff');
+  });
+
+  it('says when a migration leads to changes that are not saved', () => {
+    expect(migrationFileName('ecommerce', 12, null)).toBe('ecommerce_v12_to_unsaved.sql');
   });
 });
 

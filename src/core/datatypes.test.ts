@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchTypes, normalizeType, POSTGRES_TYPES } from './datatypes';
+import { matchTypes, normalizeType, POSTGRES_TYPES, serialType, widensType } from './datatypes';
 
 const names = (query: string) => matchTypes(query).map((t) => t.name);
 
@@ -51,5 +51,57 @@ describe('matchTypes', () => {
       { name: 'DATETIME', family: 'date/time' },
     ];
     expect(matchTypes('date', mysql)).toEqual([{ name: 'DATETIME', family: 'date/time' }]);
+  });
+});
+
+describe('serialType', () => {
+  it('is the integer an auto-increment type stores', () => {
+    expect(serialType('BIGSERIAL')).toBe('BIGINT');
+    expect(serialType('serial')).toBe('INTEGER');
+    expect(serialType('SMALLSERIAL')).toBe('SMALLINT');
+    expect(serialType('BIGINT')).toBeNull();
+  });
+});
+
+describe('widensType', () => {
+  it('holds for a longer text type', () => {
+    expect(widensType('VARCHAR(32)', 'VARCHAR(50)')).toBe(true);
+    expect(widensType('VARCHAR(50)', 'TEXT')).toBe(true);
+    expect(widensType('VARCHAR(50)', 'VARCHAR')).toBe(true);
+    expect(widensType('CHAR(3)', 'VARCHAR(3)')).toBe(true);
+    expect(widensType('character varying(10)', 'varchar(10)')).toBe(true);
+  });
+
+  it('does not hold for a shorter one', () => {
+    expect(widensType('VARCHAR(50)', 'VARCHAR(32)')).toBe(false);
+    expect(widensType('TEXT', 'VARCHAR(255)')).toBe(false);
+    expect(widensType('VARCHAR', 'VARCHAR(255)')).toBe(false);
+    expect(widensType('VARCHAR(3)', 'CHAR(3)')).toBe(false);
+  });
+
+  it('holds for a larger integer, auto-increment or not', () => {
+    expect(widensType('SMALLINT', 'INTEGER')).toBe(true);
+    expect(widensType('INT', 'BIGINT')).toBe(true);
+    expect(widensType('SERIAL', 'BIGSERIAL')).toBe(true);
+    expect(widensType('INTEGER', 'NUMERIC')).toBe(true);
+    expect(widensType('BIGINT', 'INTEGER')).toBe(false);
+    expect(widensType('BIGINT', 'DECIMAL(12,2)')).toBe(false);
+  });
+
+  it('holds for a decimal with room for every digit on both sides of the point', () => {
+    expect(widensType('DECIMAL(10,2)', 'DECIMAL(12,2)')).toBe(true);
+    expect(widensType('NUMERIC(10,2)', 'DECIMAL(12,4)')).toBe(true);
+    expect(widensType('DECIMAL(10,2)', 'NUMERIC')).toBe(true);
+    expect(widensType('DECIMAL(12,2)', 'DECIMAL(10,2)')).toBe(false);
+    // Two more digits after the point leave two fewer before it.
+    expect(widensType('DECIMAL(10,2)', 'DECIMAL(10,4)')).toBe(false);
+    expect(widensType('NUMERIC', 'DECIMAL(12,2)')).toBe(false);
+  });
+
+  it('does not vouch for a change between kinds of types', () => {
+    expect(widensType('TEXT', 'INTEGER')).toBe(false);
+    expect(widensType('TIMESTAMP', 'TIMESTAMPTZ')).toBe(false);
+    expect(widensType('INTEGER', 'TEXT')).toBe(false);
+    expect(widensType('geometry(Point, 4326)', 'TEXT')).toBe(false);
   });
 });

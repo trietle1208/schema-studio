@@ -15,6 +15,19 @@ export function exportFileName(schema: string, version: number | null, format: E
   return `${schema}${version === null ? '' : `_${versionLabel(version)}`}.${format}`;
 }
 
+/**
+ * The file a migration is saved as: `ecommerce_v11_to_v12.sql`. `to` is null when the migration
+ * leads to changes that are not saved as a version yet.
+ */
+export function migrationFileName(schema: string, from: number, to: number | null): string {
+  return `${schema}_${versionLabel(from)}_to_${to === null ? 'unsaved' : versionLabel(to)}.sql`;
+}
+
+/** The file the comparison of two versions is saved as: `ecommerce_v11_v12.diff`. */
+export function diffFileName(schema: string, from: number, to: number): string {
+  return `${schema}_${versionLabel(from)}_${versionLabel(to)}.diff`;
+}
+
 /** The size of `text` as a UTF-8 file. */
 export function byteLength(text: string): number {
   return new TextEncoder().encode(text).length;

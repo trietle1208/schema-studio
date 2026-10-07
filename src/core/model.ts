@@ -63,7 +63,8 @@ export interface Version {
   current?: boolean;
   time: string;
   timestamp?: string;
-  author: string;
+  /** Left out where versions have no author, as in a local workspace. */
+  author?: string;
   initials?: string;
   message: string;
   tables?: number;
@@ -80,6 +81,8 @@ export interface DiffItem {
   op: DiffOp;
   path: string;
   detail?: string;
+  /** Where the change shows in the DDL: the key of its block (see `DdlBlock`). */
+  anchor?: string;
 }
 
 export interface DiffGroup {

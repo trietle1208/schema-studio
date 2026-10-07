@@ -34,3 +34,9 @@ export function timestamp(time: number): string {
   const date = new Date(time);
   return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}:${two(date.getMinutes())}`;
 }
+
+/** A moment as the version history shows it, in local time: `Oct 6, 2026 · 08:14`. */
+export function dateTime(time: number): string {
+  const date = new Date(time);
+  return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()} · ${two(date.getHours())}:${two(date.getMinutes())}`;
+}
