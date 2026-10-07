@@ -6,5 +6,7 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
+    // Node has no IndexedDB; the database tests run on an in-memory one.
+    setupFiles: ['fake-indexeddb/auto'],
   },
 });

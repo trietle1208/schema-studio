@@ -1,22 +1,41 @@
 import { plural } from '../core/plural';
-import { selectDirty, undo, useSchemaStore } from '../store/schema';
+import { versionLabel } from '../core/versions';
+import { undo, useSchemaStore, type SaveResult } from '../store/schema';
 import { useUiStore } from '../store/ui';
 
-/** ⌘S and the Save button: saves the working copy and says in a toast how it went. */
-export function saveSchema() {
+/**
+ * ⌘S and the Save button: stores the working copy as a new version and says in a toast how it went.
+ * Never rejects.
+ */
+export async function saveSchema(): Promise<void> {
   const schema = useSchemaStore.getState();
   const ui = useUiStore.getState();
-  const dirty = selectDirty(schema);
-  if (!schema.save()) {
+  let result: SaveResult;
+  try {
+    result = await schema.save();
+  } catch (error) {
+    console.error(error);
+    ui.showToast({
+      tone: 'error',
+      title: 'Save failed',
+      description: 'The version could not be written to browser storage. Your changes are still open.',
+    });
+    return;
+  }
+  if (result.status === 'invalid') {
     ui.showToast({
       tone: 'error',
       title: 'Fix validation errors before saving',
       description: 'One or more columns are invalid. Errors are marked in the inspector.',
     });
-    return;
   }
   // Saving an unchanged schema saves nothing, so there is nothing to announce.
-  if (dirty) ui.showToast({ title: 'Saved', description: `${schema.name} · ${plural(schema.tables.length, 'table')}` });
+  if (result.status === 'saved') {
+    ui.showToast({
+      title: `Saved as ${versionLabel(result.version)}`,
+      description: `${schema.name} · ${plural(schema.tables.length, 'table')}`,
+    });
+  }
 }
 
 /** ⌫, the inspector and the canvas menu: deleting a table is confirmed in a dialog first. */

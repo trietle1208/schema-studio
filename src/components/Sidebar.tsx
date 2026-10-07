@@ -21,13 +21,12 @@ export interface SidebarProps {
   userInitials?: string;
 }
 
+/** `2 hours ago` as `2h`, for the narrow time column. Dates such as `Aug 28` stay as they are. */
 function shortTime(updated: string): string {
   return updated
-    .replace(' ago', '')
-    .replace(' hours', 'h')
-    .replace(' days', 'd')
-    .replace(' week', 'w')
-    .replace('Yesterday', '1d');
+    .replace('just now', 'now')
+    .replace('Yesterday', '1d')
+    .replace(/ (minute|hour|day|week)s? ago/, (_, unit: string) => unit[0]);
 }
 
 export function Sidebar({

@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "dexie": "^4.4.6",
+    "dexie-react-hooks": "^4.4.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zundo": "^2.3.0",
@@ -25,6 +27,7 @@
     "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
+    "fake-indexeddb": "^6.2.5",
     "globals": "^17.13.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.1",

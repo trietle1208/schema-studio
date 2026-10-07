@@ -6,17 +6,50 @@ import { copyName, deleteTable, duplicateTable, moveTable, renameTable, updateTa
 import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
 import type { Position, SchemaSnapshot, Table } from '../core/model';
 import { findProblems } from '../core/validate';
+import { createSchema, saveVersion } from '../db/schemas';
 
 const HISTORY_LIMIT = 50;
 
 export interface SchemaSource extends SchemaSnapshot {
   name: string;
   engine: string;
+  /** Where the snapshot is stored. Left out for a schema that has not been saved yet. */
+  id?: number;
+  version?: number;
 }
 
-export interface SchemaState extends SchemaSource {
+/** What a schema is stored under: its id in the database and the number of the version. */
+export interface StoredAs {
+  id: number;
+  version: number;
+}
+
+/**
+ * Stores `snapshot` as a new version of a schema and resolves with where it went. A schema whose
+ * `id` is null has never been stored and is created by this.
+ */
+export type Persist = (
+  schema: { id: number | null; name: string; engine: string },
+  snapshot: SchemaSnapshot,
+) => Promise<StoredAs>;
+
+/**
+ * How a save went: `saved` as a new version, `unchanged` because there was nothing to save,
+ * `invalid` because of validation problems, or `busy` because another save is still running.
+ */
+export type SaveResult = { status: 'saved'; version: number } | { status: 'unchanged' | 'invalid' | 'busy' };
+
+export interface SchemaState extends SchemaSnapshot {
+  name: string;
+  engine: string;
+  /** The schema's id in the database; null until its first save. */
+  id: number | null;
+  /** The number of the version in `saved`; null until the first save. */
+  version: number | null;
   /** The snapshot as of the last save or load; the working copy is dirty when it differs. */
   saved: SchemaSnapshot;
+  /** True while a save is being written. */
+  saving: boolean;
   selected: string | null;
   selectedColumn: number | null;
 
@@ -35,12 +68,12 @@ export interface SchemaState extends SchemaSource {
   moveTable: (name: string, position: Position) => void;
   endMove: () => void;
   /**
-   * Saves the working copy. A schema with validation problems is not saved: the first problem is
-   * selected instead, so its message shows in the inspector. Returns whether the schema is saved.
+   * Stores the working copy as a new version. A schema with validation problems is not saved: the
+   * first problem is selected instead, so its message shows in the inspector. Columns added since
+   * the last save stop being drafts. Rejects when the version could not be written; the working
+   * copy is then as it was.
    */
-  save: () => boolean;
-  /** Makes the working copy the saved snapshot. Columns added since the last save stop being drafts. */
-  markSaved: () => void;
+  save: () => Promise<SaveResult>;
 }
 
 /** What undo and redo restore: the snapshot plus the selection that went with it. */
@@ -53,31 +86,45 @@ export const ecommerceSample: SchemaSource = {
   positions: ecommercePositions,
 };
 
-export function createSchemaStore(initial: SchemaSource = ecommerceSample) {
+const persistToDatabase: Persist = async ({ id, name, engine }, snapshot) => {
+  const stored = id === null ? await createSchema({ name, engine }, snapshot) : await saveVersion(id, snapshot);
+  return { id: stored.id, version: stored.version };
+};
+
+export function createSchemaStore(initial: SchemaSource = ecommerceSample, persist: Persist = persistToDatabase) {
   return create<SchemaState>()(
     temporal(
       (set, get, api) => {
         const history = () => (api.temporal as StoreApi<TemporalState<Tracked>>).getState();
         let dragging = false;
+        /** Counts calls to `load`, so a save can tell that its schema has been replaced meanwhile. */
+        let loads = 0;
         /** The last coalescing edit and the snapshot it produced. */
         let typing: { key: string; snapshot: SchemaSnapshot } | null = null;
 
         return {
           name: initial.name,
           engine: initial.engine,
+          id: initial.id ?? null,
+          version: initial.version ?? null,
           tables: initial.tables,
           positions: initial.positions,
           saved: { tables: initial.tables, positions: initial.positions },
+          saving: false,
           selected: null,
           selectedColumn: null,
 
           load: (schema) => {
+            loads++;
             set({
               name: schema.name,
               engine: schema.engine,
+              id: schema.id ?? null,
+              version: schema.version ?? null,
               tables: schema.tables,
               positions: schema.positions,
               saved: { tables: schema.tables, positions: schema.positions },
+              saving: false,
               selected: null,
               selectedColumn: null,
             });
@@ -154,25 +201,46 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample) {
             history().resume();
           },
 
-          save: () => {
+          save: async () => {
             const state = get();
+            if (state.saving) return { status: 'busy' };
             const problem = findProblems(state.tables)[0];
             if (problem) {
               typing = null;
               set({ selected: problem.table, selectedColumn: problem.column });
-              return false;
+              return { status: 'invalid' };
             }
-            if (isDirty(state, state.saved)) state.markSaved();
-            return true;
-          },
+            // A schema that is not stored yet is saved even when nothing in it has changed.
+            if (state.id !== null && !isDirty(state, state.saved)) return { status: 'unchanged' };
 
-          markSaved: () => {
-            const { tables, positions } = get();
-            const cleared = clearDrafts(tables);
+            const snapshot: SchemaSnapshot = { tables: clearDrafts(state.tables), positions: state.positions };
+            const load = loads;
+            set({ saving: true });
+            let stored: StoredAs;
+            try {
+              stored = await persist({ id: state.id, name: state.name, engine: state.engine }, snapshot);
+            } catch (error) {
+              if (load === loads) set({ saving: false });
+              throw error;
+            }
+            const result: SaveResult = { status: 'saved', version: stored.version };
+            // The version is stored either way, but another schema may have been loaded meanwhile.
+            if (load !== loads) return result;
+
+            // Tables edited while the version was being written stay as they are, and so stay dirty.
+            const current = get().tables;
+            const tables =
+              current === state.tables
+                ? snapshot.tables
+                : current.map((t) => {
+                    const i = state.tables.indexOf(t);
+                    return i < 0 ? t : snapshot.tables[i];
+                  });
             // Dropping the draft marks is part of saving, not an edit to undo.
             if (!dragging) history().pause();
-            set({ tables: cleared, saved: { tables: cleared, positions } });
+            set({ id: stored.id, version: stored.version, tables, saved: snapshot, saving: false });
             if (!dragging) history().resume();
+            return result;
           },
         };
       },

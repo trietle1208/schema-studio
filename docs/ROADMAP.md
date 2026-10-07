@@ -15,7 +15,7 @@ Each step is sized for one Claude Code session. Tick it off when `npm run build`
 - [x] **2.5 Dialogs**: Modal, ConfirmDialog (delete table), Toast.
 
 ## Phase 3 — Persistence & list
-- [ ] **3.1 Dexie**: schemas + versions tables; save creates a new immutable version snapshot.
+- [x] **3.1 Dexie**: schemas + versions tables; save creates a new immutable version snapshot.
 - [ ] **3.2 Schema list screen**: DataTable with search, engine filter, sort; New Schema; Empty state.
 - [ ] **3.3 Routing**: list ↔ workspace ↔ history ↔ diff (react-router or simple state router).
 

@@ -5,9 +5,10 @@ import { Inspector } from '../components/Inspector';
 import { StatusBar } from '../components/StatusBar';
 import { Toast } from '../components/Toast';
 import { Toolbar } from '../components/Toolbar';
-import { outgoingRelations } from '../core/relations';
+import { countRelations } from '../core/relations';
 import { searchTables } from '../core/search';
 import { findProblems } from '../core/validate';
+import { versionLabel } from '../core/versions';
 import {
   redo,
   selectDirty,
@@ -28,6 +29,9 @@ const TOAST_MS = 5000;
 export function Workspace() {
   const name = useSchemaStore((s) => s.name);
   const engine = useSchemaStore((s) => s.engine);
+  const version = useSchemaStore((s) => s.version);
+  const stored = useSchemaStore((s) => s.id !== null);
+  const saving = useSchemaStore((s) => s.saving);
   const tables = useSchemaStore((s) => s.tables);
   const positions = useSchemaStore((s) => s.positions);
   const selected = useSchemaStore((s) => s.selected);
@@ -73,7 +77,10 @@ export function Workspace() {
     () => problems.filter((p) => p.table === selected).map((p) => p.column),
     [problems, selected],
   );
-  const relationships = useMemo(() => tables.reduce((n, t) => n + outgoingRelations(t).length, 0), [tables]);
+  const relationships = useMemo(() => countRelations(tables), [tables]);
+
+  // A schema that is not stored yet is unsaved even with no edits.
+  const saveState = saving ? 'saving' : dirty || !stored ? 'dirty' : 'saved';
 
   const column = table && selectedColumn !== null ? table.columns[selectedColumn] : undefined;
   const selection = table
@@ -85,7 +92,8 @@ export function Workspace() {
       <Toolbar
         schema={name}
         engine={engine}
-        saveState={dirty ? 'dirty' : 'saved'}
+        version={version === null ? undefined : versionLabel(version)}
+        saveState={saveState}
         onSave={saveSchema}
         zoom={zoom}
         onZoom={setZoom}

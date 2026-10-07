@@ -1,6 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ecommerceSnapshot, tableNamed } from '../core/fixtures/testing';
+import { db } from '../db/db';
+import { listSchemas, listVersions } from '../db/schemas';
+import { resetDatabase } from '../db/testing';
 import { selectDirty, undo, useSchemaStore } from '../store/schema';
+import { openLastSchema } from '../store/startup';
 import { useUiStore } from '../store/ui';
 import { deleteTable, requestDeleteTable, saveSchema } from './workspaceActions';
 
@@ -8,31 +12,79 @@ const schema = () => useSchemaStore.getState();
 const ui = () => useUiStore.getState();
 const names = () => schema().tables.map((t) => t.name);
 
-beforeEach(() => {
-  schema().load({ name: 'ecommerce', engine: 'PostgreSQL', ...ecommerceSnapshot() });
+beforeEach(async () => {
+  await resetDatabase();
+  await openLastSchema();
   useUiStore.setState({ dialog: null, toast: null });
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe('saveSchema', () => {
-  it('saves a changed schema and says so', () => {
+  it('stores a changed schema as the next version and names it', async () => {
     schema().deleteTable('payments');
-    saveSchema();
+    await saveSchema();
+
     expect(selectDirty(schema())).toBe(false);
-    expect(ui().toast).toMatchObject({ title: 'Saved', description: 'ecommerce · 4 tables' });
+    expect(schema().version).toBe(2);
+    expect(ui().toast).toMatchObject({ title: 'Saved as v2', description: 'ecommerce · 4 tables' });
+
+    const versions = await listVersions(schema().id!);
+    expect(versions.map((v) => [v.version, v.snapshot.tables.length])).toEqual([
+      [2, 4],
+      [1, 5],
+    ]);
+    expect(versions[0].snapshot).toEqual(schema().saved);
   });
 
-  it('stays quiet when there is nothing to save', () => {
-    saveSchema();
+  it('stays quiet when there is nothing to save', async () => {
+    await saveSchema();
     expect(ui().toast).toBeNull();
+    expect(schema().version).toBe(1);
+    expect(await db.versions.count()).toBe(1);
   });
 
-  it('reports validation errors instead of saving', () => {
+  it('reports validation errors instead of saving', async () => {
     const users = tableNamed(schema(), 'users');
     schema().updateTable('users', { ...users, columns: [...users.columns, { name: '', type: 'TEXT' }] });
-    saveSchema();
+    await saveSchema();
     expect(selectDirty(schema())).toBe(true);
     expect(ui().toast).toMatchObject({ tone: 'error', title: 'Fix validation errors before saving' });
     expect(schema().selected).toBe('users');
+    expect(await db.versions.count()).toBe(1);
+  });
+
+  it('stores one version when save is pressed twice in a row', async () => {
+    schema().deleteTable('payments');
+    await Promise.all([saveSchema(), saveSchema()]);
+    expect(schema().version).toBe(2);
+    expect(await db.versions.count()).toBe(2);
+    expect(ui().toast?.title).toBe('Saved as v2');
+  });
+
+  it('says that the save failed and keeps the changes unsaved', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    schema().deleteTable('payments');
+    db.close();
+
+    await saveSchema();
+
+    expect(ui().toast).toMatchObject({ tone: 'error', title: 'Save failed' });
+    expect(schema().version).toBe(1);
+    expect(schema().saving).toBe(false);
+    expect(selectDirty(schema())).toBe(true);
+    expect(names()).not.toContain('payments');
+  });
+
+  it('creates a schema that is not stored yet, as v1', async () => {
+    schema().load({ name: 'blog', engine: 'MySQL', ...ecommerceSnapshot() });
+    await saveSchema();
+
+    expect(schema().version).toBe(1);
+    expect(ui().toast).toMatchObject({ title: 'Saved as v1', description: 'blog · 5 tables' });
+    expect((await listSchemas()).map((s) => s.name).sort()).toEqual(['blog', 'ecommerce']);
   });
 });
 
@@ -72,13 +124,13 @@ describe('deleteTable', () => {
     expect(ui().toast).toBeNull();
   });
 
-  it('leaves a later toast alone when the delete is undone', () => {
+  it('leaves a later toast alone when the delete is undone', async () => {
     deleteTable('payments');
-    saveSchema();
-    expect(ui().toast?.title).toBe('Saved');
+    await saveSchema();
+    expect(ui().toast?.title).toBe('Saved as v2');
 
     undo();
     expect(names()).toContain('payments');
-    expect(ui().toast?.title).toBe('Saved');
+    expect(ui().toast?.title).toBe('Saved as v2');
   });
 });

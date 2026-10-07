@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ecommerceSnapshot, tableNamed } from './fixtures/testing';
 import type { Table } from './model';
 import {
+  countRelations,
   droppedRelations,
   incomingRelations,
   outgoingRelations,
@@ -28,6 +29,15 @@ describe('outgoingRelations', () => {
   it('reads a foreign key without an action as RESTRICT', () => {
     const table: Table = { name: 'reviews', columns: [{ name: 'product_id', type: 'BIGINT', fk: { table: 'products', column: 'id' } }] };
     expect(arrows(outgoingRelations(table))).toEqual(['reviews.product_id -> products.id RESTRICT']);
+  });
+});
+
+describe('countRelations', () => {
+  it('counts the foreign keys of the ecommerce sample', () => {
+    const { tables } = ecommerceSnapshot();
+    expect(countRelations(tables)).toBe(4);
+    expect(countRelations(tables.filter((t) => t.name !== 'order_items'))).toBe(2);
+    expect(countRelations([])).toBe(0);
   });
 });
 

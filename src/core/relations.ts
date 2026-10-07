@@ -35,6 +35,11 @@ export function outgoingRelations(table: Table): Relation[] {
   );
 }
 
+/** How many foreign keys `tables` declare between them. */
+export function countRelations(tables: readonly Table[]): number {
+  return tables.reduce((n, t) => n + outgoingRelations(t).length, 0);
+}
+
 /** The foreign keys in `tables` that reference `table`. A self-reference is both outgoing and incoming. */
 export function incomingRelations(table: Table, tables: readonly Table[]): Relation[] {
   return tables.flatMap(outgoingRelations).filter((r) => r.to.table === table.name);

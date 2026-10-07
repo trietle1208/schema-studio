@@ -30,7 +30,7 @@ export function useWorkspaceShortcuts(searchRef: RefObject<HTMLInputElement | nu
       switch (shortcut) {
         case 'save':
           e.preventDefault();
-          saveSchema();
+          void saveSchema();
           break;
         case 'undo':
         case 'redo':

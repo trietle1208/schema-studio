@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { SchemaSnapshot } from '../core/model';
 import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
 import { ecommerceSnapshot, tableNamed } from '../core/fixtures/testing';
 import {
@@ -7,17 +8,43 @@ import {
   selectDirtyTables,
   selectTable,
   useSchemaStore,
+  type Persist,
   type SchemaStore,
 } from './schema';
 
+const SCHEMA_ID = 7;
+
 let store: SchemaStore;
+/** The snapshots the store has asked to have stored, oldest first. */
+let stored: SchemaSnapshot[];
+/** Stands in for the database: a new schema gets `SCHEMA_ID`, and versions count up from 1. */
+let persist: Persist;
 const state = () => store.getState();
 const history = () => store.temporal.getState();
 const names = () => state().tables.map((t) => t.name);
 
 beforeEach(() => {
-  store = createSchemaStore({ name: 'ecommerce', engine: 'PostgreSQL', ...ecommerceSnapshot() });
+  stored = [];
+  persist = async (schema, snapshot) => {
+    stored.push(snapshot);
+    return { id: schema.id ?? SCHEMA_ID, version: stored.length };
+  };
+  store = createSchemaStore({ name: 'ecommerce', engine: 'PostgreSQL', ...ecommerceSnapshot() }, (...args) =>
+    persist(...args),
+  );
 });
+
+/** A `persist` that waits until it is told how to end. */
+function deferredPersist() {
+  let resolve!: (stored: { id: number; version: number }) => void;
+  let reject!: (error: Error) => void;
+  persist = () =>
+    new Promise((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+  return { resolve: () => resolve({ id: SCHEMA_ID, version: 1 }), reject: () => reject(new Error('QuotaExceededError')) };
+}
 
 describe('schema store', () => {
   it('starts the app on the ecommerce sample, saved and with nothing selected', () => {
@@ -28,6 +55,8 @@ describe('schema store', () => {
     expect(s.positions).toBe(ecommercePositions);
     expect(s.selected).toBeNull();
     expect(s.selectedColumn).toBeNull();
+    expect(s.id).toBeNull();
+    expect(s.version).toBeNull();
     expect(selectDirty(s)).toBe(false);
     expect(useSchemaStore.temporal.getState().pastStates).toEqual([]);
   });
@@ -235,11 +264,11 @@ describe('schema store', () => {
     expect(history().pastStates).toHaveLength(3);
   });
 
-  it('is clean after saving, and dirty again when the save is undone past', () => {
+  it('is clean after saving, and dirty again when the save is undone past', async () => {
     state().renameTable('orders', 'purchases');
     expect(selectDirty(state())).toBe(true);
 
-    state().markSaved();
+    await state().save();
     expect(selectDirty(state())).toBe(false);
     expect(selectDirtyTables(state())).toEqual([]);
     expect(history().pastStates).toHaveLength(1);
@@ -252,15 +281,34 @@ describe('schema store', () => {
     expect(selectDirty(state())).toBe(false);
   });
 
-  it('saves a valid schema and clears the draft mark without adding an undo step', () => {
+  it('stores the working copy as a new version each time it is saved', async () => {
+    state().deleteTable('payments');
+    expect(await state().save()).toEqual({ status: 'saved', version: 1 });
+    expect(state().id).toBe(SCHEMA_ID);
+    expect(state().version).toBe(1);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toBe(state().saved);
+    expect(stored[0].tables).toBe(state().tables);
+
+    state().moveTable('users', { x: 40, y: 48 });
+    state().endMove();
+    expect(await state().save()).toEqual({ status: 'saved', version: 2 });
+    expect(state().id).toBe(SCHEMA_ID);
+    expect(state().version).toBe(2);
+    expect(stored[1].positions.users).toEqual({ x: 40, y: 48 });
+    expect(stored[0].positions.users).toEqual(ecommercePositions.users);
+  });
+
+  it('saves a valid schema and clears the draft mark without adding an undo step', async () => {
     const orders = tableNamed(state(), 'orders');
     state().updateTable('orders', { ...orders, columns: [...orders.columns, { name: 'note', type: 'TEXT', nullable: true, draft: true }] });
     expect(history().pastStates).toHaveLength(1);
 
-    expect(state().save()).toBe(true);
+    expect((await state().save()).status).toBe('saved');
 
     expect(selectDirty(state())).toBe(false);
     expect(tableNamed(state(), 'orders').columns[5]).toEqual({ name: 'note', type: 'TEXT', nullable: true });
+    expect(tableNamed(stored[0], 'orders').columns[5]).toEqual({ name: 'note', type: 'TEXT', nullable: true });
     expect(history().pastStates).toHaveLength(1);
 
     history().undo();
@@ -272,14 +320,15 @@ describe('schema store', () => {
     expect(selectDirty(state())).toBe(false);
   });
 
-  it('does not save a schema with problems and selects the first one instead', () => {
+  it('does not save a schema with problems and selects the first one instead', async () => {
     const payments = tableNamed(state(), 'payments');
     state().updateTable('payments', { ...payments, columns: [...payments.columns, { name: '', type: 'TEXT', nullable: true, draft: true }] });
     state().select('users');
     state().selectColumn(1);
 
-    expect(state().save()).toBe(false);
+    expect(await state().save()).toEqual({ status: 'invalid' });
 
+    expect(stored).toEqual([]);
     expect(selectDirty(state())).toBe(true);
     expect(state().selected).toBe('payments');
     expect(state().selectedColumn).toBe(5);
@@ -287,11 +336,106 @@ describe('schema store', () => {
     expect(history().pastStates).toHaveLength(1);
   });
 
-  it('saving a clean schema changes nothing', () => {
+  it('saving a stored schema with no changes stores nothing', async () => {
+    state().load({ id: SCHEMA_ID, version: 3, name: 'ecommerce', engine: 'PostgreSQL', ...ecommerceSnapshot() });
     const before = state();
-    expect(state().save()).toBe(true);
+    expect(await state().save()).toEqual({ status: 'unchanged' });
+    expect(stored).toEqual([]);
     expect(state().tables).toBe(before.tables);
     expect(state().saved).toBe(before.saved);
+    expect(state().version).toBe(3);
+  });
+
+  it('stores a schema that has never been saved even when nothing in it changed', async () => {
+    expect(state().id).toBeNull();
+    expect(await state().save()).toEqual({ status: 'saved', version: 1 });
+    expect(stored).toHaveLength(1);
+    expect(state().id).toBe(SCHEMA_ID);
+  });
+
+  it('saves a stored schema under its own id', async () => {
+    const asked: (number | null)[] = [];
+    persist = async (schema) => {
+      asked.push(schema.id);
+      return { id: schema.id ?? SCHEMA_ID, version: 4 };
+    };
+    state().load({ id: 12, version: 3, name: 'ecommerce', engine: 'PostgreSQL', ...ecommerceSnapshot() });
+    state().deleteTable('payments');
+    expect(await state().save()).toEqual({ status: 'saved', version: 4 });
+    expect(asked).toEqual([12]);
+    expect(state().id).toBe(12);
+  });
+
+  it('is saving until the version is written, and refuses a second save meanwhile', async () => {
+    const writing = deferredPersist();
+    state().deleteTable('payments');
+
+    const save = state().save();
+    expect(state().saving).toBe(true);
+    expect(selectDirty(state())).toBe(true);
+    expect(await state().save()).toEqual({ status: 'busy' });
+
+    writing.resolve();
+    expect((await save).status).toBe('saved');
+    expect(state().saving).toBe(false);
+    expect(selectDirty(state())).toBe(false);
+  });
+
+  it('keeps an edit made while the version was being written, as an unsaved change', async () => {
+    const writing = deferredPersist();
+    const orders = tableNamed(state(), 'orders');
+    const users = tableNamed(state(), 'users');
+    state().updateTable('orders', { ...orders, columns: [...orders.columns, { name: 'note', type: 'TEXT', nullable: true, draft: true }] });
+    state().updateTable('users', { ...users, columns: [...users.columns, { name: 'phone', type: 'TEXT', nullable: true, draft: true }] });
+
+    const save = state().save();
+    state().updateTable('users', { ...tableNamed(state(), 'users'), comment: 'Edited during the save.' });
+    writing.resolve();
+    await save;
+
+    expect(tableNamed(state().saved, 'users').comment).toBe(users.comment);
+    expect(tableNamed(state(), 'users').comment).toBe('Edited during the save.');
+    expect(selectDirtyTables(state())).toEqual(['users']);
+    // The untouched table is the saved one, without its draft mark.
+    expect(tableNamed(state(), 'orders')).toBe(tableNamed(state().saved, 'orders'));
+    expect(tableNamed(state(), 'orders').columns[5].draft).toBeUndefined();
+    expect(history().pastStates).toHaveLength(3);
+  });
+
+  it('leaves the working copy unsaved when the version cannot be written', async () => {
+    const writing = deferredPersist();
+    const orders = tableNamed(state(), 'orders');
+    state().updateTable('orders', { ...orders, columns: [...orders.columns, { name: 'note', type: 'TEXT', nullable: true, draft: true }] });
+    const before = state();
+
+    const save = state().save();
+    writing.reject();
+    await expect(save).rejects.toThrow('QuotaExceededError');
+
+    expect(state().saving).toBe(false);
+    expect(state().tables).toBe(before.tables);
+    expect(state().saved).toBe(before.saved);
+    expect(state().id).toBeNull();
+    expect(state().version).toBeNull();
+    expect(selectDirty(state())).toBe(true);
+  });
+
+  it('does not touch a schema loaded while another was being saved', async () => {
+    const writing = deferredPersist();
+    state().deleteTable('payments');
+    const save = state().save();
+
+    const { tables, positions } = ecommerceSnapshot();
+    state().load({ id: 12, version: 3, name: 'blog', engine: 'MySQL', tables: tables.slice(0, 2), positions });
+    writing.resolve();
+    expect(await save).toEqual({ status: 'saved', version: 1 });
+
+    expect(state().name).toBe('blog');
+    expect(state().id).toBe(12);
+    expect(state().version).toBe(3);
+    expect(names()).toEqual(['users', 'orders']);
+    expect(state().saving).toBe(false);
+    expect(selectDirty(state())).toBe(false);
   });
 
   it('keeps at most 50 undo steps', () => {
@@ -307,10 +451,12 @@ describe('schema store', () => {
     state().deleteTable('users');
     const { tables, positions } = ecommerceSnapshot();
 
-    state().load({ name: 'blog', engine: 'MySQL', tables: tables.slice(0, 2), positions });
+    state().load({ id: 12, version: 3, name: 'blog', engine: 'MySQL', tables: tables.slice(0, 2), positions });
 
     expect(state().name).toBe('blog');
     expect(state().engine).toBe('MySQL');
+    expect(state().id).toBe(12);
+    expect(state().version).toBe(3);
     expect(names()).toEqual(['users', 'orders']);
     expect(state().selected).toBeNull();
     expect(selectDirty(state())).toBe(false);
