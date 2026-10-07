@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ecommerceTables } from './fixtures/ecommerce';
 import type { Column, Table } from './model';
-import { findProblems, validateColumns, validateTableName } from './validate';
+import { findProblems, validateColumns, validateSchemaName, validateTableName } from './validate';
 
 function sample(name: string): Table {
   const table = ecommerceTables.find((t) => t.name === name);
@@ -165,5 +165,28 @@ describe('findProblems', () => {
       { table: 'users', column: 4, message: 'Choose a data type.' },
       { table: 'orders', column: 5, message: 'Column name cannot be empty.' },
     ]);
+  });
+});
+
+describe('validateSchemaName', () => {
+  // The schemas of the prototype's list screen.
+  const names = ['ecommerce', 'blog', 'analytics', 'inventory', 'billing', 'auth_service'];
+
+  it('accepts a new name', () => {
+    expect(validateSchemaName('ecommerce_v2', names)).toBeNull();
+    expect(validateSchemaName('crm')).toBeNull();
+  });
+
+  it('rejects an empty or blank name', () => {
+    expect(validateSchemaName('')).toBe('Schema name cannot be empty.');
+    expect(validateSchemaName('  ', names)).toBe('Schema name cannot be empty.');
+  });
+
+  it.each(['my schema', '2024_archive', 'auth-service', 'shop.v2'])('rejects the schema name %j', (name) => {
+    expect(validateSchemaName(name, names)).toBe('Use letters, digits and underscores; start with a letter.');
+  });
+
+  it('rejects a name another schema already uses', () => {
+    expect(validateSchemaName('auth_service', names)).toBe('Schema "auth_service" already exists.');
   });
 });

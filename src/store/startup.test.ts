@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ecommerceSnapshot } from '../core/fixtures/testing';
 import { db } from '../db/db';
-import { listSchemas } from '../db/schemas';
+import { createSchema } from '../db/schemas';
 import { resetDatabase } from '../db/testing';
 import { selectDirty, useSchemaStore } from './schema';
 import { openLastSchema } from './startup';
@@ -13,8 +13,8 @@ const names = () => schema().tables.map((t) => t.name);
 
 beforeEach(async () => {
   await resetDatabase();
-  await openLastSchema();
-  useUiStore.setState({ dialog: null, toast: null });
+  schema().load({ name: 'ecommerce', engine: 'PostgreSQL', ...ecommerceSnapshot() });
+  useUiStore.setState({ screen: 'workspace', dialog: null, toast: null });
 });
 
 afterEach(() => {
@@ -22,38 +22,45 @@ afterEach(() => {
 });
 
 describe('openLastSchema', () => {
-  it('stores the ecommerce sample as v1 on first run and opens it', async () => {
-    expect(schema()).toMatchObject({ name: 'ecommerce', engine: 'PostgreSQL', version: 1, saving: false });
-    expect(schema().id).not.toBeNull();
-    expect(schema().tables).toEqual(ecommerceSnapshot().tables);
-    expect(selectDirty(schema())).toBe(false);
+  it('starts on the schema list while nothing is stored, and stores nothing', async () => {
+    await openLastSchema();
+
+    expect(ui().screen).toBe('schemas');
     expect(ui().toast).toBeNull();
-    expect((await listSchemas()).map((s) => [s.name, s.version])).toEqual([['ecommerce', 1]]);
+    expect(schema().id).toBeNull();
+    expect(await db.schemas.count()).toBe(0);
   });
 
-  it('opens what was saved last, as after a reload', async () => {
+  it('opens what was saved last in the workspace, as after a reload', async () => {
+    await createSchema({ name: 'blog', engine: 'MySQL' }, { tables: [], positions: {} });
+    const shop = await createSchema({ name: 'ecommerce', engine: 'PostgreSQL' }, ecommerceSnapshot());
+    await openLastSchema();
+    expect(schema()).toMatchObject({ id: shop.id, name: 'ecommerce', version: 1 });
+
     schema().deleteTable('payments');
     schema().moveTable('users', { x: 40, y: 48 });
     schema().endMove();
     await schema().save();
     schema().deleteTable('orders');
+    useUiStore.setState({ screen: 'schemas' });
 
     await openLastSchema();
 
-    expect(schema().version).toBe(2);
+    expect(ui().screen).toBe('workspace');
+    expect(schema()).toMatchObject({ id: shop.id, name: 'ecommerce', version: 2, saving: false });
     expect(names()).toEqual(['users', 'orders', 'order_items', 'products']);
     expect(schema().positions.users).toEqual({ x: 40, y: 48 });
     expect(selectDirty(schema())).toBe(false);
-    expect((await listSchemas()).map((s) => [s.name, s.version])).toEqual([['ecommerce', 2]]);
   });
 
-  it('keeps the open schema and says so when the database cannot be read', async () => {
+  it('keeps the sample open, unsaved, and says so when the database cannot be read', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    schema().load({ name: 'ecommerce', engine: 'PostgreSQL', ...ecommerceSnapshot() });
+    useUiStore.setState({ screen: 'schemas' });
     db.close();
 
     await openLastSchema();
 
+    expect(ui().screen).toBe('workspace');
     expect(schema().id).toBeNull();
     expect(names()).toHaveLength(5);
     expect(ui().toast).toMatchObject({ tone: 'error', title: 'Could not open saved schemas' });

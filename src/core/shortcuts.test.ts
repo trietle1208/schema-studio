@@ -6,6 +6,8 @@ describe('matchShortcut', () => {
     expect(matchShortcut({ key: 's', metaKey: true })).toBe('save');
     expect(matchShortcut({ key: 's', ctrlKey: true })).toBe('save');
     expect(matchShortcut({ key: 'k', ctrlKey: true })).toBe('search');
+    expect(matchShortcut({ key: 'n', ctrlKey: true })).toBe('new-schema');
+    expect(matchShortcut({ key: 'N', metaKey: true })).toBe('new-schema');
     expect(matchShortcut({ key: 'z', metaKey: true })).toBe('undo');
     expect(matchShortcut({ key: 'z', metaKey: true, shiftKey: true })).toBe('redo');
   });

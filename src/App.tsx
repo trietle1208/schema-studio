@@ -1,14 +1,17 @@
-import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from './components/AppShell';
 import { Sidebar } from './components/Sidebar';
-import type { SchemaRecord } from './db/db';
-import { listSchemas, schemaSummary } from './db/schemas';
+import { schemaSummary } from './db/schemas';
+import { useSchemas } from './db/useSchemas';
+import { Overlays } from './screens/Overlays';
+import { SchemaList } from './screens/SchemaList';
+import { openSchema, requestNewSchema, showSchemas } from './screens/schemaActions';
+import { useAppShortcuts } from './screens/useAppShortcuts';
 import { Workspace } from './screens/Workspace';
 import { useSchemaStore } from './store/schema';
+import { useUiStore } from './store/ui';
 
 const MINUTE = 60_000;
-const NO_SCHEMAS: SchemaRecord[] = [];
 
 /** The current time, refreshed every minute so that relative times do not go stale. */
 function useNow(): number {
@@ -21,15 +24,33 @@ function useNow(): number {
 }
 
 export function App() {
+  const screen = useUiStore((s) => s.screen);
   const name = useSchemaStore((s) => s.name);
-  // Re-read whenever a schema or version is written, in this tab or another. With no database there is no list.
-  const stored = useLiveQuery(() => listSchemas().catch(() => NO_SCHEMAS), [], NO_SCHEMAS);
+  const stored = useSchemas();
   const now = useNow();
-  const schemas = useMemo(() => stored.map((s) => schemaSummary(s, now)), [stored, now]);
+  const summaries = useMemo(() => (stored ?? []).map((s) => schemaSummary(s, now)), [stored, now]);
+  useAppShortcuts();
 
   return (
-    <AppShell sidebar={<Sidebar schemas={schemas} activeSchema={name} />}>
-      <Workspace />
+    <AppShell
+      sidebar={
+        <Sidebar
+          schemas={summaries}
+          // On the list no schema is the current one, as in the design.
+          activeSchema={screen === 'workspace' ? name : undefined}
+          onNavigate={(id) => {
+            if (id === 'schemas') showSchemas();
+          }}
+          onSelectSchema={(selected) => {
+            const schema = stored?.find((s) => s.name === selected);
+            if (schema) openSchema(schema.id);
+          }}
+          onNew={requestNewSchema}
+        />
+      }
+      overlay={<Overlays />}
+    >
+      {screen === 'workspace' ? <Workspace /> : <SchemaList schemas={stored} now={now} />}
     </AppShell>
   );
 }

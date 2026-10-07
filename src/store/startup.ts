@@ -1,15 +1,21 @@
 import { openLatestSchema } from '../db/schemas';
-import { ecommerceSample, useSchemaStore } from './schema';
+import { useSchemaStore } from './schema';
 import { useUiStore } from './ui';
 
 /**
- * Opens the schema saved last in the workspace. On first run the ecommerce sample is stored as its
- * v1 and opened. When the database cannot be read the sample stays open, unsaved, and a toast says so.
- * Never rejects.
+ * Opens the schema saved last in the workspace; while nothing is stored the app starts on the
+ * schema list. When the database cannot be read the ecommerce sample stays open, unsaved, and a
+ * toast says so. Never rejects.
  */
 export async function openLastSchema(): Promise<void> {
+  const ui = useUiStore.getState();
   try {
-    const { schema, snapshot } = await openLatestSchema(ecommerceSample, 'Sample schema');
+    const stored = await openLatestSchema();
+    if (!stored) {
+      ui.showScreen('schemas');
+      return;
+    }
+    const { schema, snapshot } = stored;
     useSchemaStore.getState().load({
       id: schema.id,
       name: schema.name,
@@ -17,9 +23,11 @@ export async function openLastSchema(): Promise<void> {
       version: schema.version,
       ...snapshot,
     });
+    ui.showScreen('workspace');
   } catch (error) {
     console.error(error);
-    useUiStore.getState().showToast({
+    ui.showScreen('workspace');
+    ui.showToast({
       tone: 'error',
       title: 'Could not open saved schemas',
       description: 'Browser storage is unavailable. The sample schema is open instead.',

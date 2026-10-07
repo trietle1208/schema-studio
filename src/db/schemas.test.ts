@@ -5,6 +5,7 @@ import type { SchemaSnapshot } from '../core/model';
 import { db } from './db';
 import {
   createSchema,
+  deleteSchema,
   getVersion,
   listSchemas,
   listVersions,
@@ -51,6 +52,17 @@ describe('createSchema', () => {
     expect(await listVersions(schema.id)).toEqual([
       { id: expect.any(Number), schemaId: schema.id, version: 1, message: 'Sample schema', createdAt: T0, snapshot },
     ]);
+  });
+
+  it('keeps a description, trimmed, and leaves a blank one out', async () => {
+    const shop = await createSchema({ ...ecommerce, description: '  Orders, catalogue, payments ' }, ecommerceSnapshot());
+    const blog = await createSchema({ name: 'blog', engine: 'MySQL', description: '   ' }, { tables: [], positions: {} });
+
+    expect(shop.description).toBe('Orders, catalogue, payments');
+    expect((await db.schemas.get(shop.id))?.description).toBe('Orders, catalogue, payments');
+    expect(blog).not.toHaveProperty('description');
+    expect(blog).toMatchObject({ version: 1, tables: 0, relationships: 0 });
+    expect((await openSchema(blog.id))?.snapshot).toEqual({ tables: [], positions: {} });
   });
 
   it('refuses a name that is taken and stores nothing', async () => {
@@ -133,6 +145,43 @@ describe('saveVersion', () => {
   });
 });
 
+describe('deleteSchema', () => {
+  it('removes the schema with all its versions and leaves the others alone', async () => {
+    const shop = await createSchema(ecommerce, ecommerceSnapshot());
+    await saveVersion(shop.id, deleteTable(ecommerceSnapshot(), 'payments'));
+    const blog = await createSchema({ name: 'blog', engine: 'MySQL' }, ecommerceSnapshot());
+    await saveVersion(blog.id, deleteTable(ecommerceSnapshot(), 'users'));
+
+    await deleteSchema(shop.id);
+
+    expect((await listSchemas()).map((s) => s.name)).toEqual(['blog']);
+    expect(await listVersions(shop.id)).toEqual([]);
+    expect(await openSchema(shop.id)).toBeUndefined();
+    expect((await listVersions(blog.id)).map((v) => v.version)).toEqual([2, 1]);
+    expect(await db.versions.count()).toBe(2);
+  });
+
+  it('frees the name for a new schema, which starts again at v1', async () => {
+    const shop = await createSchema(ecommerce, ecommerceSnapshot());
+    await saveVersion(shop.id, deleteTable(ecommerceSnapshot(), 'payments'));
+    await deleteSchema(shop.id);
+
+    const again = await createSchema(ecommerce, { tables: [], positions: {} });
+    expect(again.id).not.toBe(shop.id);
+    expect(again.version).toBe(1);
+    expect((await listVersions(again.id)).map((v) => v.version)).toEqual([1]);
+  });
+
+  it('does nothing for a schema that is already gone', async () => {
+    const shop = await createSchema(ecommerce, ecommerceSnapshot());
+    await deleteSchema(99);
+    await deleteSchema(shop.id);
+    await deleteSchema(shop.id);
+    expect(await db.schemas.count()).toBe(0);
+    expect(await db.versions.count()).toBe(0);
+  });
+});
+
 describe('listSchemas', () => {
   it('lists the schema saved last first', async () => {
     const shop = await createSchema(ecommerce, ecommerceSnapshot());
@@ -168,35 +217,21 @@ describe('openSchema', () => {
 });
 
 describe('openLatestSchema', () => {
-  const sample = { ...ecommerce, ...ecommerceSnapshot() };
-
-  it('stores the initial schema as v1 in an empty database and opens it', async () => {
-    const { schema, snapshot } = await openLatestSchema(sample, 'Sample schema');
-
-    expect(schema).toMatchObject({ name: 'ecommerce', engine: 'PostgreSQL', version: 1, tables: 5 });
-    expect(snapshot).toEqual(ecommerceSnapshot());
-    expect(await listSchemas()).toEqual([schema]);
-    expect((await listVersions(schema.id)).map((v) => v.message)).toEqual(['Sample schema']);
+  it('is undefined while nothing is stored, and stores nothing', async () => {
+    expect(await openLatestSchema()).toBeUndefined();
+    expect(await db.schemas.count()).toBe(0);
   });
 
-  it('opens the schema saved last and adds nothing', async () => {
+  it('opens the schema saved last', async () => {
     await createSchema(ecommerce, ecommerceSnapshot());
     at(T0 + HOUR);
     const blog = await createSchema({ name: 'blog', engine: 'MySQL' }, ecommerceSnapshot());
+    expect((await openLatestSchema())?.schema.name).toBe('blog');
+
     at(T0 + 2 * HOUR);
     const v2 = deleteTable(ecommerceSnapshot(), 'payments');
     const saved = await saveVersion(blog.id, v2);
-
-    expect(await openLatestSchema(sample)).toEqual({ schema: saved, snapshot: v2 });
-    expect(await db.schemas.count()).toBe(2);
-    expect(await db.versions.count()).toBe(3);
-  });
-
-  it('stores the initial schema once when two tabs start at the same time', async () => {
-    const [a, b] = await Promise.all([openLatestSchema(sample), openLatestSchema(sample)]);
-    expect(a.schema.id).toBe(b.schema.id);
-    expect(await db.schemas.count()).toBe(1);
-    expect(await db.versions.count()).toBe(1);
+    expect(await openLatestSchema()).toEqual({ schema: saved, snapshot: v2 });
   });
 });
 

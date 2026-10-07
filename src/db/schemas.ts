@@ -8,6 +8,7 @@ import { db, type SchemaRecord, type VersionRecord } from './db';
 export interface NewSchema {
   name: string;
   engine: string;
+  description?: string;
 }
 
 /** A schema together with the snapshot of its current version. */
@@ -17,12 +18,18 @@ export interface StoredSchema {
 }
 
 /** Stores a new schema with `snapshot` as its v1. */
-export function createSchema({ name, engine }: NewSchema, snapshot: SchemaSnapshot, message = ''): Promise<SchemaRecord> {
+export function createSchema(
+  { name, engine, description }: NewSchema,
+  snapshot: SchemaSnapshot,
+  message = '',
+): Promise<SchemaRecord> {
   return db.transaction('rw', db.schemas, db.versions, async () => {
     if (await db.schemas.where('name').equals(name).count()) throw new Error(`Schema "${name}" already exists.`);
     const now = Date.now();
     const schema = {
       name,
+      // A blank description is not stored.
+      ...(description?.trim() ? { description: description.trim() } : {}),
       engine,
       version: 1,
       tables: snapshot.tables.length,
@@ -58,6 +65,17 @@ export function saveVersion(schemaId: number, snapshot: SchemaSnapshot, message 
   });
 }
 
+/** Removes a schema and every version of it. Removing one that is already gone does nothing. */
+export function deleteSchema(id: number): Promise<void> {
+  return db.transaction('rw', db.schemas, db.versions, async () => {
+    await db.versions
+      .where('[schemaId+version]')
+      .between([id, Dexie.minKey], [id, Dexie.maxKey])
+      .delete();
+    await db.schemas.delete(id);
+  });
+}
+
 /** Every schema, the one saved last first. */
 export function listSchemas(): Promise<SchemaRecord[]> {
   return db.schemas.orderBy('updatedAt').reverse().toArray();
@@ -85,17 +103,11 @@ export function openSchema(id: number): Promise<StoredSchema | undefined> {
   });
 }
 
-/**
- * The schema saved last, with the snapshot of its current version. An empty database is first
- * given `initial` as its only schema.
- */
-export function openLatestSchema(initial: NewSchema & SchemaSnapshot, message = ''): Promise<StoredSchema> {
-  return db.transaction('rw', db.schemas, db.versions, async () => {
+/** The schema saved last, with the snapshot of its current version. Undefined while nothing is stored. */
+export function openLatestSchema(): Promise<StoredSchema | undefined> {
+  return db.transaction('r', db.schemas, db.versions, async () => {
     const latest = await db.schemas.orderBy('updatedAt').last();
-    const stored = latest && (await openSchema(latest.id));
-    if (stored) return stored;
-    const snapshot = { tables: initial.tables, positions: initial.positions };
-    return { schema: await createSchema(initial, snapshot, message), snapshot };
+    return latest && openSchema(latest.id);
   });
 }
 

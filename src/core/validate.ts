@@ -44,3 +44,11 @@ export function validateTableName(name: string, otherNames: readonly string[] = 
   if (otherNames.includes(name)) return `Table "${name}" already exists.`;
   return null;
 }
+
+/** Returns the problem with a schema name, or null when it is valid. `otherNames` are the names already stored. */
+export function validateSchemaName(name: string, otherNames: readonly string[] = []): string | null {
+  if (!name || !name.trim()) return 'Schema name cannot be empty.';
+  if (!IDENTIFIER.test(name)) return INVALID_IDENTIFIER;
+  if (otherNames.includes(name)) return `Schema "${name}" already exists.`;
+  return null;
+}

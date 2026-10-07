@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ecommerceSnapshot, tableNamed } from '../core/fixtures/testing';
 import { db } from '../db/db';
-import { listSchemas, listVersions } from '../db/schemas';
+import { createSchema, listSchemas, listVersions } from '../db/schemas';
 import { resetDatabase } from '../db/testing';
 import { selectDirty, undo, useSchemaStore } from '../store/schema';
 import { openLastSchema } from '../store/startup';
@@ -12,8 +12,10 @@ const schema = () => useSchemaStore.getState();
 const ui = () => useUiStore.getState();
 const names = () => schema().tables.map((t) => t.name);
 
+// Each test starts with the ecommerce sample stored as v1 and open in the workspace.
 beforeEach(async () => {
   await resetDatabase();
+  await createSchema({ name: 'ecommerce', engine: 'PostgreSQL' }, ecommerceSnapshot());
   await openLastSchema();
   useUiStore.setState({ dialog: null, toast: null });
 });

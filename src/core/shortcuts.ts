@@ -1,4 +1,4 @@
-export type Shortcut = 'save' | 'undo' | 'redo' | 'search' | 'rename' | 'delete' | 'cancel';
+export type Shortcut = 'save' | 'undo' | 'redo' | 'search' | 'new-schema' | 'rename' | 'delete' | 'cancel';
 
 /** The parts of a keyboard event a shortcut depends on. */
 export interface KeyStroke {
@@ -9,7 +9,7 @@ export interface KeyStroke {
   altKey?: boolean;
 }
 
-/** The workspace shortcut a key press stands for, if any. ⌘ on macOS and Ctrl elsewhere are the same modifier. */
+/** The shortcut a key press stands for, if any. ⌘ on macOS and Ctrl elsewhere are the same modifier. */
 export function matchShortcut(e: KeyStroke): Shortcut | null {
   // AltGr reports as Ctrl + Alt on Windows and types a character; it is never a shortcut.
   if (e.altKey) return null;
@@ -19,6 +19,7 @@ export function matchShortcut(e: KeyStroke): Shortcut | null {
     if (e.shiftKey) return null;
     if (key === 's') return 'save';
     if (key === 'k') return 'search';
+    if (key === 'n') return 'new-schema';
     return null;
   }
   if (e.shiftKey) return null;

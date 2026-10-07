@@ -6,6 +6,8 @@ export interface SchemaRecord {
   id: number;
   /** Unique among the schemas. */
   name: string;
+  /** A line about what the schema holds, shown and searched in the schema list. */
+  description?: string;
   engine: string;
   /** The current version: the latest one saved. */
   version: number;

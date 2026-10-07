@@ -2,8 +2,17 @@ import { create } from 'zustand';
 import type { ToastProps } from '../components/Toast';
 import { clampZoom } from '../core/layout';
 
-/** The dialog open over the workspace. */
-export type Dialog = { kind: 'delete-table'; table: string };
+/** The screen in the main area. */
+export type Screen = 'schemas' | 'workspace';
+
+/** The dialog open over the screen. */
+export type Dialog =
+  | { kind: 'delete-table'; table: string }
+  | { kind: 'new-schema' }
+  /** `versions` is how many saved versions go with the schema. */
+  | { kind: 'delete-schema'; id: number; name: string; versions: number }
+  /** Asks before the unsaved changes of the open schema are dropped; `onDiscard` then goes on. */
+  | { kind: 'discard-changes'; onDiscard: () => void };
 
 export type ToastContent = Omit<ToastProps, 'onClose'>;
 
@@ -13,15 +22,17 @@ export interface ToastMessage extends ToastContent {
 }
 
 export interface UiState {
+  screen: Screen;
   zoom: number;
   /** The toolbar search text; it filters the tables shown on the canvas. */
   search: string;
   /** Bumped each time the selected table should enter rename mode (F2, context menu). */
   renameSignal: number;
-  /** While a dialog is open it owns the keyboard: the workspace shortcuts are off. */
+  /** While a dialog is open it owns the keyboard: the shortcuts of the screen under it are off. */
   dialog: Dialog | null;
-  /** The workspace shows one toast at a time; a new one replaces it. */
+  /** One toast shows at a time; a new one replaces it. */
   toast: ToastMessage | null;
+  showScreen: (screen: Screen) => void;
   setZoom: (zoom: number) => void;
   setSearch: (search: string) => void;
   requestRename: () => void;
@@ -36,11 +47,13 @@ export interface UiState {
 let toastId = 0;
 
 export const useUiStore = create<UiState>()((set, get) => ({
+  screen: 'workspace',
   zoom: 1,
   search: '',
   renameSignal: 0,
   dialog: null,
   toast: null,
+  showScreen: (screen) => set({ screen }),
   setZoom: (zoom) => set({ zoom: clampZoom(zoom) }),
   setSearch: (search) => set({ search }),
   requestRename: () => set((s) => ({ renameSignal: s.renameSignal + 1 })),
