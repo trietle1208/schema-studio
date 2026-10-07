@@ -62,6 +62,8 @@ export interface ERCanvasProps {
   /** "New table" in the menu of the empty canvas, with the canvas point that was right-clicked. Without it there is no such menu. */
   onNewTable?: (position: Position) => void;
   initialMenu?: CanvasMenu;
+  /** Shows the diagram without letting it be changed: tables are not dragged and have no menu. Panning and selecting still work. */
+  readOnly?: boolean;
   hint?: ReactNode;
   showLegend?: boolean;
   showMinimap?: boolean;
@@ -141,6 +143,7 @@ export function ERCanvas({
   onDeleteTable,
   onNewTable,
   initialMenu,
+  readOnly,
   hint,
   showLegend,
   showMinimap,
@@ -225,6 +228,7 @@ export function ERCanvas({
     // which would keep the keyboard (and block ⌫ on the table just clicked).
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     onSelect?.(name);
+    if (readOnly) return;
     drag.current = { table: name, sx: e.clientX, sy: e.clientY, ox: q.x, oy: q.y, moved: false };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
@@ -279,7 +283,7 @@ export function ERCanvas({
     e.preventDefault();
     e.stopPropagation();
     const el = ref.current;
-    if (!el) return;
+    if (!el || readOnly) return;
     const r = el.getBoundingClientRect();
     onSelect?.(name);
     setMenu({ table: name, x: e.clientX - r.left, y: e.clientY - r.top });

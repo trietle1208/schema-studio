@@ -65,6 +65,19 @@ export function saveVersion(schemaId: number, snapshot: SchemaSnapshot, message 
   });
 }
 
+/**
+ * Makes an earlier version the current one again: its snapshot is stored as the next version, so
+ * every version in between stays in the history. Resolves with the schema and that snapshot.
+ */
+export function restoreVersion(schemaId: number, version: number): Promise<StoredSchema> {
+  return db.transaction('rw', db.schemas, db.versions, async () => {
+    const earlier = await getVersion(schemaId, version);
+    if (!earlier) throw new Error(`Version ${versionLabel(version)} no longer exists.`);
+    const schema = await saveVersion(schemaId, earlier.snapshot, `Restored from ${versionLabel(version)}`);
+    return { schema, snapshot: earlier.snapshot };
+  });
+}
+
 /** Removes a schema and every version of it. Removing one that is already gone does nothing. */
 export function deleteSchema(id: number): Promise<void> {
   return db.transaction('rw', db.schemas, db.versions, async () => {

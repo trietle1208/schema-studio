@@ -11,6 +11,7 @@ export function requestExport() {
   useUiStore.getState().openDialog({
     kind: 'export',
     schema: {
+      id: schema.id,
       name: schema.name,
       engine: schema.engine,
       version: schema.version,
@@ -36,6 +37,7 @@ export async function requestExportStored(schema: SchemaRecord): Promise<void> {
     ui.openDialog({
       kind: 'export',
       schema: {
+        id: stored.schema.id,
         name: stored.schema.name,
         engine: stored.schema.engine,
         version: stored.schema.version,
@@ -65,10 +67,15 @@ function download(fileName: string, text: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-/** The confirmed Export Schema dialog: downloads the file, closes the dialog and names the file in a toast. */
+const FILE_TYPES: Record<string, string> = { json: 'application/json', sql: 'application/sql', diff: 'text/x-diff' };
+
+/**
+ * The confirmed Export Schema dialog, and Export diff in the comparison: downloads the file, closes
+ * the dialog and names the file in a toast.
+ */
 export function exportFile(fileName: string, text: string) {
   const ui = useUiStore.getState();
-  download(fileName, text, fileName.endsWith('.json') ? 'application/json' : 'application/sql');
+  download(fileName, text, FILE_TYPES[fileName.slice(fileName.lastIndexOf('.') + 1)] ?? 'text/plain');
   ui.closeDialog();
   ui.showToast({
     title: `Exported ${fileName}`,

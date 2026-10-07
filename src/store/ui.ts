@@ -6,6 +6,8 @@ import { SCHEMAS_ROUTE, type Route } from '../core/routes';
 
 /** The schema an export writes out: the tables as they are at the moment the dialog opens. */
 export interface ExportSource {
+  /** The schema's id in the database, by which its versions are read for a migration; null for one that is not stored. */
+  id: number | null;
   name: string;
   engine: string;
   /** The saved version the tables are from; null for a schema that has not been saved. */
@@ -13,6 +15,8 @@ export interface ExportSource {
   tables: Table[];
   /** The tables have changes that `version` does not. */
   unsaved: boolean;
+  /** Opens the dialog set to a migration from this version instead of the full DDL. */
+  migrateFrom?: number;
 }
 
 /** The dialog open over the screen. */
@@ -23,6 +27,8 @@ export type Dialog =
   | { kind: 'export'; schema: ExportSource }
   /** `versions` is how many saved versions go with the schema. */
   | { kind: 'delete-schema'; id: number; name: string; versions: number }
+  /** Asks before `version` of the open schema is made its current version again. */
+  | { kind: 'restore-version'; version: number }
   /** Asks before the unsaved changes of the open schema are dropped; `onDiscard` then goes on. */
   | { kind: 'discard-changes'; onDiscard: () => void };
 

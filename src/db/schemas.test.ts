@@ -12,6 +12,7 @@ import {
   openLatestSchema,
   openSchema,
   openSchemaNamed,
+  restoreVersion,
   saveVersion,
   schemaSummary,
 } from './schemas';
@@ -143,6 +144,32 @@ describe('saveVersion', () => {
   it('fails for a schema that is gone, storing nothing', async () => {
     await expect(saveVersion(99, ecommerceSnapshot())).rejects.toThrow('Schema no longer exists.');
     expect(await db.versions.count()).toBe(0);
+  });
+});
+
+describe('restoreVersion', () => {
+  it('stores the earlier snapshot as the next version and keeps every version in between', async () => {
+    const first = ecommerceSnapshot();
+    const schema = await createSchema(ecommerce, first, 'Sample schema');
+    at(T0 + HOUR);
+    await saveVersion(schema.id, deleteTable(first, 'payments'), 'Drop payments');
+    at(T0 + 2 * HOUR);
+
+    const restored = await restoreVersion(schema.id, 1);
+    expect(restored.schema).toMatchObject({ version: 3, tables: 5, relationships: 4, updatedAt: T0 + 2 * HOUR });
+    expect(restored.snapshot).toEqual(first);
+    expect((await listVersions(schema.id)).map((v) => [v.version, v.message, v.snapshot.tables.length])).toEqual([
+      [3, 'Restored from v1', 5],
+      [2, 'Drop payments', 4],
+      [1, 'Sample schema', 5],
+    ]);
+    expect((await openSchema(schema.id))?.snapshot).toEqual(first);
+  });
+
+  it('rejects for a version that is not there, and stores nothing', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    await expect(restoreVersion(schema.id, 7)).rejects.toThrow('Version v7 no longer exists.');
+    expect(await db.versions.count()).toBe(1);
   });
 });
 

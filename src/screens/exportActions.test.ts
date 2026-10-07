@@ -36,7 +36,7 @@ describe('requestExport', () => {
     requestExport();
     expect(ui().dialog).toEqual({
       kind: 'export',
-      schema: { name: 'ecommerce', engine: 'PostgreSQL', version: 1, tables: schema().tables, unsaved: false },
+      schema: { id: shop.id, name: 'ecommerce', engine: 'PostgreSQL', version: 1, tables: schema().tables, unsaved: false },
     });
   });
 

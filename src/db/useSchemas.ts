@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { SchemaRecord } from './db';
-import { listSchemas } from './schemas';
+import type { SchemaRecord, VersionRecord } from './db';
+import { listSchemas, listVersions } from './schemas';
 
 const NO_SCHEMAS: SchemaRecord[] = [];
 
@@ -11,4 +11,15 @@ const NO_SCHEMAS: SchemaRecord[] = [];
  */
 export function useSchemas(): SchemaRecord[] | undefined {
   return useLiveQuery(() => listSchemas().catch(() => NO_SCHEMAS), []);
+}
+
+const NO_VERSIONS: VersionRecord[] = [];
+
+/**
+ * The saved versions of a schema, newest first; undefined until the first read is back. Like the
+ * list of schemas it is read again whenever a version is written. A schema that is not stored
+ * (`id` null) has none.
+ */
+export function useVersions(schemaId: number | null): VersionRecord[] | undefined {
+  return useLiveQuery(() => (schemaId === null ? NO_VERSIONS : listVersions(schemaId).catch(() => NO_VERSIONS)), [schemaId]);
 }

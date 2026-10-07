@@ -28,10 +28,10 @@ Each step is sized for one Claude Code session. Tick it off when `npm run build`
 - [x] **4.4 Export dialog**: SQL / JSON, preview, download file.
 
 ## Phase 5 — Versions
-- [ ] **5.1 Diff engine**: compare two snapshots → DiffGroup[] (tables, columns, indexes, relationships). Tests.
-- [ ] **5.2 Version history screen**.
-- [ ] **5.3 Schema diff screen** (side-by-side DdlDiff).
-- [ ] **5.4 Migration generator**: diff → ALTER statements in a transaction; flag destructive changes.
+- [x] **5.1 Diff engine**: compare two snapshots → DiffGroup[] (tables, columns, indexes, relationships). Tests.
+- [x] **5.2 Version history screen**.
+- [x] **5.3 Schema diff screen** (side-by-side DdlDiff).
+- [x] **5.4 Migration generator**: diff → ALTER statements in a transaction; flag destructive changes.
 
 ## Phase 6 — Later
 - [ ] MySQL dialect (parser + generator)

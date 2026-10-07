@@ -64,8 +64,8 @@ export function App() {
     >
       {route.screen === 'schemas' && <SchemaList schemas={stored} now={now} />}
       {route.screen === 'workspace' && <Workspace />}
-      {route.screen === 'history' && <VersionHistory />}
-      {route.screen === 'diff' && <SchemaDiff from={route.from} to={route.to} />}
+      {route.screen === 'history' && <VersionHistory now={now} />}
+      {route.screen === 'diff' && <SchemaDiff from={route.from} to={route.to} now={now} />}
     </AppShell>
   );
 }

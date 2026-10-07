@@ -1,19 +1,12 @@
 import { useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react';
-import { highlightJson, highlightSql, type SyntaxKind } from '../core/highlight';
+import { highlightJson, highlightSql } from '../core/highlight';
 import { cx } from './cx';
 import { Icon } from './Icon';
+import { SqlTokens } from './SqlTokens';
 
 // The line height and the padding above the first line, as bundle.css sets them for .ss-editor.
 const LINE_HEIGHT = 18;
 const PADDING_TOP = 8;
-
-const TOKEN_CLASS: Record<SyntaxKind, string> = {
-  keyword: 'ss-tok-kw',
-  type: 'ss-tok-ty',
-  string: 'ss-tok-str',
-  number: 'ss-tok-num',
-  comment: 'ss-tok-com',
-};
 
 export interface SqlEditorActions {
   /** Scrolls a line into view and puts the caret at its start. Lines count as the gutter shows them. */
@@ -91,15 +84,7 @@ export function SqlEditor({
             <div className="ss-editor-errline" style={{ top: PADDING_TOP + (marked - firstLine) * LINE_HEIGHT }} />
           )}
           <pre>
-            {tokens.map((token, i) =>
-              token.kind ? (
-                <span key={i} className={TOKEN_CLASS[token.kind]}>
-                  {token.text}
-                </span>
-              ) : (
-                token.text
-              ),
-            )}
+            <SqlTokens tokens={tokens} />
             {'\n'}
           </pre>
           <textarea
