@@ -2,7 +2,17 @@ import { temporal, type TemporalState } from 'zundo';
 import { create, useStore, type StoreApi } from 'zustand';
 import { clearDrafts } from '../core/columns';
 import { dirtyTables, isDirty } from '../core/dirty';
-import { copyName, deleteTable, duplicateTable, moveTable, renameTable, updateTable } from '../core/edit';
+import {
+  addTable,
+  copyName,
+  deleteTable,
+  duplicateTable,
+  moveTable,
+  newTable,
+  newTableName,
+  renameTable,
+  updateTable,
+} from '../core/edit';
 import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
 import type { Position, SchemaSnapshot, Table } from '../core/model';
 import { findProblems } from '../core/validate';
@@ -62,6 +72,8 @@ export interface SchemaState extends SchemaSnapshot {
    */
   updateTable: (name: string, table: Table, coalesce?: string) => void;
   renameTable: (from: string, to: string) => void;
+  /** Adds a new table at `position` and selects it. Returns the name it was given. */
+  addTable: (position: Position) => string;
   duplicateTable: (name: string) => void;
   deleteTable: (name: string) => void;
   /** Call on every pointer move of a drag; the whole drag becomes one undo step once `endMove` runs. */
@@ -167,6 +179,13 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample, persi
             const next = renameTable(state, from, to);
             if (next === state) return;
             set({ ...next, selected: state.selected === from ? to : state.selected });
+          },
+
+          addTable: (position) => {
+            const state = get();
+            const name = newTableName(state.tables);
+            set({ ...addTable(state, newTable(name), position), selected: name, selectedColumn: null });
+            return name;
           },
 
           duplicateTable: (name) => {

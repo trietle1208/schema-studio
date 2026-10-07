@@ -66,6 +66,28 @@ export function duplicateTable(
   };
 }
 
+/** The name a new table gets: `new_table`, then `new_table2`, `new_table3`… */
+export function newTableName(tables: readonly Table[]): string {
+  const taken = new Set(tables.map((t) => t.name));
+  let candidate = 'new_table';
+  for (let n = 2; taken.has(candidate); n++) candidate = `new_table${n}`;
+  return candidate;
+}
+
+/** What a new table starts as: an `id` primary key, to be renamed and filled in. */
+export function newTable(name: string): Table {
+  return { name, columns: [{ name: 'id', type: 'BIGSERIAL', nullable: false, pk: true }], indexes: [] };
+}
+
+/** Appends `table`, placed at `position` on the canvas. */
+export function addTable(snapshot: SchemaSnapshot, table: Table, position: Position): SchemaSnapshot {
+  if (snapshot.tables.some((t) => t.name === table.name)) return snapshot;
+  return {
+    tables: [...snapshot.tables, table],
+    positions: { ...snapshot.positions, [table.name]: { x: position.x, y: position.y } },
+  };
+}
+
 /** Removes a table and drops every foreign key that references it. */
 export function deleteTable(snapshot: SchemaSnapshot, name: string): SchemaSnapshot {
   if (!snapshot.tables.some((t) => t.name === name)) return snapshot;

@@ -10,6 +10,7 @@ import {
   viewRect,
   zoomAt,
   type Edge,
+  type Rect,
   type Size,
 } from '../core/layout';
 import type { Position, Positions, Table } from '../core/model';
@@ -24,7 +25,8 @@ const DRAG_THRESHOLD = 3;
 const WHEEL_ZOOM_SPEED = 0.0015;
 
 export interface CanvasMenu {
-  table: string;
+  /** The table the menu is for; null for the menu of the empty canvas. */
+  table: string | null;
   x: number;
   y: number;
 }
@@ -32,6 +34,8 @@ export interface CanvasMenu {
 export interface ERCanvasActions {
   /** Zooms and pans so that every table is in view. */
   fit: () => void;
+  /** The part of the canvas that is on screen, in canvas units. */
+  view: () => Rect;
 }
 
 export interface ERCanvasProps {
@@ -55,6 +59,8 @@ export interface ERCanvasProps {
   onRenameTable?: (name: string) => void;
   onDuplicateTable?: (name: string) => void;
   onDeleteTable?: (name: string) => void;
+  /** "New table" in the menu of the empty canvas, with the canvas point that was right-clicked. Without it there is no such menu. */
+  onNewTable?: (position: Position) => void;
   initialMenu?: CanvasMenu;
   hint?: ReactNode;
   showLegend?: boolean;
@@ -133,6 +139,7 @@ export function ERCanvas({
   onRenameTable,
   onDuplicateTable,
   onDeleteTable,
+  onNewTable,
   initialMenu,
   hint,
   showLegend,
@@ -161,6 +168,10 @@ export function ERCanvas({
       const view = fitView(tables, positions, { w: el.clientWidth, h: el.clientHeight });
       setOffset(view.offset);
       onZoom?.(view.zoom);
+    },
+    view() {
+      const el = ref.current;
+      return viewRect(offset, zoom, el ? { w: el.clientWidth, h: el.clientHeight } : size);
     },
   }));
 
@@ -274,13 +285,26 @@ export function ERCanvas({
     setMenu({ table: name, x: e.clientX - r.left, y: e.clientY - r.top });
   }
 
+  function onBgMenu(e: MouseEvent) {
+    e.preventDefault();
+    const el = ref.current;
+    // The legend and the minimap lie over the canvas; a table cannot be placed under them.
+    if (!el || !onNewTable || (e.target as Element).closest('.ss-legend, .ss-minimap, .ss-canvas-hint, .ss-canvas-menu')) return;
+    const r = el.getBoundingClientRect();
+    setMenu({ table: null, x: e.clientX - r.left, y: e.clientY - r.top });
+  }
+
   const closeMenu = () => setMenu(null);
   const menuSchema = (menu && tables.find((t) => t.name === menu.table)?.schema) || 'public';
   const edges = computeEdges(tables, positions);
 
+  const menuTable = menu ? menu.table : null;
   let items: (MenuItem | '-')[] | null = null;
-  if (menu) {
-    const table = menu.table;
+  if (menu && menuTable === null) {
+    const at = { x: snap((menu.x - offset.x) / zoom), y: snap((menu.y - offset.y) / zoom) };
+    items = [{ icon: 'table', label: 'New table', onSelect: () => onNewTable?.(at) }];
+  } else if (menuTable !== null) {
+    const table = menuTable;
     items = menuItems
       ? menuItems(table, closeMenu)
       : [
@@ -304,7 +328,7 @@ export function ERCanvas({
       onPointerDown={onBgDown}
       onPointerMove={onBgMove}
       onPointerUp={onBgUp}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={onBgMenu}
       role="application"
       aria-label="ER diagram canvas"
     >
@@ -375,7 +399,11 @@ export function ERCanvas({
       )}
       {menu && items && (
         <div className="ss-canvas-menu" style={{ left: menu.x, top: menu.y }}>
-          <ContextMenu label={`${menuSchema}.${menu.table}`} items={items} onClose={closeMenu} />
+          <ContextMenu
+            label={menu.table === null ? undefined : `${menuSchema}.${menu.table}`}
+            items={items}
+            onClose={closeMenu}
+          />
         </div>
       )}
     </div>

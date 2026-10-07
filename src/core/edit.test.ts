@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { copyName, deleteTable, duplicateTable, moveTable, renameTable, updateTable } from './edit';
+import {
+  addTable,
+  copyName,
+  deleteTable,
+  duplicateTable,
+  moveTable,
+  newTable,
+  newTableName,
+  renameTable,
+  updateTable,
+} from './edit';
+import { validateColumns, validateTableName } from './validate';
 import { ecommerceSnapshot, tableNamed } from './fixtures/testing';
 import type { Table } from './model';
 
@@ -172,5 +183,62 @@ describe('moveTable', () => {
     const before = ecommerceSnapshot();
     expect(moveTable(before, 'products', { x: 304, y: 328 })).toBe(before);
     expect(moveTable(before, 'invoices', { x: 0, y: 0 })).toBe(before);
+  });
+});
+
+describe('newTableName', () => {
+  it('counts up until the name is free', () => {
+    const { tables } = ecommerceSnapshot();
+    expect(newTableName(tables)).toBe('new_table');
+    expect(newTableName([...tables, newTable('new_table')])).toBe('new_table2');
+    expect(newTableName([...tables, newTable('new_table'), newTable('new_table2')])).toBe('new_table3');
+    expect(newTableName([])).toBe('new_table');
+  });
+});
+
+describe('newTable', () => {
+  it('is a valid table with an id primary key', () => {
+    const table = newTable('invoices');
+    expect(table).toEqual({
+      name: 'invoices',
+      columns: [{ name: 'id', type: 'BIGSERIAL', nullable: false, pk: true }],
+      indexes: [],
+    });
+    expect(validateColumns(table)).toEqual({});
+    expect(validateTableName(table.name, names(ecommerceSnapshot().tables))).toBeNull();
+  });
+});
+
+describe('addTable', () => {
+  it('appends the table at the position and keeps the others as they were', () => {
+    const before = ecommerceSnapshot();
+    const invoices = newTable('invoices');
+
+    const after = addTable(before, invoices, { x: 320, y: 400 });
+
+    expect(names(after.tables)).toEqual(['users', 'orders', 'order_items', 'products', 'payments', 'invoices']);
+    expect(tableNamed(after, 'invoices')).toBe(invoices);
+    expect(after.positions.invoices).toEqual({ x: 320, y: 400 });
+    for (const name of names(before.tables)) {
+      expect(tableNamed(after, name)).toBe(tableNamed(before, name));
+      expect(after.positions[name]).toBe(before.positions[name]);
+    }
+  });
+
+  it('starts a schema that has no tables', () => {
+    const after = addTable({ tables: [], positions: {} }, newTable('new_table'), { x: 0, y: 0 });
+    expect(names(after.tables)).toEqual(['new_table']);
+    expect(after.positions).toEqual({ new_table: { x: 0, y: 0 } });
+  });
+
+  it('returns the same snapshot when the name is taken', () => {
+    const before = ecommerceSnapshot();
+    expect(addTable(before, newTable('orders'), { x: 0, y: 0 })).toBe(before);
+  });
+
+  it('is undone by deleting the table', () => {
+    const before = ecommerceSnapshot();
+    const after = deleteTable(addTable(before, newTable('invoices'), { x: 8, y: 8 }), 'invoices');
+    expect(after).toEqual(before);
   });
 });

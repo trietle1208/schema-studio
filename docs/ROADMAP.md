@@ -17,6 +17,7 @@ Each step is sized for one Claude Code session. Tick it off when `npm run build`
 ## Phase 3 — Persistence & list
 - [x] **3.1 Dexie**: schemas + versions tables; save creates a new immutable version snapshot.
 - [x] **3.2 Schema list screen**: DataTable with search, engine filter, sort; New Schema; Empty state.
+- [x] **3.2a New table**: "New table" in the canvas menu (right-click) and in the inspector; the table is selected and its name put into rename mode.
 - [x] **3.2b Delete schema**: row menu and ⌫ in the schema list, confirmed in a dialog; removes the schema with all its versions.
 - [ ] **3.3 Routing**: list ↔ workspace ↔ history ↔ diff (react-router or simple state router).
 

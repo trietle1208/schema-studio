@@ -29,6 +29,8 @@ export interface InspectorProps {
   /** Adding indexes and foreign keys has no editor yet; the buttons stay disabled without a handler. */
   onAddIndex?: (name: string) => void;
   onAddForeignKey?: (name: string) => void;
+  /** A "New table" button for when no table is selected. */
+  onNewTable?: () => void;
   typeMenuOpen?: boolean;
   renaming?: boolean;
   /** Each change puts the table title into rename mode (F2). */
@@ -170,6 +172,7 @@ export function Inspector({
   onDelete,
   onAddIndex,
   onAddForeignKey,
+  onNewTable,
   typeMenuOpen,
   renaming,
   renameSignal,
@@ -202,6 +205,14 @@ export function Inspector({
             <Kbd keys={['⌘', 'K']} />
             Jump to table
           </span>
+          {onNewTable && (
+            <>
+              <br />
+              <Button size="sm" icon="plus" onClick={onNewTable}>
+                New table
+              </Button>
+            </>
+          )}
         </div>
       </aside>
     );

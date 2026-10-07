@@ -4,6 +4,7 @@ import { ERCanvas, type ERCanvasActions } from '../components/ERCanvas';
 import { Inspector } from '../components/Inspector';
 import { StatusBar } from '../components/StatusBar';
 import { Toolbar } from '../components/Toolbar';
+import { newTablePosition } from '../core/layout';
 import { countRelations } from '../core/relations';
 import { searchTables } from '../core/search';
 import { findProblems } from '../core/validate';
@@ -20,7 +21,7 @@ import {
 } from '../store/schema';
 import { useUiStore } from '../store/ui';
 import { useWorkspaceShortcuts } from './useWorkspaceShortcuts';
-import { requestDeleteTable, saveSchema } from './workspaceActions';
+import { newTable, requestDeleteTable, saveSchema } from './workspaceActions';
 
 export function Workspace() {
   const name = useSchemaStore((s) => s.name);
@@ -113,6 +114,8 @@ export function Workspace() {
           onRenameTable={requestRename}
           onDuplicateTable={duplicateTable}
           onDeleteTable={requestDeleteTable}
+          onNewTable={newTable}
+          hint={tables.length === 0 ? 'No tables yet. Right-click the canvas to add one.' : undefined}
           actionsRef={canvas}
         />
         <Inspector
@@ -125,6 +128,10 @@ export function Workspace() {
           onRename={renameTable}
           onDuplicate={duplicateTable}
           onDelete={requestDeleteTable}
+          onNewTable={() => {
+            const view = canvas.current?.view();
+            if (view) newTable(newTablePosition(positions, view));
+          }}
           renameSignal={renameSignal}
           autoFocusDraft
           settingsCollapsed

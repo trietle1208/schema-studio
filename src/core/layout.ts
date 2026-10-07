@@ -165,3 +165,20 @@ export function minimapLayout(
   });
   return { nodes: placed.map((n) => ({ name: n.name, ...fit(n) })), viewport: fit(view) };
 }
+
+const NEW_TABLE_OFFSET = 32;
+
+/**
+ * Where a new table goes when no place was pointed at: the middle of `view`, the visible part of
+ * the canvas, stepped down and right until no table sits at that very spot. Snapped to the grid.
+ */
+export function newTablePosition(positions: Positions, view: Rect): Position {
+  const taken = new Set(Object.values(positions).map((p) => `${p.x},${p.y}`));
+  let x = snap(view.x + (view.w - NODE_WIDTH) / 2);
+  let y = snap(view.y + (view.h - (NODE_HEAD_HEIGHT + NODE_ROW_HEIGHT)) / 2);
+  while (taken.has(`${x},${y}`)) {
+    x += NEW_TABLE_OFFSET;
+    y += NEW_TABLE_OFFSET;
+  }
+  return { x, y };
+}

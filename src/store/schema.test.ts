@@ -211,6 +211,28 @@ describe('schema store', () => {
     expect(state().selectedColumn).toBe(1);
   });
 
+  it('adds a new table, selected, as one undo step', () => {
+    state().select('products');
+    state().selectColumn(1);
+
+    expect(state().addTable({ x: 320, y: 400 })).toBe('new_table');
+
+    expect(names()).toEqual(['users', 'orders', 'order_items', 'products', 'payments', 'new_table']);
+    expect(state().positions.new_table).toEqual({ x: 320, y: 400 });
+    expect(state().selected).toBe('new_table');
+    expect(state().selectedColumn).toBeNull();
+    expect(selectDirtyTables(state())).toEqual(['new_table']);
+    expect(state().addTable({ x: 352, y: 432 })).toBe('new_table2');
+    expect(history().pastStates).toHaveLength(2);
+
+    history().undo();
+    history().undo();
+    expect(names()).toEqual(['users', 'orders', 'order_items', 'products', 'payments']);
+    expect(state().selected).toBe('products');
+    expect(state().selectedColumn).toBe(1);
+    expect(selectDirty(state())).toBe(false);
+  });
+
   it('clears the selection when the selected table is deleted, and undo brings both back', () => {
     state().select('orders');
     state().deleteTable('orders');

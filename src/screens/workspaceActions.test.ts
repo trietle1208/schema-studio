@@ -6,7 +6,7 @@ import { resetDatabase } from '../db/testing';
 import { selectDirty, undo, useSchemaStore } from '../store/schema';
 import { openLastSchema } from '../store/startup';
 import { useUiStore } from '../store/ui';
-import { deleteTable, requestDeleteTable, saveSchema } from './workspaceActions';
+import { deleteTable, newTable, requestDeleteTable, saveSchema } from './workspaceActions';
 
 const schema = () => useSchemaStore.getState();
 const ui = () => useUiStore.getState();
@@ -87,6 +87,33 @@ describe('saveSchema', () => {
     expect(schema().version).toBe(1);
     expect(ui().toast).toMatchObject({ title: 'Saved as v1', description: 'blog · 5 tables' });
     expect((await listSchemas()).map((s) => s.name).sort()).toEqual(['blog', 'ecommerce']);
+  });
+});
+
+describe('newTable', () => {
+  it('adds a table where it was asked for, selected and ready to be renamed', () => {
+    ui().setSearch('orders');
+    const signal = ui().renameSignal;
+
+    newTable({ x: 320, y: 400 });
+
+    expect(names()).toEqual(['users', 'orders', 'order_items', 'products', 'payments', 'new_table']);
+    expect(schema().positions.new_table).toEqual({ x: 320, y: 400 });
+    expect(schema().selected).toBe('new_table');
+    expect(ui().renameSignal).toBe(signal + 1);
+    expect(ui().search).toBe('');
+    expect(selectDirty(schema())).toBe(true);
+  });
+
+  it('is stored with the next save', async () => {
+    newTable({ x: 320, y: 400 });
+    schema().renameTable('new_table', 'invoices');
+    await saveSchema();
+
+    const [v2] = await listVersions(schema().id!);
+    expect(v2.snapshot.tables.map((t) => t.name)).toContain('invoices');
+    expect(v2.snapshot.positions.invoices).toEqual({ x: 320, y: 400 });
+    expect(ui().toast).toMatchObject({ title: 'Saved as v2', description: 'ecommerce · 6 tables' });
   });
 });
 

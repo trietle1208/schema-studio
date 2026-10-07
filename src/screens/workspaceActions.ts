@@ -1,3 +1,5 @@
+import { flushSync } from 'react-dom';
+import type { Position } from '../core/model';
 import { plural } from '../core/plural';
 import { versionLabel } from '../core/versions';
 import { undo, useSchemaStore, type SaveResult } from '../store/schema';
@@ -36,6 +38,19 @@ export async function saveSchema(): Promise<void> {
       description: `${schema.name} · ${plural(schema.tables.length, 'table')}`,
     });
   }
+}
+
+/**
+ * "New table" in the canvas menu and the inspector: adds a table at `position`, selects it and
+ * puts its name into rename mode.
+ */
+export function newTable(position: Position) {
+  const ui = useUiStore.getState();
+  // A search would hide the new table unless its name happened to match.
+  ui.setSearch('');
+  // The inspector has to show the new table before it can be told to rename it.
+  flushSync(() => useSchemaStore.getState().addTable(position));
+  ui.requestRename();
 }
 
 /** ⌫, the inspector and the canvas menu: deleting a table is confirmed in a dialog first. */

@@ -7,6 +7,7 @@ import {
   edgePath,
   fitView,
   minimapLayout,
+  newTablePosition,
   nodeHeight,
   nodeRects,
   snap,
@@ -270,5 +271,28 @@ describe('fitView', () => {
   it('resets the view when no table is placed', () => {
     expect(fitView([], {}, { w: 800, h: 600 })).toEqual({ zoom: 1, offset: { x: 0, y: 0 } });
     expect(fitView(ecommerceSnapshot().tables, {}, { w: 800, h: 600 })).toEqual({ zoom: 1, offset: { x: 0, y: 0 } });
+  });
+});
+
+describe('newTablePosition', () => {
+  const view = { x: 0, y: 0, w: 844, h: 800 };
+
+  it('is the middle of the visible canvas, on the grid', () => {
+    const { positions } = ecommerceSnapshot();
+    expect(newTablePosition(positions, view)).toEqual({ x: 312, y: 368 });
+    expect(newTablePosition({}, view)).toEqual({ x: 312, y: 368 });
+  });
+
+  it('follows the pan and the zoom', () => {
+    const p = newTablePosition({}, viewRect({ x: -400, y: 120 }, 0.5, { w: 844, h: 800 }));
+    expect(p).toEqual({ x: 1528, y: 528 });
+  });
+
+  it('steps down and right while a table sits at that spot', () => {
+    const { positions } = ecommerceSnapshot();
+    const first = { ...positions, new_table: { x: 312, y: 368 } };
+    expect(newTablePosition(first, view)).toEqual({ x: 344, y: 400 });
+    const second = { ...first, new_table2: { x: 344, y: 400 } };
+    expect(newTablePosition(second, view)).toEqual({ x: 376, y: 432 });
   });
 });
