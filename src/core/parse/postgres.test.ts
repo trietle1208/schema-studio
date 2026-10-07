@@ -471,6 +471,14 @@ describe('errors', () => {
     });
   });
 
+  it('says what backticks are, as a script full of them is MySQL', () => {
+    expect(failure('\nCREATE TABLE `da_attachment` (\n  `id` int(11) NOT NULL AUTO_INCREMENT\n);')).toEqual({
+      message: 'Unable to parse SQL near line 2.',
+      line: 2,
+      detail: 'Backticks quote names in MySQL, not in PostgreSQL. Import the script as MySQL, or quote the names with `"`.',
+    });
+  });
+
   it('reports a statement that ends early on its last line', () => {
     expect(failure('CREATE TABLE a (id int);\nCREATE TABLE t (\n  id int,\n  name text')).toEqual({
       message: 'Unable to parse SQL near line 4.',

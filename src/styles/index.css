@@ -30,3 +30,28 @@ body {
 .ss-root .ss-editor-code textarea:focus-visible {
   outline: none;
 }
+
+/*
+ * A type too long for the node (`BIGINT UNSIGNED AUTO_INCREMENT`, an ENUM with its values) is cut
+ * short instead of pushing the name of its column out of the row. The name comes first and the
+ * type keeps room for a few characters; the `?` of a nullable column stays in view after the cut.
+ */
+.ss-node-row {
+  grid-template-columns: 14px minmax(0, max-content) minmax(6ch, 1fr) 18px;
+}
+
+.ss-node-type {
+  position: relative;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+.ss-node-type:has(.ss-node-null) {
+  padding-right: 1ch;
+}
+
+.ss-node-null {
+  position: absolute;
+  right: 0;
+}

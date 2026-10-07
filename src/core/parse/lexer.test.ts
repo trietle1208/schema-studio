@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ecommerceDump, ecommerceSql } from '../fixtures/sql';
+import { ecommerceDump, ecommerceMysqlDump, ecommerceSql } from '../fixtures/sql';
 import { lineCounter, splitStatements, type Statement } from './lexer';
 
 const texts = (statement: Statement) => statement.tokens.map((t) => t.text);
@@ -108,6 +108,56 @@ describe('splitStatements', () => {
     expect(found.filter((h) => h === 'CREATE TABLE')).toHaveLength(2);
     expect(found).not.toContain('RETURN NEW');
     expect(found[0]).toBe('SET STATEMENT_TIMEOUT');
+  });
+});
+
+describe('splitStatements by the rules of MySQL', () => {
+  const split = (sql: string) => splitStatements(sql, 'mysql');
+  const mysqlHeads = (sql: string) => split(sql).statements.map((s) => `${s.tokens[0].upper} ${s.tokens[1]?.upper ?? ''}`.trim());
+
+  it('takes backticks for a quoted name and double quotes for a string', () => {
+    const [{ tokens }] = split('select `a;``b`, "c;\\"d", \'e;\\\'f\'').statements;
+    expect(tokens.map((t) => [t.kind, t.text])).toEqual([
+      ['word', 'select'],
+      ['quoted', '`a;``b`'],
+      ['symbol', ','],
+      ['string', '"c;\\"d"'],
+      ['symbol', ','],
+      ['string', "'e;\\'f'"],
+    ]);
+  });
+
+  it('leaves out # comments, and ends a comment at its first */', () => {
+    const sql = '# one;\n/*!40101 SET a = 1; /* not nested */ SELECT 1; SELECT 2 # two;\n; SELECT $$ 3';
+    expect(split(sql).statements.map(texts)).toEqual([
+      ['SELECT', '1'],
+      ['SELECT', '2'],
+      ['SELECT', '$', '$', '3'],
+    ]);
+  });
+
+  it('ends statements at what DELIMITER names', () => {
+    const sql = 'SELECT 1;\ndelimiter //\nCREATE TRIGGER t BEGIN SET a = 1; SET b = 2; END //\nSELECT 2 //\nDELIMITER ;\nSELECT 3;';
+    expect(split(sql).statements.map((s) => sql.slice(s.start, s.end))).toEqual([
+      'SELECT 1',
+      'CREATE TRIGGER t BEGIN SET a = 1; SET b = 2; END',
+      'SELECT 2',
+      'SELECT 3',
+    ]);
+  });
+
+  it('stops at a name that never ends', () => {
+    expect(split('SELECT `oops').error?.message).toBe('The quoted name that starts here is never closed.');
+    expect(split('SELECT "oops').error?.message).toBe('The string that starts here is never closed.');
+  });
+
+  it('finds the statements of a mysqldump script, with the trigger in one', () => {
+    const found = mysqlHeads(ecommerceMysqlDump);
+    expect(found.filter((h) => h === 'CREATE TABLE')).toHaveLength(5);
+    expect(found.filter((h) => h === 'DROP TABLE')).toHaveLength(5);
+    expect(found.filter((h) => h === 'CREATE TRIGGER')).toHaveLength(1);
+    expect(found).not.toContain('END');
+    expect(found.slice(-4)).toEqual(['LOCK TABLES', 'INSERT INTO', 'UNLOCK TABLES', 'CREATE TRIGGER']);
   });
 });
 

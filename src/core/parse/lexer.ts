@@ -1,5 +1,9 @@
-// Splits a SQL script into statements and their tokens, by PostgreSQL's lexical rules. It knows
-// nothing of the grammar: a parser asks it where statements begin and what words they are made of.
+// Splits a SQL script into statements and their tokens, by the lexical rules of PostgreSQL or of
+// MySQL. It knows nothing of the grammar: a parser asks it where statements begin and what words
+// they are made of.
+
+/** Whose lexical rules a script is read by. */
+export type Lexicon = 'postgres' | 'mysql';
 
 export type TokenKind = 'word' | 'quoted' | 'string' | 'number' | 'symbol';
 
@@ -54,8 +58,12 @@ function quoteEnd(sql: string, open: number, backslashes: boolean): number {
   return -1;
 }
 
-/** The offset just after the comment that opens at `open`, or -1 when it never closes. Comments nest. */
-function commentEnd(sql: string, open: number): number {
+/** The offset just after the comment that opens at `open`, or -1 when it never closes. In PostgreSQL comments nest. */
+function commentEnd(sql: string, open: number, nests: boolean): number {
+  if (!nests) {
+    const close = sql.indexOf('*/', open + 2);
+    return close < 0 ? -1 : close + 2;
+  }
   let depth = 0;
   for (let i = open; i < sql.length; i++) {
     if (sql.startsWith('/*', i)) {
@@ -97,10 +105,16 @@ function copyDataEnd(sql: string, from: number): number {
  * The statements of a script, in order. Comments, empty statements, psql commands (`\connect`)
  * and the rows of a `COPY … FROM stdin` are left out. When a string, quoted name or comment never
  * ends, the statements before it are returned together with the error.
+ *
+ * MySQL differs in what it quotes with: names go in backticks, `"` holds a string like `'` does
+ * and both take backslash escapes. It has `#` comments and none that nest, no dollar quoting, and
+ * its client's `DELIMITER` command changes what ends a statement, as dumps do around triggers.
  */
-export function splitStatements(sql: string): Script {
+export function splitStatements(sql: string, lexicon: Lexicon = 'postgres'): Script {
+  const mysql = lexicon === 'mysql';
   const statements: Statement[] = [];
   let tokens: Token[] = [];
+  let delimiter = ';';
   let i = 0;
 
   const push = (kind: TokenKind, end: number) => {
@@ -118,25 +132,28 @@ export function splitStatements(sql: string): Script {
   while (i < sql.length) {
     const c = sql[i];
     if (SPACE.test(c)) i++;
-    else if (sql.startsWith('--', i)) i = lineEnd(sql, i);
+    else if (sql.startsWith('--', i) || (mysql && c === '#')) i = lineEnd(sql, i);
     else if (sql.startsWith('/*', i)) {
-      const end = commentEnd(sql, i);
+      const end = commentEnd(sql, i, !mysql);
       if (end < 0) return unfinished('The comment that starts here is never closed.');
       i = end;
-    } else if (c === '\\') {
+    } else if (sql.startsWith(delimiter, i)) {
+      const copy = !mysql && tokens.length > 0 && copiesFromStdin(tokens);
+      finish();
+      i = copy ? copyDataEnd(sql, i) : i + delimiter.length;
+    } else if (c === '\\' && !mysql) {
       // A psql command runs to the end of its line.
       i = lineEnd(sql, i);
-    } else if (c === "'" || c === '"' || ((c === 'e' || c === 'E') && sql[i + 1] === "'")) {
-      // E'…' is a string with backslash escapes.
-      const escaped = c !== "'" && c !== '"';
-      const end = quoteEnd(sql, escaped ? i + 1 : i, escaped);
+    } else if (c === "'" || c === '"' || (mysql ? c === '`' : (c === 'e' || c === 'E') && sql[i + 1] === "'")) {
+      // E'…' is a string with backslash escapes; in MySQL every string has them.
+      const prefixed = c !== "'" && c !== '"' && c !== '`';
+      const name = c === (mysql ? '`' : '"');
+      const end = quoteEnd(sql, prefixed ? i + 1 : i, prefixed || (mysql && !name));
       if (end < 0) {
-        return unfinished(
-          c === '"' ? 'The quoted name that starts here is never closed.' : 'The string that starts here is never closed.',
-        );
+        return unfinished(name ? 'The quoted name that starts here is never closed.' : 'The string that starts here is never closed.');
       }
-      push(c === '"' ? 'quoted' : 'string', end);
-    } else if (c === '$') {
+      push(name ? 'quoted' : 'string', end);
+    } else if (c === '$' && !mysql) {
       DOLLAR_TAG.lastIndex = i;
       const tag = DOLLAR_TAG.exec(sql)?.[0];
       if (!tag) push('symbol', i + 1);
@@ -148,14 +165,15 @@ export function splitStatements(sql: string): Script {
     } else if (WORD_START.test(c)) {
       let end = i + 1;
       while (end < sql.length && WORD_PART.test(sql[end])) end++;
-      push('word', end);
+      if (mysql && !tokens.length && sql.slice(i, end).toUpperCase() === 'DELIMITER') {
+        // The rest of the line is what ends the statements from here on.
+        const line = lineEnd(sql, end);
+        delimiter = sql.slice(end, line).trim() || ';';
+        i = line;
+      } else push('word', end);
     } else if (DIGIT.test(c)) {
       NUMBER.lastIndex = i;
       push('number', i + (NUMBER.exec(sql)?.[0].length ?? 1));
-    } else if (c === ';') {
-      const copy = tokens.length > 0 && copiesFromStdin(tokens);
-      finish();
-      i = copy ? copyDataEnd(sql, i) : i + 1;
     } else push('symbol', i + 1);
   }
   finish();

@@ -34,7 +34,8 @@ Each step is sized for one Claude Code session. Tick it off when `npm run build`
 - [x] **5.4 Migration generator**: diff → ALTER statements in a transaction; flag destructive changes.
 
 ## Phase 6 — Later
-- [ ] MySQL dialect (parser + generator)
+- [x] **MySQL dialect: parser**: `CREATE TABLE / ALTER TABLE / CREATE INDEX` as mysqldump, phpMyAdmin and hand-written DDL have them → model; Import dialog offers MySQL. Tests with dump fixtures.
+- [ ] MySQL dialect: generator (export and migration still write PostgreSQL DDL)
 - [ ] Light/dark toggle in Settings
 - [ ] Desktop app with Tauri (open/save `.sql` files on disk)
 - [ ] Connect to a live database (read-only introspection)

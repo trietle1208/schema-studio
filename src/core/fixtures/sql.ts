@@ -163,3 +163,157 @@ export const missingCommaSql = `CREATE TABLE order_items (
   product_id  BIGINT NOT NULL REFERENCES products(id)
   quantity    INTEGER NOT NULL DEFAULT 1,
   price       DECIMAL(12,2) NOT NULL`;
+
+/** The ecommerce sample the way \`mysqldump --no-data\` writes it, with the trigger and the comments a dump has around its tables. */
+export const ecommerceMysqlDump = `-- MySQL dump 10.13  Distrib 8.0.36, for Linux (x86_64)
+--
+-- Host: localhost    Database: shop
+-- ------------------------------------------------------
+-- Server version	8.0.36
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+
+--
+-- Table structure for table \`users\`
+--
+
+DROP TABLE IF EXISTS \`users\`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE \`users\` (
+  \`id\` bigint unsigned NOT NULL AUTO_INCREMENT,
+  \`email\` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Lower-cased; it''s the login.',
+  \`name\` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  \`avatar_url\` text COLLATE utf8mb4_unicode_ci,
+  \`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (\`id\`),
+  UNIQUE KEY \`users_email_unique\` (\`email\`),
+  KEY \`users_created_at_idx\` (\`created_at\`)
+) ENGINE=InnoDB AUTO_INCREMENT=1042 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Registered customers. One row per account.';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table \`orders\`
+--
+
+DROP TABLE IF EXISTS \`orders\`;
+CREATE TABLE \`orders\` (
+  \`id\` bigint unsigned NOT NULL AUTO_INCREMENT,
+  \`user_id\` bigint unsigned NOT NULL,
+  \`status\` enum('pending','paid','shipped') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  \`total\` decimal(12,2) NOT NULL,
+  \`created_at\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (\`id\`),
+  KEY \`orders_user_id_idx\` (\`user_id\`),
+  KEY \`orders_status_created_idx\` (\`status\`,\`created_at\`),
+  CONSTRAINT \`orders_user_id_fk\` FOREIGN KEY (\`user_id\`) REFERENCES \`users\` (\`id\`) ON DELETE CASCADE,
+  CONSTRAINT \`orders_total_check\` CHECK ((\`total\` >= 0))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Customer orders. Totals are stored, not derived.';
+
+DROP TABLE IF EXISTS \`products\`;
+CREATE TABLE \`products\` (
+  \`id\` bigint unsigned NOT NULL AUTO_INCREMENT,
+  \`name\` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  \`sku\` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  \`price\` decimal(12,2) NOT NULL,
+  \`description\` text COLLATE utf8mb4_unicode_ci,
+  PRIMARY KEY (\`id\`),
+  UNIQUE KEY \`products_sku_unique\` (\`sku\`),
+  FULLTEXT KEY \`products_search\` (\`name\`,\`description\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Sellable catalogue items.';
+
+DROP TABLE IF EXISTS \`order_items\`;
+CREATE TABLE \`order_items\` (
+  \`id\` bigint unsigned NOT NULL AUTO_INCREMENT,
+  \`order_id\` bigint unsigned NOT NULL,
+  \`product_id\` bigint unsigned NOT NULL,
+  \`quantity\` int NOT NULL DEFAULT '1',
+  \`price\` decimal(12,2) NOT NULL,
+  PRIMARY KEY (\`id\`),
+  KEY \`order_items_order_id_idx\` (\`order_id\`),
+  KEY \`order_items_product_id_fk\` (\`product_id\`),
+  CONSTRAINT \`order_items_order_id_fk\` FOREIGN KEY (\`order_id\`) REFERENCES \`orders\` (\`id\`) ON DELETE CASCADE,
+  CONSTRAINT \`order_items_product_id_fk\` FOREIGN KEY (\`product_id\`) REFERENCES \`products\` (\`id\`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+DROP TABLE IF EXISTS \`payments\`;
+CREATE TABLE \`payments\` (
+  \`id\` bigint unsigned NOT NULL AUTO_INCREMENT,
+  \`order_id\` bigint unsigned NOT NULL,
+  \`provider\` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  \`amount\` decimal(12,2) NOT NULL,
+  \`paid_at\` datetime DEFAULT NULL,
+  PRIMARY KEY (\`id\`),
+  KEY \`payments_order_id_fk\` (\`order_id\`),
+  CONSTRAINT \`payments_order_id_fk\` FOREIGN KEY (\`order_id\`) REFERENCES \`orders\` (\`id\`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+LOCK TABLES \`payments\` WRITE;
+INSERT INTO \`payments\` VALUES (1,7,'stripe; it\\'s live',19.90,NULL);
+UNLOCK TABLES;
+
+DELIMITER ;;
+CREATE TRIGGER \`orders_touch\` BEFORE UPDATE ON \`orders\` FOR EACH ROW BEGIN
+  SET NEW.updated_at = NOW(); # not a statement; of the script
+END ;;
+DELIMITER ;
+
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+
+-- Dump completed on 2026-10-07  9:14:02
+`;
+
+/** Two of the sample's tables the way phpMyAdmin exports them: the keys and AUTO_INCREMENT come after the tables, in ALTER TABLE. */
+export const ecommercePhpMyAdmin = `-- phpMyAdmin SQL Dump
+-- version 5.2.1
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+CREATE TABLE \`users\` (
+  \`id\` int(11) NOT NULL,
+  \`email\` varchar(255) NOT NULL,
+  \`name\` varchar(255) DEFAULT NULL,
+  \`created_at\` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE \`orders\` (
+  \`id\` int(11) NOT NULL,
+  \`user_id\` int(11) NOT NULL,
+  \`status\` varchar(50) NOT NULL DEFAULT 'pending',
+  \`total\` decimal(12,2) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Indexes for dumped tables
+--
+
+ALTER TABLE \`users\`
+  ADD PRIMARY KEY (\`id\`),
+  ADD UNIQUE KEY \`users_email_unique\` (\`email\`);
+
+ALTER TABLE \`orders\`
+  ADD PRIMARY KEY (\`id\`),
+  ADD KEY \`orders_user_id_idx\` (\`user_id\`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+ALTER TABLE \`users\`
+  MODIFY \`id\` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1042;
+
+ALTER TABLE \`orders\`
+  MODIFY \`id\` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- Constraints for dumped tables
+--
+
+ALTER TABLE \`orders\`
+  ADD CONSTRAINT \`orders_user_id_fk\` FOREIGN KEY (\`user_id\`) REFERENCES \`users\` (\`id\`) ON DELETE CASCADE;
+COMMIT;
+`;

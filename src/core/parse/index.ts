@@ -1,4 +1,5 @@
 import type { Table } from '../model';
+import { mysqlParser } from './mysql';
 import { postgresParser } from './postgres';
 
 /** Why a script could not be imported. Only the first problem is reported. */
@@ -29,7 +30,7 @@ export interface SqlParser {
   parse: (sql: string) => ParseOutcome;
 }
 
-const PARSERS: readonly SqlParser[] = [postgresParser];
+const PARSERS: readonly SqlParser[] = [postgresParser, mysqlParser];
 
 /** The parser for an engine, or null when its DDL cannot be imported yet. */
 export function parserFor(engine: string): SqlParser | null {

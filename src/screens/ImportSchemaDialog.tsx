@@ -41,6 +41,9 @@ const PARSE_DELAY_MS = 150;
 /** How many warnings are listed before the rest is only counted. */
 const WARNINGS_SHOWN = 5;
 
+/** The command whose output the drop zone says it reads, by dialect. */
+const DUMP_COMMANDS: Record<string, string> = { PostgreSQL: 'pg_dump --schema-only', MySQL: 'mysqldump --no-data' };
+
 const DIALECTS = ENGINES.map((engine) => {
   const supported = IMPORT_ENGINES.includes(engine);
   return { value: engine, label: supported ? engine : `${engine} (soon)`, disabled: !supported };
@@ -222,7 +225,11 @@ export function ImportSchemaDialog() {
       />
       {mode === 'file' && (
         <>
-          <DropZone file={file} onFile={(picked) => void choose(picked)} />
+          <DropZone
+            file={file}
+            onFile={(picked) => void choose(picked)}
+            hint={`.sql or .ddl · up to 10 MB · ${DUMP_COMMANDS[engine]} output works`}
+          />
           {fileProblem && <Alert tone="error" title={fileProblem} />}
           {!file && (
             <>

@@ -12,7 +12,19 @@ import {
   type TableConstraint,
   type TableReference,
 } from 'pgsql-ast-parser';
-import type { Column, ForeignKey, Index, IndexType, OnDelete, Table } from '../model';
+import type { IndexType, OnDelete } from '../model';
+import {
+  closing,
+  Failure,
+  finishTables,
+  isName,
+  isSymbol,
+  isWord,
+  PRIMARY_KEY,
+  resolveForeignKeys,
+  type DraftColumn,
+  type DraftTable,
+} from './draft';
 import { lineCounter, splitStatements, type Statement, type Token } from './lexer';
 import type { ParseError, ParseOutcome, SqlParser } from './index';
 
@@ -24,8 +36,6 @@ import type { ParseError, ParseOutcome, SqlParser } from './index';
 const DEFAULT_SCHEMA = 'public';
 const DEFAULT_INDEX_METHOD = 'btree';
 
-/** Stands for the referenced table's primary key in `REFERENCES orders`, which names no column. */
-const PRIMARY_KEY = '?';
 /** What is written after such a reference, as the grammar wants a column list. */
 const KEY_LIST = ` ("${PRIMARY_KEY}")`;
 
@@ -94,25 +104,6 @@ const TOKEN_NAMES: Record<string, string> = {
   string: 'a string',
 };
 
-interface DraftColumn {
-  name: string;
-  type: string;
-  nullable: boolean;
-  pk: boolean;
-  unique: boolean;
-  default?: string;
-  comment?: string;
-  fk?: ForeignKey;
-}
-
-interface DraftTable {
-  name: string;
-  schema: string;
-  comment: string;
-  columns: DraftColumn[];
-  indexes: Index[];
-}
-
 /** What is known of the script so far. */
 interface Context {
   sql: string;
@@ -135,40 +126,8 @@ interface Source {
   toScript: (offset: number) => number;
 }
 
-/** Stops the import at the first problem. */
-class Failure extends Error {
-  readonly error: ParseError;
-
-  constructor(error: ParseError) {
-    super(error.message);
-    this.error = error;
-  }
-}
-
 function fail(ctx: Context, message: string, offset: number): never {
   throw new Failure({ message, line: ctx.lineOf(offset) });
-}
-
-function isName(token: Token | undefined): boolean {
-  return !!token && (token.kind === 'word' || token.kind === 'quoted');
-}
-
-function isSymbol(token: Token | undefined, text: string): boolean {
-  return !!token && token.kind === 'symbol' && token.text === text;
-}
-
-function isWord(token: Token | undefined, word: string): boolean {
-  return !!token && token.kind === 'word' && token.upper === word;
-}
-
-/** The index of the `)` that closes the `(` at `open`, or -1 when it is never closed. */
-function closing(tokens: Token[], open: number): number {
-  let depth = 0;
-  for (let i = open; i < tokens.length; i++) {
-    if (isSymbol(tokens[i], '(')) depth++;
-    else if (isSymbol(tokens[i], ')') && --depth === 0) return i;
-  }
-  return -1;
 }
 
 /** A name as the database knows it: lower case, or as it is written when it is in quotes. */
@@ -387,6 +346,15 @@ function syntaxError(ctx: Context, source: Source, kind: Kind, thrown: unknown):
         detail: `Expected \`,\` or \`)\` after ${after}. ${rest}`,
       };
     }
+  }
+
+  // A backtick is no part of PostgreSQL's SQL, and a message cannot show one: what it puts in backticks is set as code.
+  if (token.text === '`') {
+    return {
+      message: near(token.start),
+      line,
+      detail: 'Backticks quote names in MySQL, not in PostgreSQL. Import the script as MySQL, or quote the names with `"`.',
+    };
   }
 
   const expected = expectedTokens(thrown instanceof Error ? thrown.message : '');
@@ -737,45 +705,6 @@ function read(ctx: Context, statement: Statement): boolean {
   return true;
 }
 
-/** Drops the foreign keys that point at nothing, and gives the ones without a column their key. */
-function resolveForeignKeys(ctx: Context) {
-  for (const table of ctx.tables.values()) {
-    for (const column of table.columns) {
-      const fk = column.fk;
-      if (!fk) continue;
-      const path = `Foreign key \`${table.name}.${column.name}\``;
-      const target = ctx.tables.get(fk.table);
-      const keys = target?.columns.filter((c) => c.pk) ?? [];
-      if (!target) {
-        ctx.warnings.push(`${path} references \`${fk.table}\`, which is not defined, and was skipped.`);
-        delete column.fk;
-      } else if (fk.column === PRIMARY_KEY && keys.length !== 1) {
-        ctx.warnings.push(`${path} references \`${fk.table}\`, which has no single-column primary key, and was skipped.`);
-        delete column.fk;
-      } else if (fk.column === PRIMARY_KEY) {
-        fk.column = keys[0].name;
-      } else if (!target.columns.some((c) => c.name === fk.column)) {
-        ctx.warnings.push(`${path} references \`${fk.table}.${fk.column}\`, which is not defined, and was skipped.`);
-        delete column.fk;
-      }
-    }
-  }
-}
-
-/** A column as the model keeps it: flags and texts that are not set are left out. */
-function finishColumn(draft: DraftColumn): Column {
-  return {
-    name: draft.name,
-    type: draft.type,
-    nullable: draft.nullable,
-    ...(draft.pk ? { pk: true } : {}),
-    ...(draft.unique ? { unique: true } : {}),
-    ...(draft.default !== undefined ? { default: draft.default } : {}),
-    ...(draft.comment ? { comment: draft.comment } : {}),
-    ...(draft.fk ? { fk: draft.fk } : {}),
-  };
-}
-
 function parse(sql: string): ParseOutcome {
   const lineOf = lineCounter(sql);
   const ctx: Context = { sql, lineOf, tables: new Map(), indexNames: new Set(), warnings: [], checks: 0 };
@@ -794,17 +723,13 @@ function parse(sql: string): ParseOutcome {
     return { ok: false, error: { message: `Unable to parse SQL near line ${line}.`, line, detail: script.error.message } };
   }
 
-  resolveForeignKeys(ctx);
+  resolveForeignKeys(ctx.tables, ctx.warnings);
   if (ctx.checks) {
     ctx.warnings.push(
       ctx.checks === 1 ? '1 CHECK constraint was not imported.' : `${ctx.checks} CHECK constraints were not imported.`,
     );
   }
-  const tables: Table[] = [...ctx.tables.values()].map((t) => {
-    if (!t.columns.some((c) => c.pk)) ctx.warnings.push(`\`${t.name}\` has no primary key.`);
-    return { name: t.name, schema: t.schema, comment: t.comment, columns: t.columns.map(finishColumn), indexes: t.indexes };
-  });
-  return { ok: true, tables, warnings: ctx.warnings, skipped };
+  return { ok: true, tables: finishTables(ctx.tables, ctx.warnings), warnings: ctx.warnings, skipped };
 }
 
 export const postgresParser: SqlParser = { engine: 'PostgreSQL', parse };
