@@ -26,7 +26,8 @@ import type { SchemaRecord } from '../db/db';
 import { useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
 import { go } from './navigation';
-import { requestDeleteSchema, requestNewSchema } from './schemaActions';
+import { requestExportStored } from './exportActions';
+import { requestDeleteSchema, requestImport, requestNewSchema } from './schemaActions';
 
 const ALL_ENGINES = 'all';
 // The menu's minimum width in bundle.css; it opens under the More button, right edges aligned.
@@ -138,7 +139,7 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
           </div>
           <span className="ss-page-count">0</span>
         </header>
-        <EmptyState onCreate={requestNewSchema} />
+        <EmptyState onImport={requestImport} onCreate={requestNewSchema} />
       </>
     );
   }
@@ -202,7 +203,6 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
       label: '',
       width: 120,
       sortable: false,
-      // Export arrives with its dialog (roadmap 4.4).
       render: (r) => (
         // A double click on a button is not a double click on the row.
         <div className="ss-table-actions" onDoubleClick={(e) => e.stopPropagation()}>
@@ -212,7 +212,7 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
             size="sm"
             onClick={() => go({ screen: 'history', schema: r.name })}
           />
-          <IconButton icon="download" label="Export" size="sm" disabled />
+          <IconButton icon="download" label="Export" size="sm" onClick={() => void requestExportStored(r)} />
           <IconButton
             icon="more"
             label="More"
@@ -237,8 +237,7 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
         <div className="ss-page-title">Schemas</div>
         <span className="ss-page-count">{`${rows.length} of ${schemas.length}`}</span>
         <span className="ss-spacer" />
-        {/* Import arrives with its dialog (roadmap 4.2). */}
-        <Button icon="upload" kbd={['⌘', 'I']} disabled>
+        <Button icon="upload" kbd={['⌘', 'I']} onClick={requestImport}>
           Import
         </Button>
         <Button variant="primary" icon="plus" kbd={['⌘', 'N']} onClick={requestNewSchema}>

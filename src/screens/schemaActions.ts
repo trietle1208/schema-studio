@@ -1,7 +1,9 @@
 import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
-import type { SchemaSnapshot } from '../core/model';
+import { gridLayout } from '../core/layout';
+import type { SchemaSnapshot, Table } from '../core/model';
 import { plural } from '../core/plural';
 import { SCHEMAS_ROUTE } from '../core/routes';
+import { summarize } from '../core/summary';
 import type { SchemaRecord } from '../db/db';
 import { createSchema, deleteSchema as removeSchema, type NewSchema } from '../db/schemas';
 import { ecommerceSample, selectDirty, useSchemaStore } from '../store/schema';
@@ -25,29 +27,60 @@ export interface NewSchemaInput extends NewSchema {
 }
 
 /**
- * The confirmed New Schema dialog: stores the schema as its v1 and opens it in the workspace.
- * Resolves with whether it did; a failure is reported in a toast and leaves the dialog open.
+ * Stores a new schema with `snapshot` as its v1 and opens it in the workspace. Resolves with
+ * whether it did; a failure is reported in a toast titled `failure` and leaves the dialog open.
  */
-export async function createNewSchema({ sample, ...schema }: NewSchemaInput): Promise<boolean> {
+async function createAndOpen(schema: NewSchema, snapshot: SchemaSnapshot, message: string, failure: string): Promise<boolean> {
   const ui = useUiStore.getState();
-  const snapshot: SchemaSnapshot = sample
-    ? { tables: ecommerceTables, positions: ecommercePositions }
-    : { tables: [], positions: {} };
   try {
-    const stored = await createSchema(schema, snapshot, sample ? 'Ecommerce sample' : 'New schema');
+    const stored = await createSchema(schema, snapshot, message);
     ui.closeDialog();
     openStored({ schema: stored, snapshot });
     go({ screen: 'workspace', schema: stored.name });
     return true;
   } catch (error) {
     console.error(error);
-    ui.showToast({
-      tone: 'error',
-      title: 'Could not create schema',
-      description: error instanceof Error ? error.message : undefined,
-    });
+    ui.showToast({ tone: 'error', title: failure, description: error instanceof Error ? error.message : undefined });
     return false;
   }
+}
+
+/**
+ * The confirmed New Schema dialog: stores the schema as its v1 and opens it in the workspace.
+ * Resolves with whether it did; a failure is reported in a toast and leaves the dialog open.
+ */
+export function createNewSchema({ sample, ...schema }: NewSchemaInput): Promise<boolean> {
+  const snapshot: SchemaSnapshot = sample
+    ? { tables: ecommerceTables, positions: ecommercePositions }
+    : { tables: [], positions: {} };
+  return createAndOpen(schema, snapshot, sample ? 'Ecommerce sample' : 'New schema', 'Could not create schema');
+}
+
+/** ⌘I and the Import buttons: asks for the SQL of a schema to import. */
+export function requestImport() {
+  leaveOpenSchema(() => useUiStore.getState().openDialog({ kind: 'import-schema' }));
+}
+
+export interface ImportInput extends NewSchema {
+  /** The tables the SQL parsed to. */
+  tables: Table[];
+  /** The name of the file the SQL came from; left out for pasted SQL. */
+  file?: string;
+}
+
+/**
+ * The confirmed Import Schema dialog: lays the tables out in a grid, stores them as v1 of a new
+ * schema and opens it in the workspace, fitted to the screen. Resolves with whether it did; a
+ * failure is reported in a toast and leaves the dialog open.
+ */
+export async function importSchema({ tables, file, ...schema }: ImportInput): Promise<boolean> {
+  const ui = useUiStore.getState();
+  const snapshot: SchemaSnapshot = { tables, positions: gridLayout(tables) };
+  const message = file ? `Imported from ${file}` : 'Imported from pasted SQL';
+  if (!(await createAndOpen(schema, snapshot, message, 'Could not import schema'))) return false;
+  ui.setFitPending(true);
+  ui.showToast({ title: `Imported ${schema.name}`, description: summarize(tables) });
+  return true;
 }
 
 /** ⌫ and "Delete schema" in the schema list: deleting a schema is confirmed in a dialog first. */

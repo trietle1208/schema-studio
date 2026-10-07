@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { ERCanvas, type ERCanvasActions } from '../components/ERCanvas';
 import { Inspector } from '../components/Inspector';
@@ -21,6 +21,7 @@ import {
   useSchemaStore,
 } from '../store/schema';
 import { useUiStore } from '../store/ui';
+import { requestExport } from './exportActions';
 import { useWorkspaceShortcuts } from './useWorkspaceShortcuts';
 import { go } from './navigation';
 import { newTable, requestDeleteTable, saveSchema } from './workspaceActions';
@@ -53,10 +54,19 @@ export function Workspace() {
   const setSearch = useUiStore((s) => s.setSearch);
   const renameSignal = useUiStore((s) => s.renameSignal);
   const requestRename = useUiStore((s) => s.requestRename);
+  const fitPending = useUiStore((s) => s.fitPending);
+  const setFitPending = useUiStore((s) => s.setFitPending);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const canvas = useRef<ERCanvasActions>(null);
   useWorkspaceShortcuts(searchRef);
+
+  // A schema that was just imported is shown whole, wherever the canvas was panned to before.
+  useEffect(() => {
+    if (!fitPending) return;
+    canvas.current?.fit();
+    setFitPending(false);
+  }, [fitPending, setFitPending]);
 
   const visible = useMemo(() => searchTables(tables, search), [tables, search]);
   // A selected table that the search hides stays in the inspector, but the canvas has nothing to highlight.
@@ -99,6 +109,7 @@ export function Workspace() {
         searchRef={searchRef}
         onSchemas={() => go(SCHEMAS_ROUTE)}
         onHistory={() => go({ screen: 'history', schema: name })}
+        onExport={requestExport}
       />
       <div className="ss-work">
         <ERCanvas

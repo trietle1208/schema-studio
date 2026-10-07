@@ -1,12 +1,26 @@
 import { create } from 'zustand';
 import type { ToastProps } from '../components/Toast';
 import { clampZoom } from '../core/layout';
+import type { Table } from '../core/model';
 import { SCHEMAS_ROUTE, type Route } from '../core/routes';
+
+/** The schema an export writes out: the tables as they are at the moment the dialog opens. */
+export interface ExportSource {
+  name: string;
+  engine: string;
+  /** The saved version the tables are from; null for a schema that has not been saved. */
+  version: number | null;
+  tables: Table[];
+  /** The tables have changes that `version` does not. */
+  unsaved: boolean;
+}
 
 /** The dialog open over the screen. */
 export type Dialog =
   | { kind: 'delete-table'; table: string }
   | { kind: 'new-schema' }
+  | { kind: 'import-schema' }
+  | { kind: 'export'; schema: ExportSource }
   /** `versions` is how many saved versions go with the schema. */
   | { kind: 'delete-schema'; id: number; name: string; versions: number }
   /** Asks before the unsaved changes of the open schema are dropped; `onDiscard` then goes on. */
@@ -27,6 +41,8 @@ export interface UiState {
   search: string;
   /** Bumped each time the selected table should enter rename mode (F2, context menu). */
   renameSignal: number;
+  /** Set when the canvas should fit the whole diagram once the workspace shows it, as after an import. */
+  fitPending: boolean;
   /** While a dialog is open it owns the keyboard: the shortcuts of the screen under it are off. */
   dialog: Dialog | null;
   /** One toast shows at a time; a new one replaces it. */
@@ -35,6 +51,7 @@ export interface UiState {
   setZoom: (zoom: number) => void;
   setSearch: (search: string) => void;
   requestRename: () => void;
+  setFitPending: (pending: boolean) => void;
   openDialog: (dialog: Dialog) => void;
   closeDialog: () => void;
   /** Returns the id to pass to `dismissToast`. */
@@ -50,12 +67,14 @@ export const useUiStore = create<UiState>()((set, get) => ({
   zoom: 1,
   search: '',
   renameSignal: 0,
+  fitPending: false,
   dialog: null,
   toast: null,
   setRoute: (route) => set({ route }),
   setZoom: (zoom) => set({ zoom: clampZoom(zoom) }),
   setSearch: (search) => set({ search }),
   requestRename: () => set((s) => ({ renameSignal: s.renameSignal + 1 })),
+  setFitPending: (fitPending) => set({ fitPending }),
   openDialog: (dialog) => set({ dialog }),
   closeDialog: () => set({ dialog: null }),
   showToast: (toast) => {

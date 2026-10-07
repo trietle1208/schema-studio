@@ -26,3 +26,11 @@ export function relativeTime(then: number, now: number): string {
   const day = `${MONTHS[date.getMonth()]} ${date.getDate()}`;
   return date.getFullYear() === new Date(now).getFullYear() ? day : `${day}, ${date.getFullYear()}`;
 }
+
+const two = (n: number) => String(n).padStart(2, '0');
+
+/** A moment as an exported file stamps it, in local time: `2026-10-06 10:27`. */
+export function timestamp(time: number): string {
+  const date = new Date(time);
+  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}:${two(date.getMinutes())}`;
+}

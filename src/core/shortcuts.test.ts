@@ -8,6 +8,8 @@ describe('matchShortcut', () => {
     expect(matchShortcut({ key: 'k', ctrlKey: true })).toBe('search');
     expect(matchShortcut({ key: 'n', ctrlKey: true })).toBe('new-schema');
     expect(matchShortcut({ key: 'N', metaKey: true })).toBe('new-schema');
+    expect(matchShortcut({ key: 'i', ctrlKey: true })).toBe('import');
+    expect(matchShortcut({ key: 'I', metaKey: true })).toBe('import');
     expect(matchShortcut({ key: 'z', metaKey: true })).toBe('undo');
     expect(matchShortcut({ key: 'z', metaKey: true, shiftKey: true })).toBe('redo');
   });
@@ -25,7 +27,7 @@ describe('matchShortcut', () => {
   });
 
   it('does not match plain typing', () => {
-    for (const key of ['s', 'z', 'k', 'Enter', 'Tab', ' ', 'F3']) {
+    for (const key of ['s', 'z', 'k', 'i', 'Enter', 'Tab', ' ', 'F3']) {
       expect(matchShortcut({ key })).toBeNull();
     }
   });
@@ -33,6 +35,7 @@ describe('matchShortcut', () => {
   it('leaves other modifier combinations to the browser', () => {
     expect(matchShortcut({ key: 's', ctrlKey: true, shiftKey: true })).toBeNull();
     expect(matchShortcut({ key: 'k', ctrlKey: true, shiftKey: true })).toBeNull();
+    expect(matchShortcut({ key: 'i', ctrlKey: true, shiftKey: true })).toBeNull();
     expect(matchShortcut({ key: 'a', ctrlKey: true })).toBeNull();
     expect(matchShortcut({ key: 'Backspace', ctrlKey: true })).toBeNull();
     expect(matchShortcut({ key: 'Backspace', shiftKey: true })).toBeNull();

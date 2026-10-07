@@ -22,10 +22,10 @@ Each step is sized for one Claude Code session. Tick it off when `npm run build`
 - [x] **3.3 Routing**: list ↔ workspace ↔ history ↔ diff (react-router or simple state router).
 
 ## Phase 4 — Import / Export (MVP done here)
-- [ ] **4.1 Parser**: PostgreSQL `CREATE TABLE / ALTER TABLE ADD CONSTRAINT / CREATE INDEX` → model; errors with line numbers. Tests with good and broken fixtures.
-- [ ] **4.2 Import dialog**: DropZone, SqlEditor, live ParseStatus summary, auto-layout new tables in a grid.
-- [ ] **4.3 SQL generator**: model → PostgreSQL DDL with options (indexes, FKs, comments, DROP IF EXISTS). Round-trip test: parse(generate(x)) == x.
-- [ ] **4.4 Export dialog**: SQL / JSON, preview, download file.
+- [x] **4.1 Parser**: PostgreSQL `CREATE TABLE / ALTER TABLE ADD CONSTRAINT / CREATE INDEX` → model; errors with line numbers. Tests with good and broken fixtures.
+- [x] **4.2 Import dialog**: DropZone, SqlEditor, live ParseStatus summary, auto-layout new tables in a grid.
+- [x] **4.3 SQL generator**: model → PostgreSQL DDL with options (indexes, FKs, comments, DROP IF EXISTS). Round-trip test: parse(generate(x)) == x.
+- [x] **4.4 Export dialog**: SQL / JSON, preview, download file.
 
 ## Phase 5 — Versions
 - [ ] **5.1 Diff engine**: compare two snapshots → DiffGroup[] (tables, columns, indexes, relationships). Tests.

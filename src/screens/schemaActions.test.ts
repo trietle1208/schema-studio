@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ecommerceSql } from '../core/fixtures/sql';
 import { ecommerceSnapshot } from '../core/fixtures/testing';
+import { nodeRects } from '../core/layout';
+import type { Table } from '../core/model';
+import { parserFor } from '../core/parse';
 import { db, type SchemaRecord } from '../db/db';
 import { createSchema, listSchemas, listVersions } from '../db/schemas';
 import { resetDatabase } from '../db/testing';
@@ -7,7 +11,7 @@ import { selectDirty, useSchemaStore } from '../store/schema';
 import { memoryAddress, type MemoryAddress } from '../store/testing';
 import { useUiStore, type Dialog } from '../store/ui';
 import { go, startRouting } from './navigation';
-import { createNewSchema, deleteSchema, requestDeleteSchema, requestNewSchema } from './schemaActions';
+import { createNewSchema, deleteSchema, importSchema, requestDeleteSchema, requestImport, requestNewSchema } from './schemaActions';
 
 const schema = () => useSchemaStore.getState();
 const ui = () => useUiStore.getState();
@@ -33,7 +37,7 @@ beforeEach(async () => {
   await resetDatabase();
   blog = await createSchema({ name: 'blog', engine: 'MySQL' }, { tables: ecommerceSnapshot().tables.slice(0, 2), positions: {} });
   shop = await createSchema({ name: 'ecommerce', engine: 'PostgreSQL' }, ecommerceSnapshot());
-  useUiStore.setState({ dialog: null, toast: null, search: '' });
+  useUiStore.setState({ dialog: null, toast: null, search: '', fitPending: false });
   address = memoryAddress();
   await startRouting(address);
 });
@@ -116,6 +120,86 @@ describe('createNewSchema', () => {
 
     expect(ui().toast).toMatchObject({ tone: 'error', title: 'Could not create schema', description: 'Schema "blog" already exists.' });
     expect(ui().dialog).toEqual({ kind: 'new-schema' });
+    expect(schema().id).toBe(shop.id);
+    expect(await db.schemas.count()).toBe(2);
+  });
+});
+
+/** The tables the import dialog hands over: the ecommerce DDL, parsed. */
+function parsedTables(): Table[] {
+  const outcome = parserFor('PostgreSQL')?.parse(ecommerceSql);
+  if (!outcome?.ok) throw new Error('The ecommerce DDL did not parse.');
+  return outcome.tables;
+}
+
+describe('requestImport', () => {
+  it('opens the Import Schema dialog', () => {
+    requestImport();
+    expect(ui().dialog).toEqual({ kind: 'import-schema' });
+  });
+
+  it('asks about unsaved changes first', () => {
+    schema().deleteTable('payments');
+    requestImport();
+    expect(ui().dialog?.kind).toBe('discard-changes');
+
+    confirmDiscard();
+    expect(ui().dialog).toEqual({ kind: 'import-schema' });
+    // Nothing is dropped until the schema is imported.
+    expect(selectDirty(schema())).toBe(true);
+  });
+});
+
+describe('importSchema', () => {
+  it('stores the parsed tables as v1 of a new schema and opens it in the workspace', async () => {
+    go({ screen: 'schemas' });
+    requestImport();
+    const tables = parsedTables();
+    expect(await importSchema({ name: 'shop_prod', engine: 'PostgreSQL', tables, file: 'shop_prod.sql' })).toBe(true);
+
+    expect(ui().dialog).toBeNull();
+    expect(ui().route).toEqual({ screen: 'workspace', schema: 'shop_prod' });
+    expect(address.read()).toBe('#/schemas/shop_prod');
+    expect(schema()).toMatchObject({ name: 'shop_prod', engine: 'PostgreSQL', version: 1, tables });
+    expect(selectDirty(schema())).toBe(false);
+    expect(ui().toast).toMatchObject({ title: 'Imported shop_prod', description: '5 tables · 4 relationships · 11 indexes' });
+
+    const stored = (await listSchemas()).find((s) => s.name === 'shop_prod');
+    expect(stored).toMatchObject({ id: schema().id, version: 1, tables: 5, relationships: 4 });
+    expect((await listVersions(stored!.id)).map((v) => [v.version, v.message])).toEqual([[1, 'Imported from shop_prod.sql']]);
+  });
+
+  it('lays the tables out in a grid and asks the canvas to fit them', async () => {
+    const tables = parsedTables();
+    await importSchema({ name: 'shop_prod', engine: 'PostgreSQL', tables });
+
+    const rects = nodeRects(tables, schema().positions);
+    expect(rects.map((r) => r.name)).toEqual(['users', 'orders', 'products', 'order_items', 'payments']);
+    // Three columns of nodes, the first row level.
+    expect(rects.slice(0, 3).map((r) => [r.x, r.y])).toEqual([
+      [24, 24],
+      [304, 24],
+      [584, 24],
+    ]);
+    expect(ui().fitPending).toBe(true);
+    const stored = (await listSchemas()).find((s) => s.name === 'shop_prod');
+    expect((await listVersions(stored!.id))[0].snapshot.positions).toEqual(schema().positions);
+  });
+
+  it('names pasted SQL as the source when there is no file', async () => {
+    await importSchema({ name: 'pasted', engine: 'PostgreSQL', tables: parsedTables() });
+    const stored = (await listSchemas()).find((s) => s.name === 'pasted');
+    expect((await listVersions(stored!.id))[0].message).toBe('Imported from pasted SQL');
+  });
+
+  it('reports a name that is taken and leaves the dialog and the open schema as they were', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    requestImport();
+    expect(await importSchema({ name: 'blog', engine: 'PostgreSQL', tables: parsedTables() })).toBe(false);
+
+    expect(ui().toast).toMatchObject({ tone: 'error', title: 'Could not import schema', description: 'Schema "blog" already exists.' });
+    expect(ui().dialog).toEqual({ kind: 'import-schema' });
+    expect(ui().fitPending).toBe(false);
     expect(schema().id).toBe(shop.id);
     expect(await db.schemas.count()).toBe(2);
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { relativeTime } from './time';
+import { relativeTime, timestamp } from './time';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -41,5 +41,15 @@ describe('relativeTime', () => {
     expect(relativeTime(new Date(2026, 7, 28, 15, 51).getTime(), now)).toBe('Aug 28');
     expect(relativeTime(new Date(2026, 0, 2).getTime(), now)).toBe('Jan 2');
     expect(relativeTime(new Date(2025, 11, 31, 23, 59).getTime(), now)).toBe('Dec 31, 2025');
+  });
+});
+
+describe('timestamp', () => {
+  it('writes the date and the time of day, in local time', () => {
+    expect(timestamp(new Date(2026, 9, 6, 10, 27).getTime())).toBe('2026-10-06 10:27');
+  });
+
+  it('pads months, days, hours and minutes to two digits', () => {
+    expect(timestamp(new Date(2026, 0, 2, 3, 4, 59).getTime())).toBe('2026-01-02 03:04');
   });
 });

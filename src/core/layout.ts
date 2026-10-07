@@ -182,3 +182,32 @@ export function newTablePosition(positions: Positions, view: Rect): Position {
   }
   return { x, y };
 }
+
+const GRID_ORIGIN = 24;
+// The gaps of the ecommerce sample: columns of nodes 280 apart, and room for the relationship lines between rows.
+const GRID_GAP_X = 52;
+const GRID_GAP_Y = 40;
+
+/** How many columns a grid of `count` tables gets: wider than it is tall, like the canvas. */
+export function gridColumns(count: number): number {
+  return Math.max(1, Math.ceil(Math.sqrt(count * 1.5)));
+}
+
+/**
+ * Positions for tables that have none, such as imported ones: a grid filled row by row. Tables
+ * differ in height, so each one goes under the column that is shortest so far, which keeps the
+ * grid compact; tables of one height simply fill the rows from left to right. Snapped to the grid.
+ */
+export function gridLayout(tables: readonly Table[], columns: number = gridColumns(tables.length)): Positions {
+  const count = Math.max(1, Math.floor(columns));
+  /** Where the next table of each column goes. */
+  const bottoms = new Array<number>(count).fill(GRID_ORIGIN);
+  const positions: Positions = {};
+  for (const table of tables) {
+    const column = bottoms.indexOf(Math.min(...bottoms));
+    const y = snap(bottoms[column]);
+    positions[table.name] = { x: snap(GRID_ORIGIN + column * (NODE_WIDTH + GRID_GAP_X)), y };
+    bottoms[column] = y + nodeHeight(table) + GRID_GAP_Y;
+  }
+  return positions;
+}

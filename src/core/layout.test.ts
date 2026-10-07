@@ -6,6 +6,8 @@ import {
   computeEdges,
   edgePath,
   fitView,
+  gridColumns,
+  gridLayout,
   minimapLayout,
   newTablePosition,
   nodeHeight,
@@ -294,5 +296,64 @@ describe('newTablePosition', () => {
     expect(newTablePosition(first, view)).toEqual({ x: 344, y: 400 });
     const second = { ...first, new_table2: { x: 344, y: 400 } };
     expect(newTablePosition(second, view)).toEqual({ x: 376, y: 432 });
+  });
+});
+
+describe('gridLayout', () => {
+  const sized = (name: string, columns: number) => ({
+    name,
+    columns: Array.from({ length: columns }, (_, i) => ({ name: `c${i}`, type: 'INT' })),
+  });
+
+  it('fills the rows from left to right when the tables are of one height', () => {
+    const tables = ['a', 'b', 'c', 'd', 'e'].map((name) => sized(name, 3));
+    expect(gridLayout(tables, 3)).toEqual({
+      a: { x: 24, y: 24 },
+      b: { x: 304, y: 24 },
+      c: { x: 584, y: 24 },
+      d: { x: 24, y: 176 },
+      e: { x: 304, y: 176 },
+    });
+  });
+
+  it('puts each table under the shortest column so far', () => {
+    const positions = gridLayout([sized('tall', 12), sized('short', 1), sized('next', 1), sized('last', 1)], 2);
+    expect(positions).toEqual({
+      tall: { x: 24, y: 24 },
+      short: { x: 304, y: 24 },
+      // Both go under `short`: the first column is still the longer one.
+      next: { x: 304, y: 128 },
+      last: { x: 304, y: 232 },
+    });
+  });
+
+  it('lays out the ecommerce sample without two tables overlapping, on the grid', () => {
+    const { tables } = ecommerceSnapshot();
+    const positions = gridLayout(tables);
+    const rects = nodeRects(tables, positions);
+    expect(rects).toHaveLength(tables.length);
+    for (const a of rects) {
+      expect(a.x % 8).toBe(0);
+      expect(a.y % 8).toBe(0);
+      for (const b of rects) {
+        if (a === b) continue;
+        const apart = a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+        expect(apart).toBe(true);
+      }
+    }
+  });
+
+  it('places a table whose name is a property of every object', () => {
+    expect(Object.keys(gridLayout([sized('constructor', 1), sized('toString', 1)]))).toEqual(['constructor', 'toString']);
+  });
+
+  it('has nothing to place in an empty schema', () => {
+    expect(gridLayout([])).toEqual({});
+  });
+});
+
+describe('gridColumns', () => {
+  it('makes the grid wider than it is tall', () => {
+    expect([0, 1, 2, 5, 6, 24, 100].map(gridColumns)).toEqual([1, 2, 2, 3, 3, 6, 13]);
   });
 });

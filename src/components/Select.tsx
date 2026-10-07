@@ -5,6 +5,8 @@ import { Icon } from './Icon';
 export interface SelectOption {
   value: string;
   label: string;
+  /** Listed, but not to be chosen. */
+  disabled?: boolean;
 }
 
 export interface SelectProps {
@@ -25,7 +27,7 @@ export function Select({ value, onChange, options, mono, size, label, disabled, 
     <div className={cx('ss-select', mono && 'ss-select--mono', size === 'sm' && 'ss-select--sm', className)} style={style}>
       <select value={value} onChange={(e) => onChange?.(e.target.value)} aria-label={label} disabled={disabled}>
         {opts.map((o) => (
-          <option key={o.value} value={o.value}>
+          <option key={o.value} value={o.value} disabled={o.disabled}>
             {o.label}
           </option>
         ))}

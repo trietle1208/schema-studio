@@ -25,3 +25,8 @@ body {
 .ss-coledit .ss-seg-item {
   padding: 0 4px;
 }
+
+/* The editor shows focus as a ring around its border; the text area inside it gets no outline of its own. */
+.ss-root .ss-editor-code textarea:focus-visible {
+  outline: none;
+}
