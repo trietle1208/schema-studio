@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchTypes, normalizeType, POSTGRES_TYPES, serialType, widensType } from './datatypes';
+import { matchTypes, MYSQL_TYPES, normalizeType, POSTGRES_TYPES, serialType, typeEngine, typesFor, widensMysqlType, widensType } from './datatypes';
 
 const names = (query: string) => matchTypes(query).map((t) => t.name);
 
@@ -15,6 +15,24 @@ describe('POSTGRES_TYPES', () => {
 
   it('has no duplicate names', () => {
     expect(new Set(POSTGRES_TYPES.map((t) => t.name)).size).toBe(POSTGRES_TYPES.length);
+  });
+});
+
+describe('typesFor', () => {
+  it('offers the types of MySQL in a MySQL schema, and those of PostgreSQL in any other', () => {
+    expect(typesFor('MySQL')).toBe(MYSQL_TYPES);
+    expect(typesFor('PostgreSQL')).toBe(POSTGRES_TYPES);
+    expect(typesFor('SQLite')).toBe(POSTGRES_TYPES);
+    expect(['MySQL', 'PostgreSQL', 'SQLite'].map(typeEngine)).toEqual(['MySQL', 'PostgreSQL', 'PostgreSQL']);
+  });
+
+  it('lists the types of MySQL once each, with a counting integer instead of SERIAL', () => {
+    const names = MYSQL_TYPES.map((t) => t.name);
+    expect(new Set(names).size).toBe(names.length);
+    expect(names).toContain('BIGINT AUTO_INCREMENT');
+    expect(names).toContain('DATETIME');
+    expect(names).not.toContain('BIGSERIAL');
+    expect(matchTypes('auto', MYSQL_TYPES).map((t) => t.name)).toEqual(['BIGINT AUTO_INCREMENT', 'INT AUTO_INCREMENT']);
   });
 });
 
@@ -103,5 +121,57 @@ describe('widensType', () => {
     expect(widensType('TIMESTAMP', 'TIMESTAMPTZ')).toBe(false);
     expect(widensType('INTEGER', 'TEXT')).toBe(false);
     expect(widensType('geometry(Point, 4326)', 'TEXT')).toBe(false);
+  });
+});
+
+describe('widensMysqlType', () => {
+  it('holds for a larger integer of the same sign, whatever width it is shown at', () => {
+    expect(widensMysqlType('INT(11)', 'BIGINT(20)')).toBe(true);
+    expect(widensMysqlType('TINYINT', 'SMALLINT')).toBe(true);
+    expect(widensMysqlType('INT UNSIGNED', 'BIGINT UNSIGNED')).toBe(true);
+    expect(widensMysqlType('INT(11)', 'INT')).toBe(true);
+    expect(widensMysqlType('BIGINT', 'INT')).toBe(false);
+    expect(widensMysqlType('MEDIUMINT', 'SMALLINT')).toBe(false);
+  });
+
+  it('does not let an integer lose its sign, or an unsigned one keep its size', () => {
+    expect(widensMysqlType('INT', 'INT UNSIGNED')).toBe(false);
+    expect(widensMysqlType('INT', 'BIGINT UNSIGNED')).toBe(false);
+    expect(widensMysqlType('INT UNSIGNED', 'INT')).toBe(false);
+    expect(widensMysqlType('INT UNSIGNED', 'BIGINT')).toBe(true);
+  });
+
+  it('takes starting or stopping to count for no change of what fits', () => {
+    expect(widensMysqlType('BIGINT UNSIGNED', 'BIGINT UNSIGNED AUTO_INCREMENT')).toBe(true);
+    expect(widensMysqlType('INT AUTO_INCREMENT', 'BIGINT')).toBe(true);
+  });
+
+  it('holds for a longer text', () => {
+    expect(widensMysqlType('VARCHAR(32)', 'VARCHAR(64)')).toBe(true);
+    expect(widensMysqlType('CHAR(3)', 'VARCHAR(3)')).toBe(true);
+    expect(widensMysqlType('CHAR(2)', 'CHAR(3)')).toBe(true);
+    expect(widensMysqlType('VARCHAR(255)', 'TEXT')).toBe(true);
+    expect(widensMysqlType('TEXT', 'LONGTEXT')).toBe(true);
+    expect(widensMysqlType('BLOB', 'MEDIUMBLOB')).toBe(true);
+    expect(widensMysqlType('VARCHAR(64)', 'VARCHAR(32)')).toBe(false);
+    expect(widensMysqlType('VARCHAR(300)', 'TINYTEXT')).toBe(false);
+    expect(widensMysqlType('LONGTEXT', 'TEXT')).toBe(false);
+    expect(widensMysqlType('TEXT', 'VARCHAR(255)')).toBe(false);
+  });
+
+  it('holds for a decimal with room for every digit on both sides of the point', () => {
+    expect(widensMysqlType('DECIMAL(10,2)', 'DECIMAL(12,2)')).toBe(true);
+    expect(widensMysqlType('NUMERIC(10,2)', 'DECIMAL(12,4)')).toBe(true);
+    expect(widensMysqlType('DECIMAL', 'DECIMAL(10,0)')).toBe(true);
+    expect(widensMysqlType('DECIMAL(12,2)', 'DECIMAL(10,2)')).toBe(false);
+    expect(widensMysqlType('DECIMAL(12,2)', 'DECIMAL')).toBe(false);
+    expect(widensMysqlType('DECIMAL(12,2)', 'DECIMAL(12,2) UNSIGNED')).toBe(false);
+  });
+
+  it('does not vouch for a change between kinds of types', () => {
+    expect(widensMysqlType("ENUM('a','b')", 'VARCHAR(20)')).toBe(false);
+    expect(widensMysqlType('DATETIME', 'TIMESTAMP')).toBe(false);
+    expect(widensMysqlType('INT', 'VARCHAR(20)')).toBe(false);
+    expect(widensMysqlType('JSON', 'JSON')).toBe(true);
   });
 });

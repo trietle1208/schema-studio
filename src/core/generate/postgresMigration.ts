@@ -3,7 +3,8 @@ import { serialType, widensType } from '../datatypes';
 import { diffSchemas, schemaOf, type ColumnChange } from '../diff';
 import type { Column, Table } from '../model';
 import { DEFAULT_GENERATE_OPTIONS, type DestructiveChange, type MigrateOptions, type Migration, type SqlMigrator } from './options';
-import { addForeignKey, columnList, createIndex, createTable, foreignKeyName, quoteName, quoteText, tableName } from './postgres';
+import { addForeignKey, columnList, createIndex, createTable, quoteName, quoteText, tableName } from './postgres';
+import { foreignKeyName } from './script';
 
 // Two versions of a schema → the PostgreSQL statements that take a database from the first to the
 // second, in one transaction. The database is taken to be what the DDL of the first version
@@ -191,7 +192,7 @@ function migrate(before: readonly Table[], after: readonly Table[], options: Mig
   const statements = blocks.flat().filter((line) => line.endsWith(';')).length;
   const header = options.header?.length ? [options.header.map((line) => `-- ${line}`)] : [];
   const body = statements ? [['BEGIN;'], ...blocks, ['COMMIT;']] : [['-- No changes.']];
-  return { sql: `${[...header, ...body].map((lines) => lines.join('\n')).join('\n\n')}\n`, statements, destructive };
+  return { sql: `${[...header, ...body].map((lines) => lines.join('\n')).join('\n\n')}\n`, statements, destructive, atomic: true };
 }
 
 export const postgresMigrator: SqlMigrator = { engine: 'PostgreSQL', migrate };

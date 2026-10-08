@@ -1,18 +1,10 @@
-import { primaryKey, uniqueColumns, writtenIndexes } from '../constraints';
+import { primaryKey, uniqueColumns } from '../constraints';
 import type { Column, Index, Table } from '../model';
-import { DEFAULT_ON_DELETE, type Relation } from '../relations';
-import {
-  DEFAULT_GENERATE_OPTIONS,
-  foreignKeyBlock,
-  indexBlock,
-  tableBlock,
-  type DdlBlock,
-  type GenerateOptions,
-  type SqlGenerator,
-} from './options';
+import type { Relation } from '../relations';
+import type { GenerateOptions, SqlGenerator } from './options';
+import { foreignKeyName, joinBlocks, scriptBlocks, type Statements } from './script';
 
-// Model → PostgreSQL DDL, laid out as in the design: one CREATE TABLE per table with its comments,
-// then its indexes, and the foreign keys last so that the order of the tables never matters.
+// Model → PostgreSQL DDL: how each statement of a script reads (see generate/script for their order).
 //
 // The flags of a column say what its constraints are; `indexes` gives them their names (see
 // core/constraints). So a primary-key or unique index that no longer matches the columns' flags is
@@ -21,6 +13,8 @@ import {
 const DEFAULT_SCHEMA = 'public';
 const DEFAULT_INDEX_METHOD = 'btree';
 const PLAIN_NAME = /^[a-z_][a-z0-9_]*$/;
+/** The index methods of other engines that PostgreSQL has none of; an index that asks for one is written as a btree. */
+const FOREIGN_METHODS = new Set(['fulltext', 'spatial']);
 
 /** The words PostgreSQL keeps for itself, which only work as names in quotes. `precision` is one for the parser. */
 const RESERVED = new Set(
@@ -88,17 +82,14 @@ export function createTable(table: Table, indexes: readonly Index[], options: Ge
   return lines;
 }
 
+const usesForeignMethod = (index: Index) => FOREIGN_METHODS.has(index.using?.toLowerCase());
+
 export function createIndex(table: Table, index: Index): string[] {
-  const using = index.using && index.using !== DEFAULT_INDEX_METHOD ? ` USING ${index.using}` : '';
+  const using = index.using && index.using !== DEFAULT_INDEX_METHOD && !usesForeignMethod(index) ? ` USING ${index.using}` : '';
   return [
     `CREATE ${index.type === 'UNIQUE' ? 'UNIQUE ' : ''}INDEX ${quoteName(index.name)}`,
     `  ON ${tableName(table)}${using} ${columnList(index.columns)};`,
   ];
-}
-
-/** The name PostgreSQL gives the foreign key of a column, and the one it is written with. */
-export function foreignKeyName(table: string, column: string): string {
-  return `${table}_${column}_fkey`;
 }
 
 /** A foreign key as an ALTER TABLE statement. `from` and `to` are the tables of its two ends. */
@@ -111,59 +102,14 @@ export function addForeignKey(relation: Relation, from: Table, to: Table): strin
   ];
 }
 
-/** The foreign keys of a table as ALTER TABLE statements, and the reason for each one that cannot be written. */
-function foreignKeys(table: Table, tables: ReadonlyMap<string, Table>): { blocks: DdlBlock[]; left: string[] } {
-  const blocks: DdlBlock[] = [];
-  const left: string[] = [];
-  for (const c of table.columns) {
-    if (!c.fk) continue;
-    const target = tables.get(c.fk.table);
-    if (!target?.columns.some((other) => other.name === c.fk?.column)) {
-      left.push(
-        `Foreign key ${table.name}.${c.name} was left out: ${target ? `${c.fk.table}.${c.fk.column}` : c.fk.table} does not exist.`,
-      );
-      continue;
-    }
-    const relation: Relation = {
-      from: { table: table.name, column: c.name },
-      to: { table: c.fk.table, column: c.fk.column },
-      onDelete: c.fk.onDelete ?? DEFAULT_ON_DELETE,
-    };
-    blocks.push({ key: foreignKeyBlock(table.name, c.name), lines: addForeignKey(relation, table, target) });
-  }
-  return { blocks, left };
+function indexNote(index: Index): string | null {
+  if (!usesForeignMethod(index)) return null;
+  return `Index ${index.name} uses ${index.using.toLowerCase()}, which PostgreSQL does not have: it was written as a ${DEFAULT_INDEX_METHOD} index.`;
 }
 
-const note = (text: string) => `-- ${text}`;
+const STATEMENTS: Statements = { createTable, createIndex, addForeignKey, indexNote };
 
-function blocks(tables: readonly Table[], given: Partial<GenerateOptions> = {}): DdlBlock[] {
-  const options = { ...DEFAULT_GENERATE_OPTIONS, ...given };
-  const byName = new Map(tables.map((t) => [t.name, t]));
-  const blocks: DdlBlock[] = [];
-  if (options.header?.length) blocks.push({ key: 'header', lines: options.header.map(note) });
-
-  for (const table of tables) {
-    const { indexes, left } = writtenIndexes(table);
-    blocks.push({ key: tableBlock(table.name), lines: createTable(table, indexes, options) });
-    if (options.indexes) {
-      for (const index of indexes) blocks.push({ key: indexBlock(table.name, index.name), lines: createIndex(table, index) });
-      if (left.length) blocks.push({ key: `index-notes:${table.name}`, lines: left.map(note) });
-    }
-  }
-  if (options.foreignKeys) {
-    for (const table of tables) {
-      const keys = foreignKeys(table, byName);
-      blocks.push(...keys.blocks);
-      if (keys.left.length) blocks.push({ key: `fk-notes:${table.name}`, lines: keys.left.map(note) });
-    }
-  }
-  return blocks;
-}
-
-/** Blocks as one script: a blank line goes between two of them. */
-export function joinBlocks(blocks: readonly DdlBlock[]): string {
-  return blocks.length ? `${blocks.map((block) => block.lines.join('\n')).join('\n\n')}\n` : '';
-}
+const blocks = (tables: readonly Table[], options?: Partial<GenerateOptions>) => scriptBlocks(STATEMENTS, tables, options);
 
 function generate(tables: readonly Table[], options?: Partial<GenerateOptions>): string {
   return joinBlocks(blocks(tables, options));

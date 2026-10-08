@@ -145,6 +145,13 @@ describe('keys and constraints', () => {
     expect(sql).toContain('CREATE UNIQUE INDEX t_a_b_key\n  ON t (a, b);');
   });
 
+  it('writes an index of a kind only MySQL has as a btree, and says so', () => {
+    const sql = generate([table([{ name: 'body', type: 'TEXT' }], [{ name: 't_body_ft', type: 'INDEX', using: 'fulltext', columns: ['body'] }])]);
+    expect(sql).toContain(
+      'CREATE INDEX t_body_ft\n  ON t (body);\n\n-- Index t_body_ft uses fulltext, which PostgreSQL does not have: it was written as a btree index.\n',
+    );
+  });
+
   it('says in a comment which index or foreign key it could not write', () => {
     const sql = generate([
       table(
@@ -231,9 +238,9 @@ describe('round trip', () => {
 });
 
 describe('generatorFor', () => {
-  it('gives the PostgreSQL generator and none for the engines that cannot be exported yet', () => {
+  it('gives the PostgreSQL generator, which is the first of the engines that can be exported', () => {
     expect(generatorFor('PostgreSQL')).toBe(postgresGenerator);
-    expect(generatorFor('MySQL')).toBeNull();
-    expect(EXPORT_ENGINES).toEqual(['PostgreSQL']);
+    expect(generatorFor('ClickHouse')).toBeNull();
+    expect(EXPORT_ENGINES[0]).toBe('PostgreSQL');
   });
 });

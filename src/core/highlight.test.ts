@@ -38,6 +38,20 @@ describe('highlightSql', () => {
     ]);
   });
 
+  it('marks the words of MySQL, and leaves a quoted name plain whatever it is called', () => {
+    expect(kinds(highlightSql('ALTER TABLE `order` MODIFY COLUMN `key` INT UNSIGNED AUTO_INCREMENT, ADD "comment" DATETIME'))).toEqual([
+      ['ALTER', 'keyword'],
+      ['TABLE', 'keyword'],
+      ['MODIFY', 'keyword'],
+      ['COLUMN', 'keyword'],
+      ['INT', 'type'],
+      ['UNSIGNED', 'type'],
+      ['AUTO_INCREMENT', 'type'],
+      ['ADD', 'keyword'],
+      ['DATETIME', 'type'],
+    ]);
+  });
+
   it('does not look inside strings and comments', () => {
     expect(kinds(highlightSql("'CREATE 1' -- DROP 'x'\n'open"))).toEqual([
       ["'CREATE 1'", 'string'],

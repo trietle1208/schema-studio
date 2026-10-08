@@ -64,9 +64,11 @@ export interface DestructiveChange {
 
 export interface Migration {
   sql: string;
-  /** How many statements the transaction holds; 0 when the two versions come to the same database. */
+  /** How many statements the migration runs; 0 when the two versions come to the same database. */
   statements: number;
   destructive: DestructiveChange[];
+  /** Whether the script is one transaction, so that all of it is applied or none of it. */
+  atomic: boolean;
 }
 
 /** Writes what takes a database from one version of a schema to another. */

@@ -35,7 +35,7 @@ Each step is sized for one Claude Code session. Tick it off when `npm run build`
 
 ## Phase 6 — Later
 - [x] **MySQL dialect: parser**: `CREATE TABLE / ALTER TABLE / CREATE INDEX` as mysqldump, phpMyAdmin and hand-written DDL have them → model; Import dialog offers MySQL. Tests with dump fixtures.
-- [ ] MySQL dialect: generator (export and migration still write PostgreSQL DDL)
+- [x] **MySQL dialect: generator**: model → MySQL DDL and migrations (no transaction: MySQL commits each statement); exporting for the other engine converts the data types; the type picker offers MySQL's types in a MySQL schema. Tests, and checked against MySQL 8.
 - [ ] Light/dark toggle in Settings
 - [ ] Desktop app with Tauri (open/save `.sql` files on disk)
 - [ ] Connect to a live database (read-only introspection)

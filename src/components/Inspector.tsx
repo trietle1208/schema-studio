@@ -38,6 +38,8 @@ export interface InspectorProps {
   autoFocusDraft?: boolean;
   settingsCollapsed?: boolean;
   schemaName?: string;
+  /** The database engine of the schema, whose types the type picker offers. */
+  engine?: string;
 }
 
 interface InspectorSectionProps {
@@ -179,6 +181,7 @@ export function Inspector({
   autoFocusDraft,
   settingsCollapsed,
   schemaName,
+  engine,
 }: InspectorProps) {
   /** The last table sent to `onChange` since the previous render, and the `table` it was built from. */
   const sent = useRef<{ from: Table; to: Table } | null>(null);
@@ -321,6 +324,7 @@ export function Inspector({
                     <div onClick={(e) => e.stopPropagation()}>
                       <TypeSelect
                         value={c.type}
+                        engine={engine}
                         size="sm"
                         placement="top"
                         align="end"

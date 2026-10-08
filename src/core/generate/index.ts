@@ -1,3 +1,5 @@
+import { mysqlGenerator } from './mysql';
+import { mysqlMigrator } from './mysqlMigration';
 import { postgresGenerator } from './postgres';
 import { postgresMigrator } from './postgresMigration';
 import type { SqlGenerator, SqlMigrator } from './options';
@@ -13,7 +15,7 @@ export {
   type SqlMigrator,
 } from './options';
 
-const GENERATORS: readonly SqlGenerator[] = [postgresGenerator];
+const GENERATORS: readonly SqlGenerator[] = [postgresGenerator, mysqlGenerator];
 
 /** The generator for an engine, or null when its DDL cannot be written yet. */
 export function generatorFor(engine: string): SqlGenerator | null {
@@ -23,7 +25,7 @@ export function generatorFor(engine: string): SqlGenerator | null {
 /** The engines whose DDL can be exported. */
 export const EXPORT_ENGINES: readonly string[] = GENERATORS.map((g) => g.engine);
 
-const MIGRATORS: readonly SqlMigrator[] = [postgresMigrator];
+const MIGRATORS: readonly SqlMigrator[] = [postgresMigrator, mysqlMigrator];
 
 /** The migrator for an engine, or null when its migrations cannot be written yet. */
 export function migratorFor(engine: string): SqlMigrator | null {

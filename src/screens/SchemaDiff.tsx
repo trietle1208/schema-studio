@@ -187,7 +187,9 @@ export function SchemaDiff({ from, to, now }: SchemaDiffProps) {
                   .map((d) => d.message)
                   .join(' ')}
                 {destructive.length > SPELLED_OUT ? ` And ${destructive.length - SPELLED_OUT} more.` : ''}
-                {` The migration wraps ${destructive.length === 1 ? 'it' : 'them'} in a transaction.`}
+                {compared?.migration?.atomic
+                  ? ` The migration wraps ${destructive.length === 1 ? 'it' : 'them'} in a transaction.`
+                  : ` ${dialect} commits each statement as it runs, so the migration cannot be rolled back.`}
               </Alert>
             </div>
           )}

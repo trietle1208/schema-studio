@@ -70,16 +70,16 @@ COMMIT;
   });
 
   it('says so when the two versions come to the same database', () => {
-    expect(migrate(sample(), sample())).toEqual({ sql: '-- No changes.\n', statements: 0, destructive: [] });
+    expect(migrate(sample(), sample())).toEqual({ sql: '-- No changes.\n', statements: 0, destructive: [], atomic: true });
     expect(migrate(sample(), sample(), { header: ['v1 → v2'] }).sql).toBe('-- v1 → v2\n\n-- No changes.\n');
     // Where the tables are on the canvas and the order of the columns are not the database's business.
     const shuffled = sample().map((t) => ({ ...t, columns: [...t.columns].reverse() }));
     expect(migrate(sample(), shuffled).statements).toBe(0);
   });
 
-  it('is offered for PostgreSQL only', () => {
+  it('is the migrator of PostgreSQL, and there is none for an engine that cannot be exported yet', () => {
     expect(migratorFor('PostgreSQL')).toBe(postgresMigrator);
-    expect(migratorFor('MySQL')).toBeNull();
+    expect(migratorFor('SQLite')).toBeNull();
   });
 });
 

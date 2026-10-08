@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { matchTypes, normalizeType } from '../core/datatypes';
+import { matchTypes, normalizeType, typeEngine, typesFor } from '../core/datatypes';
 import { cx } from './cx';
 import { Icon } from './Icon';
 import { Input } from './Input';
@@ -14,6 +14,8 @@ const LIST_GAP = 4;
 export interface TypeSelectProps {
   value: string;
   onChange?: (type: string) => void;
+  /** The database engine whose types the list offers. */
+  engine?: string;
   size?: 'md' | 'sm';
   error?: boolean;
   defaultOpen?: boolean;
@@ -39,14 +41,14 @@ function roomAround(el: HTMLElement): { above: number; below: number } {
   return { above: r.top, below: window.innerHeight - r.bottom };
 }
 
-export function TypeSelect({ value, onChange, size, error, defaultOpen, placement, align, inputClassName }: TypeSelectProps) {
+export function TypeSelect({ value, onChange, engine = 'PostgreSQL', size, error, defaultOpen, placement, align, inputClassName }: TypeSelectProps) {
   const preferTop = placement === 'top';
   const [list, setList] = useState<ListPlacement | null>(defaultOpen ? { top: preferTop } : null);
   const [query, setQuery] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   const needle = normalizeType(query ?? '');
-  const matches = matchTypes(needle);
+  const matches = matchTypes(needle, typesFor(engine));
 
   function open() {
     if (list) return;
@@ -111,7 +113,7 @@ export function TypeSelect({ value, onChange, size, error, defaultOpen, placemen
           style={list.maxHeight === undefined ? undefined : { maxHeight: list.maxHeight }}
           role="listbox"
         >
-          <div className="ss-pop-group ss-caption">{needle ? 'Matches' : 'PostgreSQL types'}</div>
+          <div className="ss-pop-group ss-caption">{needle ? 'Matches' : `${typeEngine(engine)} types`}</div>
           {matches.map((t, i) => {
             const at = needle ? t.name.indexOf(needle) : -1;
             const label: ReactNode =

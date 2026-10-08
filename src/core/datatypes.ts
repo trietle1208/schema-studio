@@ -25,6 +25,42 @@ export const POSTGRES_TYPES: readonly DataType[] = [
   { name: 'BYTEA', family: 'binary' },
 ];
 
+/** The same families as MySQL has them. An auto-increment column is an integer that says so, and a UUID is kept as text. */
+export const MYSQL_TYPES: readonly DataType[] = [
+  { name: 'BIGINT AUTO_INCREMENT', family: 'auto-increment' },
+  { name: 'INT AUTO_INCREMENT', family: 'auto-increment' },
+  { name: 'BIGINT', family: 'integer' },
+  { name: 'INT', family: 'integer' },
+  { name: 'SMALLINT', family: 'integer' },
+  { name: 'TINYINT', family: 'integer' },
+  { name: 'DECIMAL(12,2)', family: 'exact numeric' },
+  { name: 'DOUBLE', family: 'approximate numeric' },
+  { name: 'VARCHAR(255)', family: 'text' },
+  { name: 'VARCHAR(100)', family: 'text' },
+  { name: 'VARCHAR(50)', family: 'text' },
+  { name: 'TEXT', family: 'text' },
+  { name: 'LONGTEXT', family: 'text' },
+  { name: 'BOOLEAN', family: 'logical' },
+  { name: 'DATETIME', family: 'date/time' },
+  { name: 'TIMESTAMP', family: 'date/time' },
+  { name: 'DATE', family: 'date/time' },
+  { name: 'CHAR(36)', family: 'identifier' },
+  { name: 'JSON', family: 'document' },
+  { name: 'BLOB', family: 'binary' },
+];
+
+const TYPE_LISTS: Record<string, readonly DataType[]> = { PostgreSQL: POSTGRES_TYPES, MySQL: MYSQL_TYPES };
+
+/** The engine whose types the type picker offers in a schema for `engine`: its own, or PostgreSQL for one without a list. */
+export function typeEngine(engine: string): string {
+  return engine in TYPE_LISTS ? engine : 'PostgreSQL';
+}
+
+/** The types the type picker offers in a schema for `engine`. */
+export function typesFor(engine: string): readonly DataType[] {
+  return TYPE_LISTS[typeEngine(engine)];
+}
+
 /** Free text from the type picker as it is stored: trimmed and upper-cased, so `varchar(64)` becomes `VARCHAR(64)`. */
 export function normalizeType(text: string): string {
   return text.trim().toUpperCase();
@@ -94,6 +130,65 @@ export function widensType(from: string, to: string): boolean {
     if (!a.args.length) return false;
     const [precision, scale = 0] = a.args;
     const [toPrecision, toScale = 0] = b.args;
+    return toScale >= scale && toPrecision - toScale >= precision - scale;
+  }
+  return false;
+}
+
+const MYSQL_INTEGER_SIZE: Record<string, number> = { TINYINT: 1, SMALLINT: 2, MEDIUMINT: 3, INT: 4, INTEGER: 4, BIGINT: 8 };
+/** The text and binary types without a length, each family from the smallest to the largest. */
+const MYSQL_TEXT_SIZE: Record<string, number> = { TINYTEXT: 1, TEXT: 2, MEDIUMTEXT: 3, LONGTEXT: 4 };
+const MYSQL_BLOB_SIZE: Record<string, number> = { TINYBLOB: 1, BLOB: 2, MEDIUMBLOB: 3, LONGBLOB: 4 };
+/** How many digits a DECIMAL has when it does not say. */
+const MYSQL_DECIMAL_DIGITS = 10;
+
+interface MysqlType {
+  name: string;
+  args: number[];
+  unsigned: boolean;
+}
+
+/** A MySQL type in its parts: `INT(11) UNSIGNED AUTO_INCREMENT` is `INT` with 11, without a sign. Counting by itself does not change what fits. */
+function parseMysqlType(type: string): MysqlType | null {
+  const match = /^([A-Z][A-Z0-9]*(?: [A-Z]+)*?)\s*(?:\(\s*(\d+)\s*(?:,\s*(\d+)\s*)?\))?((?: (?:UNSIGNED|ZEROFILL|AUTO_INCREMENT))*)$/.exec(
+    normalizeType(type),
+  );
+  if (!match) return null;
+  const name = match[1] === 'NUMERIC' || match[1] === 'DEC' ? 'DECIMAL' : match[1];
+  const args = match.slice(2, 4).flatMap((n) => (n === undefined ? [] : [Number(n)]));
+  // ZEROFILL makes a column UNSIGNED without saying so.
+  return { name, args, unsigned: /UNSIGNED|ZEROFILL/.test(match[4]) };
+}
+
+/** `widensType` for the types of MySQL: an integer may not lose its sign, and a text has a largest size. */
+export function widensMysqlType(from: string, to: string): boolean {
+  const a = parseMysqlType(from);
+  const b = parseMysqlType(to);
+  if (!a || !b) return false;
+
+  if (a.name in MYSQL_INTEGER_SIZE && b.name in MYSQL_INTEGER_SIZE) {
+    // The number in the brackets of an integer is how wide it is shown, not what it holds.
+    const size = MYSQL_INTEGER_SIZE[a.name];
+    const toSize = MYSQL_INTEGER_SIZE[b.name];
+    if (a.unsigned === b.unsigned) return size <= toSize;
+    // Only a larger signed integer holds every value of an unsigned one.
+    return a.unsigned && size < toSize;
+  }
+  if (a.name === b.name && a.unsigned === b.unsigned && a.args.length === b.args.length && a.args.every((n, i) => n === b.args[i])) return true;
+
+  if (a.name === 'CHAR' || a.name === 'VARCHAR') {
+    // A VARCHAR is at most as long as a TEXT.
+    if (b.name in MYSQL_TEXT_SIZE) return MYSQL_TEXT_SIZE[b.name] >= MYSQL_TEXT_SIZE.TEXT;
+    // A CHAR without a length holds one character; a VARCHAR always says its length.
+    const fits = (a.args[0] ?? 1) <= (b.args[0] ?? 1);
+    return fits && (b.name === 'VARCHAR' ? b.args.length === 1 : b.name === 'CHAR' && a.name === 'CHAR');
+  }
+  if (a.name in MYSQL_TEXT_SIZE && b.name in MYSQL_TEXT_SIZE) return MYSQL_TEXT_SIZE[a.name] <= MYSQL_TEXT_SIZE[b.name];
+  if (a.name in MYSQL_BLOB_SIZE && b.name in MYSQL_BLOB_SIZE) return MYSQL_BLOB_SIZE[a.name] <= MYSQL_BLOB_SIZE[b.name];
+  if (a.name === 'DECIMAL' && b.name === 'DECIMAL') {
+    if (a.unsigned !== b.unsigned && !a.unsigned) return false;
+    const [precision = MYSQL_DECIMAL_DIGITS, scale = 0] = a.args;
+    const [toPrecision = MYSQL_DECIMAL_DIGITS, toScale = 0] = b.args;
     return toScale >= scale && toPrecision - toScale >= precision - scale;
   }
   return false;

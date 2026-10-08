@@ -1,5 +1,6 @@
 // Syntax highlighting for the SQL editor: text in, runs of text with a kind out. The editor draws
-// each kind in its `syn-*` colour. The keyword and type lists are those of the design system.
+// each kind in its `syn-*` colour. The keyword and type lists are those of the design system, with
+// the words of MySQL's DDL added to them.
 
 export type SyntaxKind = 'keyword' | 'type' | 'string' | 'number' | 'comment';
 
@@ -10,12 +11,16 @@ export interface SyntaxToken {
 }
 
 const KEYWORDS =
-  'CREATE|TABLE|PRIMARY|KEY|NOT|NULL|UNIQUE|DEFAULT|REFERENCES|ON|DELETE|UPDATE|CASCADE|RESTRICT|SET|INDEX|ALTER|ADD|COLUMN|DROP|IF|EXISTS|CONSTRAINT|FOREIGN|CHECK|USING|BEGIN|COMMIT|TYPE|IN|AND|OR|INSERT|INTO|VALUES|SELECT|FROM|WHERE|NO|ACTION|COMMENT|IS|RENAME|TO';
+  'CREATE|TABLE|PRIMARY|KEY|NOT|NULL|UNIQUE|DEFAULT|REFERENCES|ON|DELETE|UPDATE|CASCADE|RESTRICT|SET|INDEX|ALTER|ADD|COLUMN|DROP|IF|EXISTS|CONSTRAINT|FOREIGN|CHECK|USING|BEGIN|COMMIT|TYPE|IN|AND|OR|INSERT|INTO|VALUES|SELECT|FROM|WHERE|NO|ACTION|COMMENT|IS|RENAME|TO|MODIFY|FULLTEXT|SPATIAL';
 const TYPES =
-  'BIGSERIAL|SERIAL|SMALLSERIAL|BIGINT|INTEGER|INT|SMALLINT|DECIMAL|NUMERIC|VARCHAR|CHAR|TEXT|BOOLEAN|BOOL|TIMESTAMPTZ|TIMESTAMP|DATE|TIME|UUID|JSONB|JSON|BYTEA|REAL|DOUBLE|PRECISION|INET|DateTime|UInt64|UInt32|String|Float64';
+  'BIGSERIAL|SERIAL|SMALLSERIAL|BIGINT|INTEGER|INT|SMALLINT|DECIMAL|NUMERIC|VARCHAR|CHAR|TEXT|BOOLEAN|BOOL|TIMESTAMPTZ|TIMESTAMP|DATE|TIME|UUID|JSONB|JSON|BYTEA|REAL|DOUBLE|PRECISION|INET|DateTime|UInt64|UInt32|String|Float64|TINYINT|MEDIUMINT|FLOAT|TINYTEXT|MEDIUMTEXT|LONGTEXT|BLOB|LONGBLOB|ENUM|UNSIGNED|AUTO_INCREMENT';
 
-const SQL = new RegExp(`(--[^\\n]*)|('(?:[^'\\\\]|\\\\.)*'?)|\\b(${KEYWORDS})\\b|\\b(${TYPES})\\b|\\b(\\d+(?:\\.\\d+)?)\\b`, 'gi');
-const SQL_KINDS: SyntaxKind[] = ['comment', 'string', 'keyword', 'type', 'number'];
+// The third group is a name in backticks or double quotes. It has no kind, so a column called `key` stays plain.
+const SQL = new RegExp(
+  `(--[^\\n]*)|('(?:[^'\\\\]|\\\\.)*'?)|(\`[^\`\\n]*\`|"[^"\\n]*")|\\b(${KEYWORDS})\\b|\\b(${TYPES})\\b|\\b(\\d+(?:\\.\\d+)?)\\b`,
+  'gi',
+);
+const SQL_KINDS: (SyntaxKind | undefined)[] = ['comment', 'string', undefined, 'keyword', 'type', 'number'];
 
 // The first group is a key: a string followed by a colon. It has no kind, so it stays plain.
 const JSON_TOKEN = /("(?:[^"\\]|\\.)*"\s*:)|("(?:[^"\\]|\\.)*"?)|\b(true|false|null)\b|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)/g;

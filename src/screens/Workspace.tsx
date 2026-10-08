@@ -137,6 +137,7 @@ export function Workspace() {
           table={table}
           tables={tables}
           schemaName={name}
+          engine={engine}
           selectedColumn={selectedColumn}
           onSelectColumn={selectColumn}
           onChange={(t, field) => updateTable(t.name, t, field)}
