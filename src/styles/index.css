@@ -55,3 +55,11 @@ body {
   position: absolute;
   right: 0;
 }
+
+/*
+ * The password of a database connection. It is shown as dots without being a password field, so
+ * the browser does not offer to keep it: the dialog says that it is not stored.
+ */
+.ss-secret {
+  -webkit-text-security: disc;
+}

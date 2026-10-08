@@ -23,6 +23,7 @@ The user is Vietnamese; reply in Vietnamese unless asked otherwise. Code, identi
 - Canvas: start by porting the prototype `ERCanvas`; switch to React Flow (`@xyflow/react`) only if performance requires it
 - SQL parsing: `pgsql-ast-parser` for PostgreSQL first; keep the parser behind an interface (`src/core/parse/`) so MySQL can be added later
 - Persistence: local-first, IndexedDB via Dexie. One record per schema, one immutable JSON snapshot per saved version
+- Live databases: a browser cannot open a database connection, so `bridge/` is a small Node process (`pg`, `mysql2`) that reads a catalog in a read-only transaction. It only sends the fixed queries in `bridge/*.ts`; turning the catalog into DDL is `src/core/introspect/`, which the parsers then read
 - Tests: Vitest for `src/core/**` (parser, generator, diff). UI tests are optional
 - Package manager: npm
 
@@ -30,12 +31,14 @@ The user is Vietnamese; reply in Vietnamese unless asked otherwise. Code, identi
 
 ```
 src/
-  core/            # pure TS, no React: model, parse/, generate/, diff/, validate.ts
-  store/           # Zustand stores (schema, ui), undo/redo
+  core/            # pure TS, no React: model, parse/, generate/, diff/, introspect/, validate.ts
+  store/           # Zustand stores (schema, ui, settings), undo/redo
   db/              # Dexie setup and repositories
+  bridge/          # the app's client of the connection bridge
   components/      # ported design-system components (.tsx)
   screens/         # SchemaList, Workspace, VersionHistory, SchemaDiff, Empty
   styles/          # imports tokens.css + bundle.css
+bridge/            # the connection bridge itself: a Node process, never bundled into the app
 ```
 
 ## Rules
@@ -50,5 +53,6 @@ src/
 ## Commands
 
 - `npm run dev` — dev server
+- `npm run bridge` — connection bridge on 127.0.0.1:4577, for Import Schema → Connect to database
 - `npm run build` — type-check + build
 - `npm test` — Vitest

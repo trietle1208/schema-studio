@@ -113,6 +113,12 @@ describe('createNewSchema', () => {
     ]);
   });
 
+  it('names the database as the source of tables that were read from one', async () => {
+    await importSchema({ name: 'live', engine: 'PostgreSQL', tables: parsedTables(), database: 'shop @ localhost:5432' });
+    const stored = (await listSchemas()).find((s) => s.name === 'live');
+    expect((await listVersions(stored!.id))[0].message).toBe('Imported from database shop @ localhost:5432');
+  });
+
   it('reports a name that is taken and leaves the dialog and the open schema as they were', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     requestNewSchema();

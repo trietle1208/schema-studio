@@ -66,6 +66,8 @@ export interface ImportInput extends NewSchema {
   tables: Table[];
   /** The name of the file the SQL came from; left out for pasted SQL. */
   file?: string;
+  /** The database the tables were read from, as it is named: `shop @ localhost:5432`. */
+  database?: string;
 }
 
 /**
@@ -73,10 +75,10 @@ export interface ImportInput extends NewSchema {
  * schema and opens it in the workspace, fitted to the screen. Resolves with whether it did; a
  * failure is reported in a toast and leaves the dialog open.
  */
-export async function importSchema({ tables, file, ...schema }: ImportInput): Promise<boolean> {
+export async function importSchema({ tables, file, database, ...schema }: ImportInput): Promise<boolean> {
   const ui = useUiStore.getState();
   const snapshot: SchemaSnapshot = { tables, positions: gridLayout(tables) };
-  const message = file ? `Imported from ${file}` : 'Imported from pasted SQL';
+  const message = file ? `Imported from ${file}` : database ? `Imported from database ${database}` : 'Imported from pasted SQL';
   if (!(await createAndOpen(schema, snapshot, message, 'Could not import schema'))) return false;
   ui.setFitPending(true);
   ui.showToast({ title: `Imported ${schema.name}`, description: summarize(tables) });

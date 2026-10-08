@@ -18,6 +18,7 @@ import {
   MAX_IMPORT_BYTES,
   schemaNameFromFile,
 } from '../core/files';
+import { EMPTY_CONNECTION_FORM, INTROSPECT_ENGINES } from '../core/introspect';
 import { IMPORT_ENGINES, parserFor, type ParseOutcome } from '../core/parse';
 import { plural } from '../core/plural';
 import { ENGINES } from '../core/schemaList';
@@ -25,9 +26,11 @@ import { summarize } from '../core/summary';
 import { validateSchemaName } from '../core/validate';
 import { useSchemas } from '../db/useSchemas';
 import { useUiStore } from '../store/ui';
+import { ConnectDatabase, type DatabaseRead } from './ConnectDatabase';
+import { Marked } from './Marked';
 import { importSchema } from './schemaActions';
 
-type Mode = 'file' | 'paste';
+type Mode = 'file' | 'paste' | 'connect';
 
 /** The chosen file, read. */
 interface SqlFile {
@@ -67,11 +70,6 @@ function useParsed(sql: string, engine: string): { outcome: ParseOutcome | null;
   return { outcome: parsed?.outcome ?? null, pending: !blank && (parsed?.sql !== sql || parsed.engine !== engine) };
 }
 
-/** Text in which names are wrapped in backticks, with the names set as code. */
-function Marked({ text }: { text: string }) {
-  return <>{text.split('`').map((part, i) => (i % 2 ? <code key={i}>{part}</code> : part))}</>;
-}
-
 export function ImportSchemaDialog() {
   const closeDialog = useUiStore((s) => s.closeDialog);
   const schemas = useSchemas();
@@ -80,18 +78,23 @@ export function ImportSchemaDialog() {
   const [file, setFile] = useState<SqlFile | null>(null);
   const [fileProblem, setFileProblem] = useState<string | null>(null);
   const [pasted, setPasted] = useState('');
+  const [connection, setConnection] = useState(EMPTY_CONNECTION_FORM);
+  const [read, setRead] = useState<DatabaseRead | null>(null);
   // The name follows the file until it is typed over.
   const [typedName, setTypedName] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const editor = useRef<SqlEditorActions>(null);
 
   const taken = useMemo(() => (schemas ?? []).map((s) => s.name), [schemas]);
-  const name = typedName ?? availableName(file ? schemaNameFromFile(file.name) : DEFAULT_IMPORT_NAME, taken);
-  const nameProblem = validateSchemaName(name, taken);
-
   // A chosen file is what the Upload tab imports; without one, what is pasted under the drop zone.
   const fromFile = mode === 'file' && file !== null;
-  const sql = fromFile ? file.sql : pasted;
+  // The Connect tab imports the DDL of the tables that were read from the database.
+  const fromDatabase = mode === 'connect' && read !== null;
+  const source = fromFile ? file.name : fromDatabase ? read.database : null;
+  const name = typedName ?? availableName(source === null ? DEFAULT_IMPORT_NAME : schemaNameFromFile(source), taken);
+  const nameProblem = validateSchemaName(name, taken);
+
+  const sql = fromFile ? file.sql : mode === 'connect' ? (read?.sql ?? '') : pasted;
   const { outcome, pending } = useParsed(sql, engine);
 
   const blank = !sql.trim();
@@ -104,9 +107,10 @@ export function ImportSchemaDialog() {
         ? { message: 'No CREATE TABLE statement found.', line: null, detail: 'Import needs at least one table.' }
         : outcome.error;
   const errorLine = error?.line ?? null;
+  // A file and a database have no editor to go to: the lines around the error are shown instead.
   const excerpt = useMemo(
-    () => (fromFile && errorLine ? excerptAround(file.sql, errorLine) : null),
-    [fromFile, file, errorLine],
+    () => ((fromFile || fromDatabase) && errorLine ? excerptAround(sql, errorLine) : null),
+    [fromFile, fromDatabase, sql, errorLine],
   );
   const warnings = outcome?.ok ? outcome.warnings : [];
   const skipped = outcome?.ok ? outcome.skipped : 0;
@@ -132,7 +136,13 @@ export function ImportSchemaDialog() {
   const submit = async () => {
     if (!ready) return;
     setImporting(true);
-    const imported = await importSchema({ name, engine, tables, file: fromFile ? file.name : undefined });
+    const imported = await importSchema({
+      name,
+      engine,
+      tables,
+      file: fromFile ? file.name : undefined,
+      database: fromDatabase ? read.label : undefined,
+    });
     // On success the dialog is closed, and this component gone.
     if (!imported) setImporting(false);
   };
@@ -176,8 +186,7 @@ export function ImportSchemaDialog() {
           <ParseStatus
             state="error"
             message={error.message}
-            // A file has no editor to go to; the lines around the error are shown instead.
-            onJump={errorLine && !fromFile ? () => editor.current?.goToLine(errorLine) : undefined}
+            onJump={errorLine && !excerpt ? () => editor.current?.goToLine(errorLine) : undefined}
           />
         ) : state === 'parsing' ? (
           <ParseStatus state="parsing" />
@@ -210,7 +219,16 @@ export function ImportSchemaDialog() {
           />
         </Field>
         <Field label="Dialect">
-          <Select value={engine} onChange={setEngine} options={DIALECTS} label="Dialect" />
+          <Select
+            value={engine}
+            onChange={(picked) => {
+              setEngine(picked);
+              // What was read is the DDL of the other dialect.
+              setRead(null);
+            }}
+            options={DIALECTS}
+            label="Dialect"
+          />
         </Field>
       </div>
       <SegmentedControl
@@ -220,7 +238,7 @@ export function ImportSchemaDialog() {
         options={[
           { value: 'file', label: 'Upload SQL file', icon: 'upload' },
           { value: 'paste', label: 'Paste SQL', icon: 'clipboard' },
-          { value: 'connect', label: 'Connect to database', icon: 'plug', badge: 'Soon', disabled: true },
+          { value: 'connect', label: 'Connect to database', icon: 'plug', disabled: !INTROSPECT_ENGINES.includes(engine) },
         ]}
       />
       {mode === 'file' && (
@@ -245,26 +263,27 @@ export function ImportSchemaDialog() {
               </div>
             </>
           )}
-          {excerpt && (
-            <SqlEditor
-              value={excerpt.text}
-              readOnly
-              // As tall as its lines, with the editor's padding and border.
-              height={countLines(excerpt.text) * 18 + 18}
-              firstLine={excerpt.firstLine}
-              errorLine={errorLine}
-              label={`${file?.name ?? 'SQL'} near the error`}
-            />
-          )}
         </>
       )}
       {mode === 'paste' && pasteEditor(280)}
+      {mode === 'connect' && <ConnectDatabase engine={engine} form={connection} onForm={setConnection} read={read} onRead={setRead} />}
+      {excerpt && (
+        <SqlEditor
+          value={excerpt.text}
+          readOnly
+          // As tall as its lines, with the editor's padding and border.
+          height={countLines(excerpt.text) * 18 + 18}
+          firstLine={excerpt.firstLine}
+          errorLine={errorLine}
+          label={`${source ?? 'SQL'} near the error`}
+        />
+      )}
       {error && (
         <Alert tone="error" title={error.message}>
           {error.detail && <Marked text={error.detail} />}
         </Alert>
       )}
-      {state === 'ok' && (fromFile || warnings.length > 0 || skipped > 0) && (
+      {state === 'ok' && (fromFile || fromDatabase || warnings.length > 0 || skipped > 0) && (
         <Alert tone="success" title="Ready to import">
           <div>
             <code>{summary}</code>

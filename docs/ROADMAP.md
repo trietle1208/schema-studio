@@ -38,4 +38,4 @@ Each step is sized for one Claude Code session. Tick it off when `npm run build`
 - [x] **MySQL dialect: generator**: model → MySQL DDL and migrations (no transaction: MySQL commits each statement); exporting for the other engine converts the data types; the type picker offers MySQL's types in a MySQL schema. Tests, and checked against MySQL 8.
 - [x] **Light/dark toggle in Settings**: a Settings dialog (sidebar, ⌘,) with the theme; kept in the browser and applied before the first paint.
 - [ ] Desktop app with Tauri (open/save `.sql` files on disk)
-- [ ] Connect to a live database (read-only introspection)
+- [x] **Connect to a live database (read-only introspection)**: the Connect to database tab of Import Schema reads the tables of a PostgreSQL or MySQL database through a local bridge (`npm run bridge`) in a read-only transaction; the catalog becomes DDL and is imported like a script. Tests with catalogs of real databases.

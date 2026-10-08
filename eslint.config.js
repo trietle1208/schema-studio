@@ -21,6 +21,11 @@ export default defineConfig([
     },
   },
   {
+    // The connection bridge is a Node process, not part of the page.
+    files: ['bridge/**/*.ts'],
+    languageOptions: { globals: globals.node },
+  },
+  {
     // src/core stays pure TypeScript so it can be tested without a DOM.
     files: ['src/core/**/*.ts'],
     languageOptions: { globals: {} },
