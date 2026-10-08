@@ -7,6 +7,7 @@ import { DiscardChangesDialog } from './DiscardChangesDialog';
 import { ExportDialog } from './ExportDialog';
 import { NewSchemaDialog } from './NewSchemaDialog';
 import { RestoreVersionDialog } from './RestoreVersionDialog';
+import { SettingsDialog } from './SettingsDialog';
 
 // The SQL parser comes with the import dialog, so it is only loaded when that is first opened.
 const ImportSchemaDialog = lazy(() => import('./ImportSchemaDialog').then((m) => ({ default: m.ImportSchemaDialog })));
@@ -47,6 +48,7 @@ export function Overlays() {
         </Suspense>
       )}
       {dialog?.kind === 'export' && <ExportDialog schema={dialog.schema} />}
+      {dialog?.kind === 'settings' && <SettingsDialog />}
       {dialog?.kind === 'delete-schema' && (
         <DeleteSchemaDialog id={dialog.id} name={dialog.name} versions={dialog.versions} />
       )}

@@ -5,6 +5,12 @@
     <link rel="icon" type="image/svg+xml" href="/design-system/assets/Logos/schema-studio-mark.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Schema Studio</title>
+    <script>
+      // The theme chosen in Settings (see src/core/theme.ts) is applied before the first paint, so a light page never starts dark.
+      try {
+        if (localStorage.getItem('schema-studio.theme') === 'light') document.documentElement.dataset.theme = 'light';
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -15,6 +15,7 @@ export interface SidebarProps {
   activeSchema?: string;
   onSelectSchema?: (name: string) => void;
   onNew?: () => void;
+  onSettings?: () => void;
   empty?: boolean;
   workspace?: string;
   userName?: string;
@@ -36,6 +37,7 @@ export function Sidebar({
   activeSchema,
   onSelectSchema,
   onNew,
+  onSettings,
   empty,
   workspace = 'Personal',
   userName = 'Luong Hoang',
@@ -100,7 +102,7 @@ export function Sidebar({
         </div>
       )}
       <div className="ss-sb-foot">
-        <button type="button" className="ss-nav-item">
+        <button type="button" className="ss-nav-item" onClick={onSettings}>
           <Icon name="settings" size={16} />
           Settings
           <span className="ss-nav-count">⌘,</span>

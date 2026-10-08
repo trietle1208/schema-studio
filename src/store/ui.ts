@@ -25,6 +25,7 @@ export type Dialog =
   | { kind: 'new-schema' }
   | { kind: 'import-schema' }
   | { kind: 'export'; schema: ExportSource }
+  | { kind: 'settings' }
   /** `versions` is how many saved versions go with the schema. */
   | { kind: 'delete-schema'; id: number; name: string; versions: number }
   /** Asks before `version` of the open schema is made its current version again. */

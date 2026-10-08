@@ -9,6 +9,7 @@ import { Overlays } from './screens/Overlays';
 import { requestNewSchema } from './screens/schemaActions';
 import { SchemaDiff } from './screens/SchemaDiff';
 import { SchemaList } from './screens/SchemaList';
+import { requestSettings } from './screens/settingsActions';
 import { useAppShortcuts } from './screens/useAppShortcuts';
 import { VersionHistory } from './screens/VersionHistory';
 import { Workspace } from './screens/Workspace';
@@ -58,6 +59,7 @@ export function App() {
           }}
           onSelectSchema={(schema) => go({ screen: 'workspace', schema })}
           onNew={requestNewSchema}
+          onSettings={requestSettings}
         />
       }
       overlay={<Overlays />}

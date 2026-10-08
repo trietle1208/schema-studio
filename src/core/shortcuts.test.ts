@@ -10,6 +10,8 @@ describe('matchShortcut', () => {
     expect(matchShortcut({ key: 'N', metaKey: true })).toBe('new-schema');
     expect(matchShortcut({ key: 'i', ctrlKey: true })).toBe('import');
     expect(matchShortcut({ key: 'I', metaKey: true })).toBe('import');
+    expect(matchShortcut({ key: ',', metaKey: true })).toBe('settings');
+    expect(matchShortcut({ key: ',', ctrlKey: true })).toBe('settings');
     expect(matchShortcut({ key: 'z', metaKey: true })).toBe('undo');
     expect(matchShortcut({ key: 'z', metaKey: true, shiftKey: true })).toBe('redo');
   });
@@ -27,7 +29,7 @@ describe('matchShortcut', () => {
   });
 
   it('does not match plain typing', () => {
-    for (const key of ['s', 'z', 'k', 'i', 'Enter', 'Tab', ' ', 'F3']) {
+    for (const key of ['s', 'z', 'k', 'i', ',', 'Enter', 'Tab', ' ', 'F3']) {
       expect(matchShortcut({ key })).toBeNull();
     }
   });

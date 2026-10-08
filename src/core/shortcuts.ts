@@ -1,4 +1,4 @@
-export type Shortcut = 'save' | 'undo' | 'redo' | 'search' | 'new-schema' | 'import' | 'rename' | 'delete' | 'cancel';
+export type Shortcut = 'save' | 'undo' | 'redo' | 'search' | 'new-schema' | 'import' | 'settings' | 'rename' | 'delete' | 'cancel';
 
 /** The parts of a keyboard event a shortcut depends on. */
 export interface KeyStroke {
@@ -21,6 +21,7 @@ export function matchShortcut(e: KeyStroke): Shortcut | null {
     if (key === 'k') return 'search';
     if (key === 'n') return 'new-schema';
     if (key === 'i') return 'import';
+    if (key === ',') return 'settings';
     return null;
   }
   if (e.shiftKey) return null;
