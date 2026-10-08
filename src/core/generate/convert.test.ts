@@ -191,3 +191,15 @@ describe('MySQL → PostgreSQL', () => {
     expect(toPostgres('INT', "'1'")[1]).toBe("'1'");
   });
 });
+
+describe('inferred foreign keys', () => {
+  const tables = (inferred: boolean): Table[] => [
+    { name: 'users', columns: [{ name: 'id', type: 'BIGSERIAL', pk: true }] },
+    { name: 'orders', columns: [{ name: 'user_id', type: 'INTEGER', fk: { table: 'users', column: 'id', ...(inferred ? { inferred } : {}) } }] },
+  ];
+
+  it('change no type: only a foreign key that is written has to match the column it references', () => {
+    expect(convertTables(tables(false), 'PostgreSQL', 'MySQL')[1].columns[0].type).toBe('BIGINT');
+    expect(convertTables(tables(true), 'PostgreSQL', 'MySQL')[1].columns[0].type).toBe('INTEGER');
+  });
+});

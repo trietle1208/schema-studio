@@ -5,6 +5,7 @@ import {
   deleteTable,
   duplicateTable,
   moveTable,
+  moveTables,
   newTable,
   newTableName,
   renameTable,
@@ -186,6 +187,29 @@ describe('moveTable', () => {
   });
 });
 
+describe('moveTables', () => {
+  it('moves the tables it names and leaves the others where they are', () => {
+    const before = ecommerceSnapshot();
+    const after = moveTables(before, { users: { x: 40, y: 64 }, orders: { x: 320, y: 40 } });
+    expect(after.positions).toEqual({ ...before.positions, users: { x: 40, y: 64 }, orders: { x: 320, y: 40 } });
+    expect(after.positions.products).toBe(before.positions.products);
+    expect(after.tables).toBe(before.tables);
+  });
+
+  it('returns the same snapshot when no table it knows goes anywhere', () => {
+    const before = ecommerceSnapshot();
+    expect(moveTables(before, { users: { x: 24, y: 48 }, invoices: { x: 0, y: 0 } })).toBe(before);
+    expect(moveTables(before, {})).toBe(before);
+  });
+
+  it('places a table whose name is a property of every object', () => {
+    const before = ecommerceSnapshot();
+    const snapshot = { tables: [...before.tables, { name: '__proto__', columns: [] }], positions: before.positions };
+    const after = moveTables(snapshot, Object.fromEntries([['__proto__', { x: 8, y: 16 }]]));
+    expect(Object.keys(after.positions)).toEqual([...Object.keys(before.positions), '__proto__']);
+  });
+});
+
 describe('newTableName', () => {
   it('counts up until the name is free', () => {
     const { tables } = ecommerceSnapshot();
@@ -240,5 +264,43 @@ describe('addTable', () => {
     const before = ecommerceSnapshot();
     const after = deleteTable(addTable(before, newTable('invoices'), { x: 8, y: 8 }), 'invoices');
     expect(after).toEqual(before);
+  });
+});
+
+describe('the groups of an edited snapshot', () => {
+  const grouped = () => {
+    const snapshot = ecommerceSnapshot();
+    return {
+      ...snapshot,
+      groups: [
+        { name: 'sales', color: 'violet' as const, tables: ['orders', 'order_items'] },
+        { name: 'people', color: 'orange' as const, tables: ['users'] },
+      ],
+    };
+  };
+
+  it('stay as they are when a table is edited, added or moved', () => {
+    const snapshot = grouped();
+    const orders = tableNamed(snapshot, 'orders');
+    expect(updateTable(snapshot, 'orders', { ...orders, comment: 'One row per checkout.' }).groups).toBe(snapshot.groups);
+    expect(addTable(snapshot, newTable('new_table'), { x: 0, y: 0 }).groups).toBe(snapshot.groups);
+    expect(moveTable(snapshot, 'orders', { x: 8, y: 8 }).groups).toBe(snapshot.groups);
+  });
+
+  it('follow a table that is renamed, duplicated or deleted', () => {
+    const snapshot = grouped();
+    expect(renameTable(snapshot, 'orders', 'purchases').groups?.[0].tables).toEqual(['purchases', 'order_items']);
+    expect(duplicateTable(snapshot, 'users').groups?.[1].tables).toEqual(['users', 'users_copy']);
+    expect(deleteTable(snapshot, 'users').groups).toEqual([snapshot.groups[0], { name: 'people', color: 'orange', tables: [] }]);
+    // A table that is in no group leaves them as they are.
+    expect(renameTable(snapshot, 'payments', 'refunds').groups).toBe(snapshot.groups);
+    expect(snapshot.groups[0].tables).toEqual(['orders', 'order_items']);
+  });
+
+  it('are not added to a snapshot that has none', () => {
+    const snapshot = ecommerceSnapshot();
+    expect('groups' in renameTable(snapshot, 'orders', 'purchases')).toBe(false);
+    expect('groups' in deleteTable(snapshot, 'payments')).toBe(false);
+    expect('groups' in duplicateTable(snapshot, 'users')).toBe(false);
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dirtyTables, isDirty } from './dirty';
 import { deleteTable, duplicateTable, moveTable, renameTable, updateTable } from './edit';
 import { ecommerceSnapshot, tableNamed } from './fixtures/testing';
+import { assignGroup, groupsOf, recolorGroup } from './groups';
 
 describe('isDirty and dirtyTables', () => {
   it('reads the saved snapshot as clean', () => {
@@ -55,5 +56,27 @@ describe('isDirty and dirtyTables', () => {
     const saved = ecommerceSnapshot();
     const current = deleteTable(saved, 'products');
     expect(dirtyTables(current, saved)).toEqual(['order_items']);
+  });
+  it('marks the tables whose group changed, and is clean again when it is as it was', () => {
+    const saved = ecommerceSnapshot();
+    const grouped = { ...saved, groups: assignGroup(groupsOf(saved), ['orders', 'order_items'], 'sales', 'violet') };
+    expect(isDirty(grouped, saved)).toBe(true);
+    expect(dirtyTables(grouped, saved)).toEqual(['orders', 'order_items']);
+
+    const recoloured = { ...grouped, groups: recolorGroup(grouped.groups, 'sales', 'lime') };
+    expect(isDirty(recoloured, grouped)).toBe(true);
+    expect(dirtyTables(recoloured, grouped)).toEqual(['orders', 'order_items']);
+    const moved = { ...grouped, groups: assignGroup(grouped.groups, ['orders'], null) };
+    expect(dirtyTables(moved, grouped)).toEqual(['orders']);
+
+    // The same groups in a list of their own, as after an undo of an undo.
+    const again = { ...grouped, groups: structuredClone(grouped.groups) };
+    expect(isDirty(again, grouped)).toBe(false);
+    expect(dirtyTables(again, grouped)).toEqual([]);
+    // A group without a table is a change that no table shows.
+    const empty = { ...saved, groups: [{ name: 'group_1', color: 'gray' as const, tables: [] }] };
+    expect(isDirty(empty, saved)).toBe(true);
+    expect(dirtyTables(empty, saved)).toEqual([]);
+    expect(isDirty({ ...saved, groups: [] }, saved)).toBe(false);
   });
 });

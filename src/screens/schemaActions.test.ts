@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { arrangeTables } from '../core/arrange';
 import { ecommerceSql } from '../core/fixtures/sql';
 import { ecommerceSnapshot } from '../core/fixtures/testing';
 import { nodeRects } from '../core/layout';
@@ -175,18 +176,15 @@ describe('importSchema', () => {
     expect((await listVersions(stored!.id)).map((v) => [v.version, v.message])).toEqual([[1, 'Imported from shop_prod.sql']]);
   });
 
-  it('lays the tables out in a grid and asks the canvas to fit them', async () => {
+  it('arranges the tables by their relationships and asks the canvas to fit them', async () => {
     const tables = parsedTables();
     await importSchema({ name: 'shop_prod', engine: 'PostgreSQL', tables });
 
     const rects = nodeRects(tables, schema().positions);
     expect(rects.map((r) => r.name)).toEqual(['users', 'orders', 'products', 'order_items', 'payments']);
-    // Three columns of nodes, the first row level.
-    expect(rects.slice(0, 3).map((r) => [r.x, r.y])).toEqual([
-      [24, 24],
-      [304, 24],
-      [584, 24],
-    ]);
+    // Three columns of nodes: users, the tables that reference it, and the tables that reference those.
+    expect(rects.map((r) => r.x)).toEqual([24, 344, 344, 664, 664]);
+    expect(schema().positions).toEqual(arrangeTables(tables));
     expect(ui().fitPending).toBe(true);
     const stored = (await listSchemas()).find((s) => s.name === 'shop_prod');
     expect((await listVersions(stored!.id))[0].snapshot.positions).toEqual(schema().positions);

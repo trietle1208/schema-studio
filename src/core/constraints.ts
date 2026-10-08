@@ -3,7 +3,7 @@ import { outgoingRelations, type Relation } from './relations';
 
 // What a table comes to in a database. The flags of a column say what its constraints are;
 // `indexes` gives them their names. So a primary-key or unique index that no longer matches the
-// columns' flags does not count, and neither does a foreign key to a column that is not there.
+// columns' flags does not count, and neither does a foreign key to a column that is not there, or one that was only inferred.
 
 function sameNames(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((name) => b.includes(name));
@@ -52,10 +52,13 @@ export function uniqueColumns(table: Table, indexes: readonly Index[] = writtenI
   return table.columns.filter((c) => c.unique && !c.pk && !indexed.has(c.name)).map((c) => c.name);
 }
 
-/** The foreign keys of `tables` whose referenced column exists, so that they can be written. */
+/**
+ * The foreign keys of `tables` whose referenced column exists, so that they can be written. An
+ * inferred one is not among them: it is a guess about the database, not something to create in it.
+ */
 export function writtenRelations(tables: readonly Table[]): Relation[] {
   const byName = new Map(tables.map((t) => [t.name, t]));
   return tables
     .flatMap(outgoingRelations)
-    .filter((r) => byName.get(r.to.table)?.columns.some((c) => c.name === r.to.column));
+    .filter((r) => !r.inferred && byName.get(r.to.table)?.columns.some((c) => c.name === r.to.column));
 }

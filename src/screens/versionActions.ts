@@ -1,6 +1,7 @@
 import { compareDdl, unifiedDiff } from '../core/diff/ddl';
 import { diffFileName, exportFileName } from '../core/files';
 import { EXPORT_ENGINES, generatorFor } from '../core/generate';
+import { groupsOf } from '../core/groups';
 import { plural } from '../core/plural';
 import { versionLabel, type SavedVersion } from '../core/versions';
 import { restoreVersion as restoreStored } from '../db/schemas';
@@ -23,6 +24,8 @@ export function exportVersion(version: SavedVersion) {
       engine: schema.engine,
       version: version.version,
       tables: version.snapshot.tables,
+      positions: version.snapshot.positions,
+      groups: groupsOf(version.snapshot),
       unsaved: false,
     },
   });
@@ -42,6 +45,8 @@ export function generateMigration(from: SavedVersion, to: SavedVersion) {
       engine: schema.engine,
       version: to.version,
       tables: to.snapshot.tables,
+      positions: to.snapshot.positions,
+      groups: groupsOf(to.snapshot),
       unsaved: false,
       migrateFrom: from.version,
     },

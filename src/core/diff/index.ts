@@ -6,8 +6,8 @@ import { outgoingRelations, qualifiedName, type Relation } from '../relations';
 
 // Compares two versions of a schema. Tables, columns and indexes are matched by name and a foreign
 // key by its column, so a rename reads as one removed and one added. The comparison is about what
-// ends up in a database: an index or foreign key that cannot be written (see core/constraints) is
-// not part of it, and neither are the order of the columns and the canvas positions.
+// ends up in a database: an index or foreign key that cannot be written (see core/constraints) or
+// was only inferred is not part of it, and neither are the order of the columns and the canvas positions.
 
 /** One thing that was added (`after`), removed (`before`) or changed (both). */
 export type Change<T> = { op: 'add'; after: T } | { op: 'del'; before: T } | { op: 'mod'; before: T; after: T };
@@ -155,7 +155,7 @@ export function describeRelation(relation: Relation): string {
 function describeTable(table: Table): string {
   const parts = [plural(table.columns.length, 'column')];
   const indexes = table.indexes?.length ?? 0;
-  const keys = outgoingRelations(table).length;
+  const keys = outgoingRelations(table).filter((r) => !r.inferred).length;
   if (indexes) parts.push(plural(indexes, 'index', 'indexes'));
   if (keys) parts.push(plural(keys, 'foreign key'));
   return parts.join(' · ');

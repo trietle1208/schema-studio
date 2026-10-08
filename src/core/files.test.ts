@@ -20,6 +20,8 @@ describe('exportFileName', () => {
   it('names the schema, its version and the format', () => {
     expect(exportFileName('ecommerce', 12, 'sql')).toBe('ecommerce_v12.sql');
     expect(exportFileName('ecommerce', 12, 'json')).toBe('ecommerce_v12.json');
+    expect(exportFileName('ecommerce', 12, 'svg')).toBe('ecommerce_v12.svg');
+    expect(exportFileName('ecommerce', 12, 'png')).toBe('ecommerce_v12.png');
   });
 
   it('leaves the version out for a schema that is not saved', () => {

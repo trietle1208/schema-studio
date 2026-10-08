@@ -63,3 +63,345 @@ body {
 .ss-secret {
   -webkit-text-security: disc;
 }
+
+/*
+ * A foreign key that was inferred from the names of the columns is not in the database: its line
+ * is dashed, and its icon in the node is fainter than that of a declared one.
+ */
+.ss-edge-g.is-inferred .ss-edge {
+  stroke-dasharray: 5 4;
+}
+
+.ss-node-fk.is-inferred {
+  opacity: 0.55;
+}
+
+.ss-legend-edge {
+  overflow: visible;
+}
+
+.ss-legend-edge .ss-edge {
+  stroke-dasharray: 5 4;
+}
+
+/*
+ * A foreign key that is being drawn from the row of a column (see ERCanvas). Its line is dashed
+ * until the pointer is on a column it can end on. The row it starts from and the row it would end
+ * on are marked like a selected one, a row it cannot end on like an invalid one.
+ */
+.ss-canvas.is-linking,
+.ss-canvas.is-linking * {
+  cursor: crosshair;
+}
+
+.ss-canvas.is-linking.is-refused,
+.ss-canvas.is-linking.is-refused * {
+  cursor: not-allowed;
+}
+
+.ss-edge-g.is-open .ss-edge {
+  stroke-dasharray: 3 3;
+}
+
+.ss-node-row.is-link-end {
+  background: var(--accent-subtle);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.ss-node-row.is-link-refused {
+  background: var(--removed-subtle);
+}
+
+/*
+ * The frame that is dragged over the canvas with Shift held (see ERCanvas): the tables it touches
+ * are selected. It looks like the visible area in the minimap.
+ */
+.ss-canvas.is-framing,
+.ss-canvas.is-framing * {
+  cursor: crosshair;
+}
+
+.ss-canvas-frame {
+  position: absolute;
+  box-sizing: border-box;
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
+/*
+ * The minimap moves the view (see ERCanvas): a press on it puts the visible area there, and the
+ * visible area is dragged.
+ */
+.ss-minimap {
+  cursor: pointer;
+}
+
+.ss-minimap rect.vp {
+  cursor: grab;
+}
+
+.ss-minimap.is-dragging,
+.ss-minimap.is-dragging rect.vp {
+  cursor: grabbing;
+}
+
+/*
+ * The list of the Review inferred relationships dialog: one relationship a row, with its two
+ * buttons, or what was decided, at the end. It scrolls inside the dialog.
+ */
+.ss-review {
+  display: flex;
+  flex-direction: column;
+}
+
+.ss-review-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--line-1);
+}
+
+.ss-review-row:last-child {
+  border-bottom: 0;
+}
+
+.ss-review-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 12px/16px var(--font-mono);
+}
+
+.ss-review-row.is-decided .ss-review-name {
+  color: var(--ink-3);
+}
+
+/*
+ * The colours of the groups of tables (see core/groups). They are tokens of the app and not of the
+ * design system, whose tokens.css is generated from tokens.json. Each holds 4.5:1 on bg-1 to bg-3
+ * of its theme, and none is a hue that says something else on the canvas: the accent, a key, or
+ * a change.
+ */
+:root,
+[data-theme='dark'] {
+  --group-violet: #a78bfa;
+  --group-orange: #f0883e;
+  --group-cyan: #56c8e8;
+  --group-pink: #ec7fc0;
+  --group-lime: #a3c95a;
+  --group-brown: #c49a6c;
+  --group-gray: #9aa0ab;
+}
+
+[data-theme='light'] {
+  --group-violet: #6d4fd6;
+  --group-orange: #b45309;
+  --group-cyan: #0e7490;
+  --group-pink: #b83280;
+  --group-lime: #4d7c0f;
+  --group-brown: #8a5a2b;
+  --group-gray: #5b6370;
+}
+
+/* What is in a group, or shows one, has its colour as `--group`. */
+.ss-group--violet {
+  --group: var(--group-violet);
+}
+
+.ss-group--orange {
+  --group: var(--group-orange);
+}
+
+.ss-group--cyan {
+  --group: var(--group-cyan);
+}
+
+.ss-group--pink {
+  --group: var(--group-pink);
+}
+
+.ss-group--lime {
+  --group: var(--group-lime);
+}
+
+.ss-group--brown {
+  --group: var(--group-brown);
+}
+
+.ss-group--gray {
+  --group: var(--group-gray);
+}
+
+/* A table of a group: a bar of the colour along the top of its head, which is tinted with it. */
+.ss-node.has-group .ss-node-head {
+  background: color-mix(in srgb, var(--group) 10%, transparent);
+  box-shadow: inset 0 3px 0 var(--group);
+}
+
+.ss-minimap rect.n.has-group:not(.is-sel) {
+  fill: var(--group);
+  opacity: 0.7;
+}
+
+.ss-group-swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--group);
+}
+
+/*
+ * The groups of the tables on the canvas, over the legend: the colour, the label and how many
+ * tables of each are shown. A press on one selects its tables.
+ */
+.ss-legend-groups {
+  position: absolute;
+  left: 12px;
+  bottom: 48px;
+  display: flex;
+  flex-direction: column;
+  max-width: 240px;
+  max-height: 40%;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-1);
+  border-radius: var(--radius-md);
+  font: 400 11px/16px var(--font-mono);
+}
+
+.ss-legend-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ss-legend-group:hover {
+  background: var(--bg-4);
+  color: var(--ink-1);
+}
+
+.ss-legend-group.is-selected {
+  background: var(--bg-5);
+  color: var(--ink-1);
+}
+
+.ss-legend-group-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ss-legend-group-count {
+  color: var(--ink-3);
+}
+
+/*
+ * The Table groups dialog: a group or a suggestion a row, with the names of its tables under what
+ * it is called, and the colours of a group to pick from.
+ */
+.ss-groups-head {
+  padding: var(--space-3) var(--space-4) var(--space-1);
+}
+
+.ss-groups-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--line-1);
+}
+
+.ss-groups-row:last-child {
+  border-bottom: 0;
+}
+
+.ss-groups-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font: 500 12px/16px var(--font-mono);
+  color: var(--ink-1);
+}
+
+.ss-groups-tables {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 11px/16px var(--font-mono);
+  color: var(--ink-3);
+}
+
+.ss-groups-colors {
+  display: flex;
+  gap: 2px;
+}
+
+.ss-groups-color {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.ss-groups-color:hover {
+  background: var(--bg-4);
+}
+
+.ss-groups-color[aria-checked='true'] {
+  border-color: var(--line-3);
+  background: var(--bg-5);
+}
+
+.ss-groups-row .ss-field-error {
+  grid-column: 1 / -1;
+}
+
+/*
+ * The diagram in the Export Schema dialog: the picture as it will be exported, fitted into the
+ * preview. Where the picture is see-through a chequered board shows, in the theme of the picture.
+ */
+.ss-diagram-preview {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-1);
+  background-image: conic-gradient(var(--bg-4) 25%, transparent 0 50%, var(--bg-4) 0 75%, transparent 0);
+  background-size: 16px 16px;
+  overflow: hidden;
+}
+
+.ss-diagram-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+}

@@ -43,6 +43,9 @@ describe('exportVersion', () => {
       engine: 'PostgreSQL',
       version: 1,
       tables: v1.snapshot.tables,
+      // For the diagram as a picture: where the tables of that version were.
+      positions: v1.snapshot.positions,
+      groups: [],
       unsaved: false,
     });
   });

@@ -81,6 +81,14 @@ export function serialType(type: string): string | null {
   return null;
 }
 
+/**
+ * The type of a column that references a column of `type`: the same one, without the counting.
+ * `BIGSERIAL` is referenced by a `BIGINT`, `INT UNSIGNED AUTO_INCREMENT` by an `INT UNSIGNED`.
+ */
+export function referencingType(type: string): string {
+  return serialType(type) ?? type.replace(/\s*\bAUTO_INCREMENT\b/gi, '').trim();
+}
+
 const ALIASES: Record<string, string> = {
   INT: 'INTEGER',
   INT4: 'INTEGER',

@@ -1,13 +1,11 @@
 import type { ReactNode, Ref } from 'react';
-import { stepZoom } from '../core/layout';
+import { stepZoom, ZOOM_STEP } from '../core/layout';
 import { Badge } from './Badge';
 import { Button } from './Button';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Input } from './Input';
 import { Kbd } from './Kbd';
-
-const ZOOM_STEP = 0.1;
 
 export type SaveState = 'saved' | 'dirty' | 'saving';
 
@@ -76,6 +74,10 @@ export interface ToolbarProps {
   zoom?: number;
   onZoom?: (zoom: number) => void;
   onFit?: () => void;
+  /** Adds "Arrange tables" next to the zoom buttons. */
+  onArrange?: () => void;
+  /** Several tables are selected: the button arranges only them, and says so. */
+  arrangeSelected?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
   canUndo?: boolean;
@@ -102,6 +104,8 @@ export function Toolbar({
   zoom = 1,
   onZoom,
   onFit,
+  onArrange,
+  arrangeSelected,
   onUndo,
   onRedo,
   canUndo,
@@ -154,6 +158,9 @@ export function Toolbar({
         </button>
         <IconButton icon="zoom-in" label="Zoom in (⌘+)" onClick={() => onZoom?.(stepZoom(zoom, ZOOM_STEP))} />
         <IconButton icon="fit" label="Fit to screen (⇧1)" onClick={onFit} />
+        {onArrange && (
+          <IconButton icon="sparkle" label={`${arrangeSelected ? 'Arrange selected tables' : 'Arrange tables'} (⇧A)`} onClick={onArrange} />
+        )}
       </div>
       <span className="ss-tb-sep" />
       <div className="ss-tb-search">

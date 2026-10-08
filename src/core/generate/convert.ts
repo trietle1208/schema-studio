@@ -91,6 +91,7 @@ function mysqlInteger(type: string): string | null {
 /**
  * PostgreSQL lets an INTEGER reference a BIGINT; MySQL only takes a foreign key between two
  * integers of the same size and sign. The referencing column takes the type of the one it references.
+ * An inferred foreign key is not written, so it changes no type.
  */
 function alignForeignKeys(tables: readonly Table[]): Table[] {
   let aligned = [...tables];
@@ -101,7 +102,7 @@ function alignForeignKeys(tables: readonly Table[]): Table[] {
     aligned = aligned.map((table) => ({
       ...table,
       columns: table.columns.map((column) => {
-        const referenced = column.fk ? types.get(`${column.fk.table}.${column.fk.column}`) : null;
+        const referenced = column.fk && !column.fk.inferred ? types.get(`${column.fk.table}.${column.fk.column}`) : null;
         const own = mysqlInteger(column.type);
         if (!referenced || !own || own === referenced) return column;
         changed = true;

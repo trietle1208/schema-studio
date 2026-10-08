@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { ToastProps } from '../components/Toast';
 import { clampZoom } from '../core/layout';
-import type { Table } from '../core/model';
+import type { Positions, Table, TableGroup } from '../core/model';
 import { SCHEMAS_ROUTE, type Route } from '../core/routes';
 
 /** The schema an export writes out: the tables as they are at the moment the dialog opens. */
@@ -13,6 +13,9 @@ export interface ExportSource {
   /** The saved version the tables are from; null for a schema that has not been saved. */
   version: number | null;
   tables: Table[];
+  /** Where the tables are on the canvas and the groups they are in, for the diagram as a picture. */
+  positions: Positions;
+  groups: readonly TableGroup[];
   /** The tables have changes that `version` does not. */
   unsaved: boolean;
   /** Opens the dialog set to a migration from this version instead of the full DDL. */
@@ -26,6 +29,12 @@ export type Dialog =
   | { kind: 'import-schema' }
   | { kind: 'export'; schema: ExportSource }
   | { kind: 'settings' }
+  /** Adds a foreign key to `table`, on one of its columns or on a new one. */
+  | { kind: 'add-foreign-key'; table: string }
+  /** Lists the inferred foreign keys of the open schema, to be accepted or removed one by one. */
+  | { kind: 'review-inferred' }
+  /** Lists the groups of tables of the open schema and the ones the names of its tables point to. */
+  | { kind: 'table-groups' }
   /** `versions` is how many saved versions go with the schema. */
   | { kind: 'delete-schema'; id: number; name: string; versions: number }
   /** Asks before `version` of the open schema is made its current version again. */

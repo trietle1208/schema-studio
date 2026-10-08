@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ecommerceSnapshot, previousSnapshot, withColumn, withTable } from '../fixtures/testing';
+import { ecommerceSnapshot, inferredTables, previousSnapshot, withColumn, withTable } from '../fixtures/testing';
+import { declareReference, removeInferred } from '../relations';
 import type { Column, Table } from '../model';
 import { migratorFor } from './index';
 import { postgresMigrator } from './postgresMigration';
@@ -313,5 +314,21 @@ CREATE INDEX payments_paid_at_idx
   ON billing.payments (paid_at);`);
     const back = body(after, sample());
     expect(back.startsWith('ALTER TABLE billing.payments\n  SET SCHEMA public;\n\nDROP INDEX payments_paid_at_idx;')).toBe(true);
+  });
+});
+
+describe('inferred foreign keys', () => {
+  it('are no change to migrate', () => {
+    const inferred = inferredTables();
+    expect(migrate(removeInferred(inferred), inferred)).toMatchObject({ sql: '-- No changes.\n', statements: 0 });
+  });
+
+  it('are added by the migration that declares them', () => {
+    const inferred = inferredTables();
+    const declared = withTable(inferred, 'orders', (t) => ({ ...t, columns: t.columns.map(declareReference) }));
+    expect(body(inferred, declared)).toBe(`ALTER TABLE orders
+  ADD CONSTRAINT orders_user_id_fkey
+  FOREIGN KEY (user_id) REFERENCES users (id)
+  ON DELETE RESTRICT;`);
   });
 });

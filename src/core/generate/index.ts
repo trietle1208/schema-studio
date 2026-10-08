@@ -14,6 +14,7 @@ export {
   type SqlGenerator,
   type SqlMigrator,
 } from './options';
+export { tableScript } from './script';
 
 const GENERATORS: readonly SqlGenerator[] = [postgresGenerator, mysqlGenerator];
 

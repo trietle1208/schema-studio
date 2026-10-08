@@ -1,19 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { deleteTable, moveTable, updateTable } from './edit';
-import { ecommerceSnapshot, tableNamed } from './fixtures/testing';
+import { ecommerceSnapshot, inferredTables, tableNamed } from './fixtures/testing';
 import {
+  centreOn,
   clampZoom,
   computeEdges,
+  drawnEnds,
+  edgeEnds,
   edgePath,
   fitView,
   gridColumns,
   gridLayout,
   minimapLayout,
+  minimapPoint,
   newTablePosition,
   nodeHeight,
   nodeRects,
+  rectBetween,
   snap,
   stepZoom,
+  tablesInRect,
   viewRect,
   zoomAt,
 } from './layout';
@@ -126,6 +132,44 @@ describe('computeEdges', () => {
   });
 });
 
+describe('edgeEnds', () => {
+  it('is where the edge of the foreign key is drawn once it is there', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const edges = computeEdges(tables, positions);
+    // orders.user_id, row 1 of orders, references users.id, row 0 of users.
+    const { a, b } = edges.find((e) => e.id === 'orders:1')!;
+    expect(edgeEnds(positions.orders, 1, positions.users, 0)).toEqual({ a, b });
+    // payments is left of orders, which it references.
+    const payment = edges.find((e) => e.id === 'payments:1')!;
+    expect(edgeEnds(positions.payments, 1, positions.orders, 0)).toEqual({ a: payment.a, b: payment.b });
+  });
+});
+
+describe('drawnEnds', () => {
+  // orders is at (304, 24) and 228 wide; user_id is its row 1.
+  it('runs from the side of the table the pointer is past to the pointer', () => {
+    const { positions } = ecommerceSnapshot();
+    expect(drawnEnds(positions.orders, 1, { x: 700, y: 300 })).toEqual({
+      a: { x: 700, y: 300, side: -1 },
+      b: { x: 532, y: 94, side: 1 },
+    });
+    expect(drawnEnds(positions.orders, 1, { x: 120, y: 60 })).toEqual({
+      a: { x: 120, y: 60, side: 1 },
+      b: { x: 304, y: 94, side: -1 },
+    });
+  });
+
+  it('loops out of the right side to a pointer over or under the table, as the edge of tables that overlap does', () => {
+    const { positions } = ecommerceSnapshot();
+    expect(drawnEnds(positions.orders, 1, { x: 320, y: 400 })).toEqual({
+      a: { x: 320, y: 400, side: 1 },
+      b: { x: 532, y: 94, side: 1 },
+    });
+    expect(drawnEnds(positions.orders, 1, { x: 303, y: 400 }).b).toEqual({ x: 304, y: 94, side: -1 });
+    expect(drawnEnds(positions.orders, 1, { x: 532, y: 400 }).a.side).toBe(-1);
+  });
+});
+
 describe('edgePath', () => {
   it('is a cubic curve that leaves each node horizontally', () => {
     expect(edgePath({ x: 252, y: 94, side: 1 }, { x: 304, y: 94, side: -1 })).toBe('M252 94 C288 94 268 94 304 94');
@@ -195,6 +239,70 @@ describe('minimapLayout', () => {
     expect(minimapLayout(tables, {}, view, size)).toBeNull();
     expect(minimapLayout([], positions, view, size)).toBeNull();
   });
+
+  it('says where it draws the canvas', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const view = { x: 400, y: 200, w: 840, h: 600 };
+    const layout = minimapLayout(tables, positions, view, size)!;
+    for (const n of layout.nodes) {
+      const p = positions[n.name];
+      expect(minimapPoint(layout, n).x).toBeCloseTo(p.x);
+      expect(minimapPoint(layout, n).y).toBeCloseTo(p.y);
+    }
+    expect(minimapPoint(layout, layout.viewport).x).toBeCloseTo(400);
+    expect(minimapPoint(layout, layout.viewport).y).toBeCloseTo(200);
+    // The padding is canvas too: its corner is left of and above everything that is drawn.
+    expect(minimapPoint(layout, { x: 0, y: 0 }).x).toBeCloseTo(Math.min(...Object.values(positions).map((p) => p.x)) - 8 / layout.scale);
+  });
+
+  it('holds the picture still while the visible area moves over it', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const before = minimapLayout(tables, positions, { x: 0, y: 0, w: 840, h: 600 }, size)!;
+    const moved = minimapLayout(tables, positions, { x: 3000, y: -900, w: 840, h: 600 }, size, before)!;
+
+    expect(moved.scale).toBe(before.scale);
+    expect(moved.origin).toEqual(before.origin);
+    expect(moved.nodes).toEqual(before.nodes);
+    // The visible area goes where it is, off the minimap here, at the size it had.
+    expect(moved.viewport.x).toBeCloseTo(before.viewport.x + 3000 * before.scale);
+    expect(moved.viewport.y).toBeCloseTo(before.viewport.y - 900 * before.scale);
+    expect(moved.viewport.w).toBeCloseTo(before.viewport.w);
+    expect(moved.viewport.x).toBeGreaterThan(size.w);
+  });
+});
+
+describe('centreOn', () => {
+  const view = { w: 840, h: 600 };
+  const minimap = { w: 168, h: 108 };
+
+  it('puts a canvas point in the middle of the view at any zoom', () => {
+    for (const zoom of [0.5, 1, 1.5]) {
+      const point = { x: 692, y: 344 };
+      const rect = viewRect(centreOn(point, zoom, view), zoom, view);
+      expect(rect.x + rect.w / 2).toBeCloseTo(point.x, 0);
+      expect(rect.y + rect.h / 2).toBeCloseTo(point.y, 0);
+    }
+    expect(centreOn({ x: 0, y: 0 }, 1, view)).toEqual({ x: 420, y: 300 });
+    expect(centreOn({ x: 100.3, y: 0 }, 0.5, view)).toEqual({ x: 370, y: 300 });
+  });
+
+  it('moves the visible area of the minimap to the point that was pressed', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const zoom = 2;
+    const start = { x: 0, y: 0 };
+    const layout = minimapLayout(tables, positions, viewRect(start, zoom, view), minimap)!;
+    // A press on the middle of the last table, which is under the view at this zoom.
+    const node = layout.nodes[layout.nodes.length - 1];
+    const press = { x: node.x + node.w / 2, y: node.y + node.h / 2 };
+    expect(tablesInRect(tables, positions, viewRect(start, zoom, view))).not.toContain(node.name);
+    const offset = centreOn(minimapPoint(layout, press), zoom, view);
+
+    expect(tablesInRect(tables, positions, viewRect(offset, zoom, view))).toContain(node.name);
+    const after = minimapLayout(tables, positions, viewRect(offset, zoom, view), minimap, layout)!;
+    expect(after.viewport.x + after.viewport.w / 2).toBeCloseTo(press.x, 0);
+    expect(after.viewport.y + after.viewport.h / 2).toBeCloseTo(press.y, 0);
+    expect(after.viewport.w).toBeCloseTo(layout.viewport.w);
+  });
 });
 
 describe('stepZoom', () => {
@@ -222,6 +330,34 @@ describe('nodeRects', () => {
       { name: 'users', x: 24, y: 48, w: 228, h: 159 },
       { name: 'products', x: positions.products.x, y: positions.products.y, w: 228, h: 135 },
     ]);
+  });
+});
+
+describe('rectBetween and tablesInRect', () => {
+  it('makes the same rectangle whichever corner the drag began at', () => {
+    const rect = { x: 40, y: 16, w: 200, h: 120 };
+    expect(rectBetween({ x: 40, y: 16 }, { x: 240, y: 136 })).toEqual(rect);
+    expect(rectBetween({ x: 240, y: 16 }, { x: 40, y: 136 })).toEqual(rect);
+    expect(rectBetween({ x: 240, y: 136 }, { x: 40, y: 16 })).toEqual(rect);
+  });
+
+  it('finds the tables a frame covers any part of, in the order of the schema', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    // users is at 24,48 and 228 by 159; orders at 304,24; payments at 24,336.
+    expect(tablesInRect(tables, positions, { x: 200, y: 0, w: 150, h: 60 })).toEqual(['users', 'orders']);
+    expect(tablesInRect(tables, positions, { x: 0, y: 150, w: 100, h: 250 })).toEqual(['users', 'payments']);
+    expect(tablesInRect(tables, positions, { x: 0, y: 0, w: 2000, h: 2000 })).toEqual(tables.map((t) => t.name));
+  });
+
+  it('finds none in the gap between tables, and none that has no position', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    expect(tablesInRect(tables, positions, { x: 256, y: 0, w: 40, h: 600 })).toEqual([]);
+    expect(tablesInRect(tables, { orders: positions.orders }, { x: 0, y: 0, w: 2000, h: 2000 })).toEqual(['orders']);
+  });
+
+  it('counts a click without a drag as a frame on the table under it', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    expect(tablesInRect(tables, positions, rectBetween({ x: 100, y: 100 }, { x: 100, y: 100 }))).toEqual(['users']);
   });
 });
 
@@ -355,5 +491,15 @@ describe('gridLayout', () => {
 describe('gridColumns', () => {
   it('makes the grid wider than it is tall', () => {
     expect([0, 1, 2, 5, 6, 24, 100].map(gridColumns)).toEqual([1, 2, 2, 3, 3, 6, 13]);
+  });
+});
+
+describe('inferred foreign keys', () => {
+  it('get the edge a declared one gets, marked so that it is drawn dashed', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const declared = computeEdges(tables, positions);
+    const inferred = computeEdges(inferredTables(), positions);
+    expect(inferred).toEqual(declared.map((edge) => ({ ...edge, inferred: true })));
+    expect(declared.every((edge) => !('inferred' in edge))).toBe(true);
   });
 });

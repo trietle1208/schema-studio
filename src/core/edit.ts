@@ -1,10 +1,21 @@
-import type { Column, Position, SchemaSnapshot, Table } from './model';
+import { copyMember, renameMember } from './groups';
+import type { Column, Position, Positions, SchemaSnapshot, Table, TableGroup } from './model';
 import { positionOf } from './positions';
 
 // Every edit returns a new snapshot and leaves the input untouched. Tables that an edit does not
 // change keep their identity, and an edit that cannot apply returns the snapshot it was given.
 
 const DUPLICATE_OFFSET = 32;
+
+/** A snapshot of `tables` and `positions` with the groups of `snapshot`, or with `groups` in their place. One that has no groups gets none. */
+function edited(
+  snapshot: SchemaSnapshot,
+  tables: Table[],
+  positions: Positions,
+  groups: readonly TableGroup[] | undefined = snapshot.groups,
+): SchemaSnapshot {
+  return groups ? { tables, positions, groups } : { tables, positions };
+}
 
 function mapColumns(table: Table, edit: (column: Column) => Column): Table {
   let changed = false;
@@ -22,10 +33,10 @@ export function updateTable(snapshot: SchemaSnapshot, name: string, table: Table
   if (index < 0 || table.name !== name || snapshot.tables[index] === table) return snapshot;
   const tables = snapshot.tables.slice();
   tables[index] = table;
-  return { tables, positions: snapshot.positions };
+  return edited(snapshot, tables, snapshot.positions);
 }
 
-/** Renames a table and repoints every foreign key that references it. */
+/** Renames a table and repoints every foreign key that references it. It stays in its group. */
 export function renameTable(snapshot: SchemaSnapshot, from: string, to: string): SchemaSnapshot {
   if (from === to) return snapshot;
   if (!snapshot.tables.some((t) => t.name === from) || snapshot.tables.some((t) => t.name === to)) return snapshot;
@@ -34,7 +45,7 @@ export function renameTable(snapshot: SchemaSnapshot, from: string, to: string):
     return mapColumns(renamed, (c) => (c.fk?.table === from ? { ...c, fk: { ...c.fk, table: to } } : c));
   });
   const positions = Object.fromEntries(Object.entries(snapshot.positions).map(([key, p]) => [key === from ? to : key, p]));
-  return { tables, positions };
+  return edited(snapshot, tables, positions, snapshot.groups && renameMember(snapshot.groups, from, to));
 }
 
 /** The name a copy of `name` gets: `orders_copy`, then `orders_copy2`, `orders_copy3`… */
@@ -45,7 +56,7 @@ export function copyName(tables: readonly Table[], name: string): string {
   return candidate;
 }
 
-/** Appends a copy of a table, without its foreign keys and indexes, placed just off the original. */
+/** Appends a copy of a table, without its foreign keys and indexes, placed just off the original and in its group. */
 export function duplicateTable(
   snapshot: SchemaSnapshot,
   name: string,
@@ -60,10 +71,12 @@ export function duplicateTable(
     indexes: [],
   };
   const origin = positionOf(snapshot.positions, name) ?? { x: 0, y: 0 };
-  return {
-    tables: [...snapshot.tables, copy],
-    positions: { ...snapshot.positions, [newName]: { x: origin.x + DUPLICATE_OFFSET, y: origin.y + DUPLICATE_OFFSET } },
-  };
+  return edited(
+    snapshot,
+    [...snapshot.tables, copy],
+    { ...snapshot.positions, [newName]: { x: origin.x + DUPLICATE_OFFSET, y: origin.y + DUPLICATE_OFFSET } },
+    snapshot.groups && copyMember(snapshot.groups, name, newName),
+  );
 }
 
 /** The name a new table gets: `new_table`, then `new_table2`, `new_table3`… */
@@ -82,13 +95,10 @@ export function newTable(name: string): Table {
 /** Appends `table`, placed at `position` on the canvas. */
 export function addTable(snapshot: SchemaSnapshot, table: Table, position: Position): SchemaSnapshot {
   if (snapshot.tables.some((t) => t.name === table.name)) return snapshot;
-  return {
-    tables: [...snapshot.tables, table],
-    positions: { ...snapshot.positions, [table.name]: { x: position.x, y: position.y } },
-  };
+  return edited(snapshot, [...snapshot.tables, table], { ...snapshot.positions, [table.name]: { x: position.x, y: position.y } });
 }
 
-/** Removes a table and drops every foreign key that references it. */
+/** Removes a table, from its group too, and drops every foreign key that references it. */
 export function deleteTable(snapshot: SchemaSnapshot, name: string): SchemaSnapshot {
   if (!snapshot.tables.some((t) => t.name === name)) return snapshot;
   const tables = snapshot.tables
@@ -96,13 +106,22 @@ export function deleteTable(snapshot: SchemaSnapshot, name: string): SchemaSnaps
     .map((t) => mapColumns(t, (c) => (c.fk?.table === name ? { ...c, fk: null } : c)));
   const positions = { ...snapshot.positions };
   delete positions[name];
-  return { tables, positions };
+  return edited(snapshot, tables, positions, snapshot.groups && renameMember(snapshot.groups, name, null));
 }
 
 /** Places a table at `position` on the canvas. */
 export function moveTable(snapshot: SchemaSnapshot, name: string, position: Position): SchemaSnapshot {
-  if (!snapshot.tables.some((t) => t.name === name)) return snapshot;
-  const current = positionOf(snapshot.positions, name);
-  if (current && current.x === position.x && current.y === position.y) return snapshot;
-  return { tables: snapshot.tables, positions: { ...snapshot.positions, [name]: { x: position.x, y: position.y } } };
+  return moveTables(snapshot, { [name]: position });
+}
+
+/** Places each table named in `moves` at its position there, as when several are dragged together. */
+export function moveTables(snapshot: SchemaSnapshot, moves: Positions): SchemaSnapshot {
+  const known = new Set(snapshot.tables.map((t) => t.name));
+  const moved = Object.entries(moves).filter(([name, to]) => {
+    const from = positionOf(snapshot.positions, name);
+    return known.has(name) && (!from || from.x !== to.x || from.y !== to.y);
+  });
+  if (!moved.length) return snapshot;
+  const placed = Object.fromEntries(moved.map(([name, to]) => [name, { x: to.x, y: to.y }]));
+  return edited(snapshot, snapshot.tables, { ...snapshot.positions, ...placed });
 }

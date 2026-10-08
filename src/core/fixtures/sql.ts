@@ -317,3 +317,171 @@ ALTER TABLE \`orders\`
   ADD CONSTRAINT \`orders_user_id_fk\` FOREIGN KEY (\`user_id\`) REFERENCES \`users\` (\`id\`) ON DELETE CASCADE;
 COMMIT;
 `;
+
+/**
+ * A blog the way \`mysqldump --no-data\` writes a database that declares no foreign keys: MyISAM-era
+ * tables with a common prefix, keys called after their table, and \`ID\` in capitals.
+ */
+export const blogMysqlDump = `-- MySQL dump 10.13  Distrib 8.0.36, for Linux (x86_64)
+--
+-- Host: localhost    Database: blog
+-- ------------------------------------------------------
+
+DROP TABLE IF EXISTS \`wp_users\`;
+CREATE TABLE \`wp_users\` (
+  \`ID\` bigint unsigned NOT NULL AUTO_INCREMENT,
+  \`user_login\` varchar(60) NOT NULL DEFAULT '',
+  \`user_email\` varchar(100) NOT NULL DEFAULT '',
+  \`user_registered\` datetime NOT NULL DEFAULT '1970-01-01 00:00:00',
+  PRIMARY KEY (\`ID\`),
+  KEY \`user_login_key\` (\`user_login\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS \`wp_usermeta\`;
+CREATE TABLE \`wp_usermeta\` (
+  \`umeta_id\` bigint unsigned NOT NULL AUTO_INCREMENT,
+  \`user_id\` bigint unsigned NOT NULL DEFAULT '0',
+  \`meta_key\` varchar(255) DEFAULT NULL,
+  \`meta_value\` longtext,
+  PRIMARY KEY (\`umeta_id\`),
+  KEY \`user_id\` (\`user_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS \`wp_posts\`;
+CREATE TABLE \`wp_posts\` (
+  \`ID\` bigint unsigned NOT NULL AUTO_INCREMENT,
+  \`post_author\` bigint unsigned NOT NULL DEFAULT '0',
+  \`post_date\` datetime NOT NULL DEFAULT '1970-01-01 00:00:00',
+  \`post_title\` text NOT NULL,
+  \`post_status\` varchar(20) NOT NULL DEFAULT 'publish',
+  \`post_parent\` bigint unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (\`ID\`),
+  KEY \`post_author\` (\`post_author\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS \`wp_postmeta\`;
+CREATE TABLE \`wp_postmeta\` (
+  \`meta_id\` bigint unsigned NOT NULL AUTO_INCREMENT,
+  \`post_id\` bigint unsigned NOT NULL DEFAULT '0',
+  \`meta_key\` varchar(255) DEFAULT NULL,
+  \`meta_value\` longtext,
+  PRIMARY KEY (\`meta_id\`),
+  KEY \`post_id\` (\`post_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS \`wp_comments\`;
+CREATE TABLE \`wp_comments\` (
+  \`comment_ID\` bigint unsigned NOT NULL AUTO_INCREMENT,
+  \`comment_post_ID\` bigint unsigned NOT NULL DEFAULT '0',
+  \`comment_author\` tinytext NOT NULL,
+  \`comment_content\` text NOT NULL,
+  \`comment_parent\` bigint unsigned NOT NULL DEFAULT '0',
+  \`user_id\` bigint unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (\`comment_ID\`),
+  KEY \`comment_post_ID\` (\`comment_post_ID\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS \`wp_terms\`;
+CREATE TABLE \`wp_terms\` (
+  \`term_id\` bigint unsigned NOT NULL AUTO_INCREMENT,
+  \`name\` varchar(200) NOT NULL DEFAULT '',
+  \`slug\` varchar(200) NOT NULL DEFAULT '',
+  PRIMARY KEY (\`term_id\`),
+  KEY \`slug\` (\`slug\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS \`wp_term_taxonomy\`;
+CREATE TABLE \`wp_term_taxonomy\` (
+  \`term_taxonomy_id\` bigint unsigned NOT NULL AUTO_INCREMENT,
+  \`term_id\` bigint unsigned NOT NULL DEFAULT '0',
+  \`taxonomy\` varchar(32) NOT NULL DEFAULT '',
+  \`parent\` bigint unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (\`term_taxonomy_id\`),
+  UNIQUE KEY \`term_id_taxonomy\` (\`term_id\`,\`taxonomy\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS \`wp_term_relationships\`;
+CREATE TABLE \`wp_term_relationships\` (
+  \`object_id\` bigint unsigned NOT NULL DEFAULT '0',
+  \`term_taxonomy_id\` bigint unsigned NOT NULL DEFAULT '0',
+  \`term_order\` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (\`object_id\`,\`term_taxonomy_id\`),
+  KEY \`term_taxonomy_id\` (\`term_taxonomy_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`;
+
+/**
+ * A shop the way a Vietnamese team may name it, as \`mysqldump --no-data\` writes it, with no foreign
+ * keys: the word for a key goes first (\`ma_don_hang\`, the order's id), a table is also known by a
+ * code next to its numeric \`id\` (\`ma_khach_hang\`), and a table of categories is called after the
+ * table it belongs to.
+ */
+export const shopVietnameseDump = `-- MySQL dump 10.13  Distrib 8.0.36, for Linux (x86_64)
+--
+-- Host: localhost    Database: cua_hang
+-- ------------------------------------------------------
+
+DROP TABLE IF EXISTS \`tb_khach_hang\`;
+CREATE TABLE \`tb_khach_hang\` (
+  \`id\` int(11) NOT NULL AUTO_INCREMENT,
+  \`ma_khach_hang\` char(20) DEFAULT NULL,
+  \`ho_ten\` varchar(255) DEFAULT NULL,
+  \`dien_thoai\` char(20) DEFAULT NULL,
+  PRIMARY KEY (\`id\`),
+  KEY \`ma_khach_hang\` (\`ma_khach_hang\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS \`tb_san_pham_danh_muc\`;
+CREATE TABLE \`tb_san_pham_danh_muc\` (
+  \`id\` int(11) NOT NULL AUTO_INCREMENT,
+  \`tieu_de\` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS \`tb_san_pham\`;
+CREATE TABLE \`tb_san_pham\` (
+  \`id\` int(11) NOT NULL AUTO_INCREMENT,
+  \`danh_muc_id\` int(11) DEFAULT NULL,
+  \`ma_san_pham\` char(20) NOT NULL,
+  \`ten_san_pham\` varchar(255) DEFAULT NULL,
+  \`don_gia\` decimal(12,2) DEFAULT NULL,
+  PRIMARY KEY (\`id\`),
+  UNIQUE KEY \`ma_san_pham\` (\`ma_san_pham\`),
+  KEY \`danh_muc_id\` (\`danh_muc_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS \`tb_don_hang\`;
+CREATE TABLE \`tb_don_hang\` (
+  \`id\` int(11) NOT NULL AUTO_INCREMENT,
+  \`ma_so\` char(20) DEFAULT NULL,
+  \`ma_khach_hang\` char(20) DEFAULT NULL,
+  \`ten_khach_hang\` varchar(255) DEFAULT NULL,
+  \`ma_nhan_vien\` char(20) DEFAULT NULL,
+  \`trang_thai\` int(11) DEFAULT NULL,
+  \`ngay_tao\` datetime DEFAULT NULL,
+  PRIMARY KEY (\`id\`),
+  KEY \`ma_khach_hang\` (\`ma_khach_hang\`),
+  KEY \`ma_nhan_vien\` (\`ma_nhan_vien\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS \`tb_don_hang_chi_tiet\`;
+CREATE TABLE \`tb_don_hang_chi_tiet\` (
+  \`id\` int(11) NOT NULL AUTO_INCREMENT,
+  \`ma_don_hang\` int(11) DEFAULT NULL,
+  \`ma_san_pham\` char(20) DEFAULT NULL,
+  \`so_luong\` int(11) DEFAULT NULL,
+  \`don_gia\` decimal(12,2) DEFAULT NULL,
+  PRIMARY KEY (\`id\`),
+  KEY \`ma_don_hang\` (\`ma_don_hang\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+DROP TABLE IF EXISTS \`tb_don_hang_lich_su\`;
+CREATE TABLE \`tb_don_hang_lich_su\` (
+  \`id\` int(11) NOT NULL AUTO_INCREMENT,
+  \`ma_don_hang\` int(11) DEFAULT NULL,
+  \`noi_dung\` varchar(500) DEFAULT NULL,
+  \`ngay_tao\` datetime DEFAULT NULL,
+  PRIMARY KEY (\`id\`),
+  KEY \`ma_don_hang\` (\`ma_don_hang\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+`;

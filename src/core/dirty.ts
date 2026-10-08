@@ -1,3 +1,4 @@
+import { groupOf, groupsOf, sameGroups } from './groups';
 import type { Position, SchemaSnapshot } from './model';
 import { positionOf } from './positions';
 
@@ -9,24 +10,37 @@ function moved(current: SchemaSnapshot, saved: SchemaSnapshot, name: string): bo
   return !samePosition(positionOf(current.positions, name), positionOf(saved.positions, name));
 }
 
+/** Whether a table is in another group than it was, or in one that has another name or colour. */
+function regrouped(current: SchemaSnapshot, saved: SchemaSnapshot, name: string): boolean {
+  const now = groupOf(groupsOf(current), name);
+  const before = groupOf(groupsOf(saved), name);
+  return now?.name !== before?.name || now?.color !== before?.color;
+}
+
+/** Whether the two snapshots have their tables, positions and groups in common, as they do when nothing was edited. */
+function identical(current: SchemaSnapshot, saved: SchemaSnapshot): boolean {
+  return current.tables === saved.tables && current.positions === saved.positions && groupsOf(current) === groupsOf(saved);
+}
+
 /**
- * Names of the tables in `current` that differ from `saved`: new, edited or moved.
+ * Names of the tables in `current` that differ from `saved`: new, edited, moved or put in another group.
  * Tables are compared by identity, so undoing back to the saved snapshot reads as clean.
  */
 export function dirtyTables(current: SchemaSnapshot, saved: SchemaSnapshot): string[] {
-  if (current.tables === saved.tables && current.positions === saved.positions) return [];
+  if (identical(current, saved)) return [];
   const before = new Map(saved.tables.map((t) => [t.name, t]));
   return current.tables
-    .filter((t) => before.get(t.name) !== t || moved(current, saved, t.name))
+    .filter((t) => before.get(t.name) !== t || moved(current, saved, t.name) || regrouped(current, saved, t.name))
     .map((t) => t.name);
 }
 
-/** Whether `current` has changes that `saved` does not, including deleted tables. */
+/** Whether `current` has changes that `saved` does not, including deleted tables and changed groups. */
 export function isDirty(current: SchemaSnapshot, saved: SchemaSnapshot): boolean {
-  if (current.tables === saved.tables && current.positions === saved.positions) return false;
+  if (identical(current, saved)) return false;
   return (
     current.tables.length !== saved.tables.length ||
     current.tables.some((t, i) => saved.tables[i] !== t) ||
-    current.tables.some((t) => moved(current, saved, t.name))
+    current.tables.some((t) => moved(current, saved, t.name)) ||
+    !sameGroups(groupsOf(current), groupsOf(saved))
   );
 }

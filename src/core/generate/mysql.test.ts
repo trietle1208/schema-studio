@@ -3,6 +3,8 @@ import { ecommerceTables } from '../fixtures/ecommerce';
 import { ecommerceMysqlDump, ecommercePhpMyAdmin } from '../fixtures/sql';
 import type { Table } from '../model';
 import { mysqlParser } from '../parse/mysql';
+import { addInferred } from '../infer';
+import { declareInferred, removeInferred } from '../relations';
 import { EXPORT_ENGINES, generatorFor, type GenerateOptions } from './index';
 import { mysqlGenerator, quoteName, quoteText } from './mysql';
 import { postgresGenerator } from './postgres';
@@ -236,5 +238,22 @@ describe('generatorFor', () => {
     expect(generatorFor('PostgreSQL')).toBe(postgresGenerator);
     expect(generatorFor('SQLite')).toBeNull();
     expect(EXPORT_ENGINES).toEqual(['PostgreSQL', 'MySQL']);
+  });
+});
+
+describe('inferred foreign keys', () => {
+  /** The shop as a MySQL database that declares no foreign keys has it. */
+  const undeclared = () => shop().map((t) => ({ ...t, columns: t.columns.map((c) => ({ ...c, fk: null })) }));
+
+  it('are left out of the script', () => {
+    const inferred = addInferred(undeclared());
+    expect(generate(inferred)).not.toContain('FOREIGN KEY');
+    expect(generate(inferred)).toBe(generate(removeInferred(inferred)));
+  });
+
+  it('are written once they are declared', () => {
+    const sql = generate(declareInferred(addInferred(undeclared())));
+    expect(sql.match(/FOREIGN KEY/g)).toHaveLength(4);
+    expect(sql).toContain('FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)\n  ON DELETE RESTRICT;');
   });
 });

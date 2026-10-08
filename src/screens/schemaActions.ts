@@ -1,5 +1,5 @@
 import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
-import { gridLayout } from '../core/layout';
+import { arrangeTables } from '../core/arrange';
 import type { SchemaSnapshot, Table } from '../core/model';
 import { plural } from '../core/plural';
 import { SCHEMAS_ROUTE } from '../core/routes';
@@ -71,13 +71,13 @@ export interface ImportInput extends NewSchema {
 }
 
 /**
- * The confirmed Import Schema dialog: lays the tables out in a grid, stores them as v1 of a new
- * schema and opens it in the workspace, fitted to the screen. Resolves with whether it did; a
- * failure is reported in a toast and leaves the dialog open.
+ * The confirmed Import Schema dialog: arranges the tables by their relationships (a grid when
+ * there are none), stores them as v1 of a new schema and opens it in the workspace, fitted to the
+ * screen. Resolves with whether it did; a failure is reported in a toast and leaves the dialog open.
  */
 export async function importSchema({ tables, file, database, ...schema }: ImportInput): Promise<boolean> {
   const ui = useUiStore.getState();
-  const snapshot: SchemaSnapshot = { tables, positions: gridLayout(tables) };
+  const snapshot: SchemaSnapshot = { tables, positions: arrangeTables(tables) };
   const message = file ? `Imported from ${file}` : database ? `Imported from database ${database}` : 'Imported from pasted SQL';
   if (!(await createAndOpen(schema, snapshot, message, 'Could not import schema'))) return false;
   ui.setFitPending(true);

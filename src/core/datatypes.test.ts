@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchTypes, MYSQL_TYPES, normalizeType, POSTGRES_TYPES, serialType, typeEngine, typesFor, widensMysqlType, widensType } from './datatypes';
+import { matchTypes, MYSQL_TYPES, normalizeType, POSTGRES_TYPES, referencingType, serialType, typeEngine, typesFor, widensMysqlType, widensType } from './datatypes';
 
 const names = (query: string) => matchTypes(query).map((t) => t.name);
 
@@ -78,6 +78,21 @@ describe('serialType', () => {
     expect(serialType('serial')).toBe('INTEGER');
     expect(serialType('SMALLSERIAL')).toBe('SMALLINT');
     expect(serialType('BIGINT')).toBeNull();
+  });
+});
+
+describe('referencingType', () => {
+  it('is the type without the counting, which only the referenced column does', () => {
+    expect(referencingType('BIGSERIAL')).toBe('BIGINT');
+    expect(referencingType('SERIAL')).toBe('INTEGER');
+    expect(referencingType('BIGINT UNSIGNED AUTO_INCREMENT')).toBe('BIGINT UNSIGNED');
+    expect(referencingType('INT(11) AUTO_INCREMENT')).toBe('INT(11)');
+  });
+
+  it('is the type itself for one that does not count', () => {
+    expect(referencingType('UUID')).toBe('UUID');
+    expect(referencingType('VARCHAR(32)')).toBe('VARCHAR(32)');
+    expect(referencingType('BIGINT UNSIGNED')).toBe('BIGINT UNSIGNED');
   });
 });
 

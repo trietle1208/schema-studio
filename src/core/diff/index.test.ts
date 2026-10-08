@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ecommerceSnapshot, previousSnapshot, tableNamed, withColumn, withTable } from '../fixtures/testing';
+import { ecommerceSnapshot, inferredTables, previousSnapshot, tableNamed, withColumn, withTable } from '../fixtures/testing';
+import { declareInferred, removeInferred } from '../relations';
 import type { DiffItem, Table } from '../model';
 import { countChanges, describeColumn, diffGroups, diffSchemas, totalChanges } from './index';
 
@@ -190,5 +191,28 @@ describe('describeColumn', () => {
       'TEXT NULL',
       'TIMESTAMP NOT NULL DEFAULT now()',
     ]);
+  });
+});
+
+describe('inferred foreign keys', () => {
+  it('are not a change: the database is the same with and without them', () => {
+    const inferred = inferredTables();
+    const changes = diffSchemas(removeInferred(inferred), inferred);
+    expect(totalChanges(countChanges(changes))).toBe(0);
+  });
+
+  it('are added relationships once they are declared', () => {
+    const inferred = inferredTables();
+    expect(rows(group(inferred, declareInferred(inferred), 'Relationships'))).toEqual([
+      ['add', 'orders.user_id → users.id', 'ON DELETE RESTRICT'],
+      ['add', 'order_items.order_id → orders.id', 'ON DELETE RESTRICT'],
+      ['add', 'order_items.product_id → products.id', 'ON DELETE RESTRICT'],
+      ['add', 'payments.order_id → orders.id', 'ON DELETE RESTRICT'],
+    ]);
+  });
+
+  it('do not count among the foreign keys of an added table', () => {
+    const payments = inferredTables().filter((t) => t.name === 'payments');
+    expect(rows(group([], payments, 'Tables'))).toEqual([['add', 'payments', '5 columns · 1 index']]);
   });
 });

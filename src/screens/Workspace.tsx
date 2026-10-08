@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { Button } from '../components/Button';
 import { ERCanvas, type ERCanvasActions } from '../components/ERCanvas';
 import { Inspector } from '../components/Inspector';
 import { StatusBar } from '../components/StatusBar';
 import { Toolbar } from '../components/Toolbar';
 import { newTablePosition } from '../core/layout';
-import { countRelations } from '../core/relations';
+import { plural } from '../core/plural';
+import { countInferred, countRelations, relatedTables } from '../core/relations';
 import { SCHEMAS_ROUTE } from '../core/routes';
 import { searchTables } from '../core/search';
 import { findProblems } from '../core/validate';
@@ -14,6 +16,7 @@ import {
   redo,
   selectDirty,
   selectDirtyTables,
+  selectFocused,
   selectTable,
   undo,
   useCanRedo,
@@ -24,7 +27,24 @@ import { useUiStore } from '../store/ui';
 import { requestExport } from './exportActions';
 import { useWorkspaceShortcuts } from './useWorkspaceShortcuts';
 import { go } from './navigation';
-import { newTable, requestDeleteTable, saveSchema } from './workspaceActions';
+import {
+  arrangeTables,
+  copyCreateTable,
+  drawForeignKey,
+  focusRelatedTables,
+  groupTables,
+  groupTablesAsNew,
+  inferRelationships,
+  newTable,
+  removeInferredRelationships,
+  requestAddForeignKey,
+  requestDeleteTable,
+  requestReviewInferred,
+  requestTableGroups,
+  saveSchema,
+  searchFor,
+  showAllTables,
+} from './workspaceActions';
 
 export function Workspace() {
   const name = useSchemaStore((s) => s.name);
@@ -34,24 +54,28 @@ export function Workspace() {
   const saving = useSchemaStore((s) => s.saving);
   const tables = useSchemaStore((s) => s.tables);
   const positions = useSchemaStore((s) => s.positions);
+  const groups = useSchemaStore((s) => s.groups);
   const selected = useSchemaStore((s) => s.selected);
+  const selection = useSchemaStore((s) => s.selection);
   const selectedColumn = useSchemaStore((s) => s.selectedColumn);
+  const focused = useSchemaStore(selectFocused);
   const table = useSchemaStore(selectTable);
   const dirty = useSchemaStore(selectDirty);
   const dirtyTables = useSchemaStore(useShallow(selectDirtyTables));
   const select = useSchemaStore((s) => s.select);
+  const selectTables = useSchemaStore((s) => s.selectTables);
   const selectColumn = useSchemaStore((s) => s.selectColumn);
-  const moveTable = useSchemaStore((s) => s.moveTable);
+  const moveTables = useSchemaStore((s) => s.moveTables);
   const endMove = useSchemaStore((s) => s.endMove);
   const updateTable = useSchemaStore((s) => s.updateTable);
   const renameTable = useSchemaStore((s) => s.renameTable);
   const duplicateTable = useSchemaStore((s) => s.duplicateTable);
+  const addColumn = useSchemaStore((s) => s.addColumn);
   const canUndo = useCanUndo();
   const canRedo = useCanRedo();
   const zoom = useUiStore((s) => s.zoom);
   const setZoom = useUiStore((s) => s.setZoom);
   const search = useUiStore((s) => s.search);
-  const setSearch = useUiStore((s) => s.setSearch);
   const renameSignal = useUiStore((s) => s.renameSignal);
   const requestRename = useUiStore((s) => s.requestRename);
   const fitPending = useUiStore((s) => s.fitPending);
@@ -68,8 +92,10 @@ export function Workspace() {
     setFitPending(false);
   }, [fitPending, setFitPending]);
 
-  const visible = useMemo(() => searchTables(tables, search), [tables, search]);
-  // A selected table that the search hides stays in the inspector, but the canvas has nothing to highlight.
+  // A focus leaves the table it is on and the tables related to it; the search then looks through what is left.
+  const inFocus = useMemo(() => (focused === null ? tables : relatedTables(tables, focused)), [tables, focused]);
+  const visible = useMemo(() => searchTables(inFocus, search), [inFocus, search]);
+  // A selected table that the search or the focus hides stays in the inspector, but the canvas has nothing to highlight.
   const selectedInView = selected !== null && visible.some((t) => t.name === selected) ? selected : null;
   const problems = useMemo(() => findProblems(tables), [tables]);
   const invalidColumns = useMemo(
@@ -77,14 +103,15 @@ export function Workspace() {
     [problems, selected],
   );
   const relationships = useMemo(() => countRelations(tables), [tables]);
+  const inferred = useMemo(() => countInferred(tables), [tables]);
 
   // A schema that is not stored yet is unsaved even with no edits.
   const saveState = saving ? 'saving' : dirty || !stored ? 'dirty' : 'saved';
 
   const column = table && selectedColumn !== null ? table.columns[selectedColumn] : undefined;
-  const selection = table
-    ? `${table.schema || 'public'}.${table.name}${column ? `.${column.name || '?'}` : ''}`
-    : 'Nothing selected';
+  const several = selection.length > 1;
+  let selectionText = several ? `${selection.length} tables selected` : 'Nothing selected';
+  if (table) selectionText = `${table.schema || 'public'}.${table.name}${column ? `.${column.name || '?'}` : ''}`;
 
   return (
     <>
@@ -97,12 +124,14 @@ export function Workspace() {
         zoom={zoom}
         onZoom={setZoom}
         onFit={() => canvas.current?.fit()}
+        onArrange={tables.length ? arrangeTables : undefined}
+        arrangeSelected={several}
         onUndo={undo}
         onRedo={redo}
         canUndo={canUndo}
         canRedo={canRedo}
         search={search}
-        onSearch={setSearch}
+        onSearch={searchFor}
         onSearchSubmit={() => {
           if (search.trim() && visible[0]) select(visible[0].name);
         }}
@@ -115,10 +144,12 @@ export function Workspace() {
         <ERCanvas
           tables={visible}
           positions={positions}
-          onMove={moveTable}
+          onMoveTables={moveTables}
           onMoveEnd={endMove}
           selected={selectedInView}
           onSelect={select}
+          selection={selection}
+          onSelectTables={selectTables}
           selectedColumn={selectedColumn}
           onSelectColumn={selectColumn}
           zoom={zoom}
@@ -129,8 +160,39 @@ export function Workspace() {
           onRenameTable={requestRename}
           onDuplicateTable={duplicateTable}
           onDeleteTable={requestDeleteTable}
+          onAddColumn={addColumn}
+          onAddForeignKey={requestAddForeignKey}
+          onDrawForeignKey={drawForeignKey}
+          onCopyCreateTable={(table) => void copyCreateTable(table)}
+          onFocusRelated={focusRelatedTables}
+          focused={focused}
+          onShowAll={showAllTables}
           onNewTable={newTable}
-          hint={tables.length === 0 ? 'No tables yet. Right-click the canvas to add one.' : undefined}
+          onArrange={tables.length ? arrangeTables : undefined}
+          groups={groups}
+          onGroups={requestTableGroups}
+          onInferRelations={inferRelationships}
+          onReviewInferred={inferred ? requestReviewInferred : undefined}
+          onRemoveInferred={inferred ? removeInferredRelationships : undefined}
+          hint={
+            tables.length === 0 ? (
+              'No tables yet. Right-click the canvas to add one.'
+            ) : focused !== null ? (
+              // The canvas takes a press on it as the start of a pan, which would swallow the click on the button.
+              <span className="ss-row" onPointerDown={(e) => e.stopPropagation()}>
+                <span>
+                  {'Showing '}
+                  <span className="ss-mono" style={{ color: 'var(--ink-1)' }}>
+                    {focused}
+                  </span>
+                  {` and ${plural(inFocus.length - 1, 'related table')}`}
+                </span>
+                <Button variant="ghost" size="sm" kbd="Esc" onClick={showAllTables}>
+                  Show all tables
+                </Button>
+              </span>
+            ) : undefined
+          }
           actionsRef={canvas}
         />
         <Inspector
@@ -144,17 +206,27 @@ export function Workspace() {
           onRename={renameTable}
           onDuplicate={duplicateTable}
           onDelete={requestDeleteTable}
+          onAddForeignKey={requestAddForeignKey}
           onNewTable={() => {
             const view = canvas.current?.view();
             if (view) newTable(newTablePosition(positions, view));
           }}
+          onInferRelations={tables.length ? inferRelationships : undefined}
+          onReviewInferred={inferred ? requestReviewInferred : undefined}
+          onRemoveInferred={inferred ? removeInferredRelationships : undefined}
+          selectedCount={selection.length}
+          selection={selection}
+          groups={groups}
+          onGroup={groupTables}
+          onNewGroup={groupTablesAsNew}
+          onGroups={tables.length ? requestTableGroups : undefined}
           renameSignal={renameSignal}
           autoFocusDraft
           settingsCollapsed
         />
       </div>
       <StatusBar
-        left={[`${visible.length} of ${tables.length} tables in view`, `${relationships} relationships`, selection]}
+        left={[`${visible.length} of ${tables.length} tables in view`, `${relationships} relationships${inferred ? ` (${inferred} inferred)` : ''}`, selectionText]}
         right={[
           problems.length ? (
             <span style={{ color: 'var(--removed)' }}>{`${problems.length} problem${problems.length > 1 ? 's' : ''}`}</span>

@@ -34,6 +34,10 @@ export const tableBlock = (table: string) => `table:${table}`;
 export const indexBlock = (table: string, index: string) => `index:${table}.${index}`;
 export const foreignKeyBlock = (table: string, column: string) => `fk:${table}.${column}`;
 
+/** The keys of the blocks of comments on what was left out of, or written differently in, the indexes and the foreign keys of a table. */
+export const indexNotesBlock = (table: string) => `index-notes:${table}`;
+export const foreignKeyNotesBlock = (table: string) => `fk-notes:${table}`;
+
 /** The table a block is about, or null for a block that is about none, such as the header. */
 export function blockTable(key: string): string | null {
   const match = /^(?:table|index|fk):([^.]+)/.exec(key);

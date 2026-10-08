@@ -4,6 +4,11 @@ export interface ForeignKey {
   table: string;
   column: string;
   onDelete?: OnDelete;
+  /**
+   * Guessed from the names of the columns instead of declared (see core/infer). It is drawn on the
+   * canvas, but it is not in the database: DDL, migrations and the diff leave it out.
+   */
+  inferred?: boolean;
 }
 
 export interface Column {
@@ -42,10 +47,27 @@ export interface Position {
 
 export type Positions = Record<string, Position>;
 
+/** The colours a group of tables can have: the `--group-*` tokens of the styles. */
+export type GroupColor = 'violet' | 'pink' | 'orange' | 'lime' | 'cyan' | 'brown' | 'gray';
+
+/**
+ * The tables of one module, which the canvas marks with a colour and names in its legend (see
+ * core/groups). A table is in one group at most. Like the positions it is of the diagram and not
+ * of the database: DDL, migrations and the diff leave it out.
+ */
+export interface TableGroup {
+  /** The label, which tells the group from the others. */
+  name: string;
+  color: GroupColor;
+  tables: string[];
+}
+
 /** The editable content of a schema: what undo/redo tracks and what a saved version stores. */
 export interface SchemaSnapshot {
   tables: Table[];
   positions: Positions;
+  /** Left out by a schema that has none, as by every version saved before there were groups. */
+  groups?: readonly TableGroup[];
 }
 
 export interface SchemaSummary {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ecommerceSnapshot } from './fixtures/testing';
+import { ecommerceSnapshot, inferredTables } from './fixtures/testing';
 import { countIndexes, summarize } from './summary';
 
 describe('countIndexes', () => {
@@ -22,5 +22,11 @@ describe('summarize', () => {
     const payments = tables.filter((t) => t.name === 'payments');
     expect(summarize(payments)).toBe('1 table · 1 relationship · 1 index');
     expect(summarize([])).toBe('0 tables · 0 relationships · 0 indexes');
+  });
+
+  it('says how many of the relationships were inferred', () => {
+    expect(summarize(inferredTables())).toBe('5 tables · 4 relationships (4 inferred) · 11 indexes');
+    const mixed = [...ecommerceSnapshot().tables.slice(0, 2), ...inferredTables().slice(2)];
+    expect(summarize(mixed)).toBe('5 tables · 4 relationships (3 inferred) · 11 indexes');
   });
 });

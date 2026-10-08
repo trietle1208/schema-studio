@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { arrangeOnly, arrangeTables } from '../core/arrange';
 import type { SchemaSnapshot } from '../core/model';
 import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
-import { ecommerceSnapshot, tableNamed } from '../core/fixtures/testing';
+import { ecommerceSnapshot, inferredTables, tableNamed } from '../core/fixtures/testing';
+import { assignGroup, recolorGroup, renameGroup } from '../core/groups';
+import { countInferred, countRelations, removeInferred } from '../core/relations';
 import {
   createSchemaStore,
   selectDirty,
   selectDirtyTables,
+  selectFocused,
   selectTable,
   useSchemaStore,
   type Persist,
@@ -484,5 +488,401 @@ describe('schema store', () => {
     expect(selectDirty(state())).toBe(false);
     expect(history().pastStates).toEqual([]);
     expect(history().futureStates).toEqual([]);
+  });
+});
+
+describe('a selection of several tables', () => {
+  it('has no table for the inspector, and is of one table again once the others are taken out', () => {
+    state().select('orders');
+    state().selectColumn(2);
+    state().selectTables(['orders', 'users']);
+    expect(state().selection).toEqual(['orders', 'users']);
+    expect(state().selected).toBeNull();
+    expect(selectTable(state())).toBeNull();
+    expect(state().selectedColumn).toBeNull();
+
+    state().selectTables(['users']);
+    expect(state().selected).toBe('users');
+    expect(state().selection).toEqual(['users']);
+
+    state().selectTables([]);
+    expect(state().selected).toBeNull();
+    expect(state().selection).toEqual([]);
+  });
+
+  it('follows the selection of one table, which ends it', () => {
+    state().select('orders');
+    expect(state().selection).toEqual(['orders']);
+
+    state().selectTables(['orders', 'users', 'orders']);
+    expect(state().selection).toEqual(['orders', 'users']);
+
+    state().select('users');
+    expect(state().selection).toEqual(['users']);
+    state().selectTables(['orders', 'users']);
+    state().select(null);
+    expect(state().selection).toEqual([]);
+  });
+
+  it('is no edit, and is the same selection when it is made again', () => {
+    state().selectTables(['orders', 'users']);
+    const { selection } = state();
+    state().selectTables(['orders', 'users']);
+    expect(state().selection).toBe(selection);
+    expect(history().pastStates).toEqual([]);
+    expect(selectDirty(state())).toBe(false);
+  });
+
+  it('moves together in one undo step, which brings the tables and the selection back', () => {
+    state().selectTables(['users', 'payments']);
+    state().moveTables({ users: { x: 32, y: 56 }, payments: { x: 32, y: 344 } });
+    state().moveTables({ users: { x: 104, y: 128 }, payments: { x: 104, y: 416 } });
+    state().endMove();
+
+    expect(state().positions).toEqual({ ...ecommercePositions, users: { x: 104, y: 128 }, payments: { x: 104, y: 416 } });
+    expect(history().pastStates).toHaveLength(1);
+    expect(selectDirtyTables(state())).toEqual(['users', 'payments']);
+
+    state().select('orders');
+    history().undo();
+    expect(state().positions).toEqual(ecommercePositions);
+    expect(state().selection).toEqual(['users', 'payments']);
+    expect(state().selected).toBeNull();
+  });
+
+  it('follows a table through a rename, and loses a table that is deleted', () => {
+    state().selectTables(['users', 'payments', 'orders']);
+    state().renameTable('users', 'customers');
+    expect(state().selection).toEqual(['customers', 'payments', 'orders']);
+
+    state().deleteTable('payments');
+    expect(state().selection).toEqual(['customers', 'orders']);
+    expect(state().selected).toBeNull();
+
+    state().deleteTable('orders');
+    expect(state().selection).toEqual(['customers']);
+    expect(state().selected).toBe('customers');
+
+    history().undo();
+    expect(state().selection).toEqual(['customers', 'orders']);
+  });
+
+  it('ends with an edit that selects its table', () => {
+    state().selectTables(['users', 'payments']);
+    state().addColumn('orders');
+    expect(state().selection).toEqual(['orders']);
+
+    state().selectTables(['users', 'payments']);
+    state().duplicateTable('users');
+    expect(state().selection).toEqual(['users_copy']);
+
+    state().selectTables(['users', 'payments']);
+    const name = state().addTable({ x: 0, y: 0 });
+    expect(state().selection).toEqual([name]);
+  });
+
+  it('ends when another schema is loaded', () => {
+    state().selectTables(['users', 'payments']);
+    state().load({ name: 'shop', engine: 'PostgreSQL', ...ecommerceSnapshot() });
+    expect(state().selection).toEqual([]);
+  });
+});
+
+describe('addColumn', () => {
+  it('adds a blank column to the table and selects it, in one step that undo takes back', () => {
+    state().select('users');
+    state().addColumn('orders');
+
+    const orders = tableNamed(state(), 'orders');
+    expect(orders.columns).toHaveLength(6);
+    expect(orders.columns[5]).toEqual({ name: '', type: 'TEXT', nullable: true, draft: true });
+    expect(state().selected).toBe('orders');
+    expect(state().selectedColumn).toBe(5);
+    expect(selectDirtyTables(state())).toEqual(['orders']);
+    expect(history().pastStates).toHaveLength(1);
+
+    history().undo();
+    expect(state().tables).toEqual(ecommerceSnapshot().tables);
+    expect(state().selected).toBe('users');
+    expect(state().selectedColumn).toBeNull();
+  });
+
+  it('is a step of its own after typing into the table', () => {
+    const users = tableNamed(state(), 'users');
+    state().updateTable('users', { ...users, comment: 'a' }, 'comment');
+    state().updateTable('users', { ...tableNamed(state(), 'users'), comment: 'ab' }, 'comment');
+    state().addColumn('users');
+    state().updateTable('users', { ...tableNamed(state(), 'users'), comment: 'abc' }, 'comment');
+    expect(history().pastStates).toHaveLength(3);
+  });
+
+  it('does nothing for a table the schema does not have', () => {
+    state().addColumn('invoices');
+    expect(state().tables).toEqual(ecommerceSnapshot().tables);
+    expect(history().pastStates).toEqual([]);
+  });
+});
+
+describe('addForeignKey', () => {
+  it('adds the foreign key on a new column and selects it, in one step that undo takes back', () => {
+    expect(state().addForeignKey({ table: 'products', column: 'user_id' }, { table: 'users', column: 'id' }, 'SET NULL')).toBe(true);
+
+    expect(tableNamed(state(), 'products').columns[4]).toEqual({
+      name: 'user_id',
+      type: 'BIGINT',
+      nullable: true,
+      fk: { table: 'users', column: 'id', onDelete: 'SET NULL' },
+    });
+    expect(countRelations(state().tables)).toBe(5);
+    expect(state().selected).toBe('products');
+    expect(state().selectedColumn).toBe(4);
+    expect(selectDirtyTables(state())).toEqual(['products']);
+    expect(history().pastStates).toHaveLength(1);
+
+    history().undo();
+    expect(state().tables).toEqual(ecommerceSnapshot().tables);
+    expect(state().selected).toBeNull();
+  });
+
+  it('adds it on a column the table has, which it selects', () => {
+    expect(state().addForeignKey({ table: 'payments', column: 'amount' }, { table: 'products', column: 'id' })).toBe(true);
+    expect(tableNamed(state(), 'payments').columns[3].fk).toEqual({ table: 'products', column: 'id', onDelete: 'RESTRICT' });
+    expect(tableNamed(state(), 'payments').columns).toHaveLength(5);
+    expect(state().selectedColumn).toBe(3);
+  });
+
+  it('says so and changes nothing when there is nothing to reference', () => {
+    expect(state().addForeignKey({ table: 'products', column: 'user_id' }, { table: 'customers', column: 'id' })).toBe(false);
+    expect(state().tables).toEqual(ecommerceSnapshot().tables);
+    expect(state().selected).toBeNull();
+    expect(history().pastStates).toEqual([]);
+  });
+});
+
+describe('focus', () => {
+  it('is on one table, is no edit, and ends with null', () => {
+    state().focus('orders');
+    expect(selectFocused(state())).toBe('orders');
+    expect(selectDirty(state())).toBe(false);
+    expect(history().pastStates).toEqual([]);
+
+    state().focus(null);
+    expect(selectFocused(state())).toBeNull();
+  });
+
+  it('follows the table through a rename', () => {
+    state().focus('orders');
+    state().renameTable('orders', 'purchases');
+    expect(selectFocused(state())).toBe('purchases');
+    state().renameTable('users', 'customers');
+    expect(selectFocused(state())).toBe('purchases');
+  });
+
+  it('is none while its table is gone, and back when undo brings the table back', () => {
+    state().focus('orders');
+    state().deleteTable('orders');
+    expect(selectFocused(state())).toBeNull();
+    history().undo();
+    expect(selectFocused(state())).toBe('orders');
+  });
+
+  it('ends when another schema is loaded', () => {
+    state().focus('orders');
+    state().load({ name: 'shop', engine: 'PostgreSQL', ...ecommerceSnapshot() });
+    expect(state().focused).toBeNull();
+  });
+});
+
+describe('inferred relationships', () => {
+  /** The sample as a database that declares no foreign keys has it. */
+  const undeclared = () => removeInferred(inferredTables());
+
+  it('are added in one step that undo takes back', () => {
+    state().load({ name: 'shop', engine: 'PostgreSQL', tables: undeclared(), positions: ecommercePositions });
+    expect(countRelations(state().tables)).toBe(0);
+
+    expect(state().inferRelations()).toBe(4);
+    expect(countInferred(state().tables)).toBe(4);
+    expect(selectDirtyTables(state())).toEqual(['orders', 'order_items', 'payments']);
+    expect(history().pastStates).toHaveLength(1);
+
+    history().undo();
+    expect(countRelations(state().tables)).toBe(0);
+    expect(selectDirty(state())).toBe(false);
+  });
+
+  it('are not added twice, and leave the declared ones alone', () => {
+    expect(state().inferRelations()).toBe(0);
+    expect(history().pastStates).toEqual([]);
+
+    state().load({ name: 'shop', engine: 'PostgreSQL', tables: undeclared(), positions: ecommercePositions });
+    state().inferRelations();
+    expect(state().inferRelations()).toBe(0);
+    expect(history().pastStates).toHaveLength(1);
+  });
+
+  it('are removed together, which undo takes back too', () => {
+    const { tables } = ecommerceSnapshot();
+    const mixed = [...tables.slice(0, 2), ...inferredTables().slice(2)];
+    state().load({ name: 'shop', engine: 'PostgreSQL', tables: mixed, positions: ecommercePositions });
+
+    expect(state().removeInferred()).toBe(3);
+    expect(countRelations(state().tables)).toBe(1);
+    expect(state().removeInferred()).toBe(0);
+    expect(history().pastStates).toHaveLength(1);
+
+    history().undo();
+    expect(countInferred(state().tables)).toBe(3);
+  });
+
+  it('are accepted or removed one at a time, each in a step of its own', () => {
+    state().load({ name: 'shop', engine: 'PostgreSQL', tables: inferredTables(), positions: ecommercePositions });
+
+    expect(state().acceptInferred({ table: 'orders', column: 'user_id' })).toBe(1);
+    expect(tableNamed(state(), 'orders').columns[1].fk).toEqual({ table: 'users', column: 'id', onDelete: 'RESTRICT' });
+    expect(state().removeInferred({ table: 'payments', column: 'order_id' })).toBe(1);
+    expect(tableNamed(state(), 'payments').columns[1].fk).toBeNull();
+    expect(countInferred(state().tables)).toBe(2);
+    expect(countRelations(state().tables)).toBe(3);
+    expect(selectDirtyTables(state())).toEqual(['orders', 'payments']);
+    expect(history().pastStates).toHaveLength(2);
+
+    // A relationship that is decided is not decided again.
+    expect(state().acceptInferred({ table: 'orders', column: 'user_id' })).toBe(0);
+    expect(state().removeInferred({ table: 'orders', column: 'user_id' })).toBe(0);
+    expect(history().pastStates).toHaveLength(2);
+
+    history().undo();
+    expect(countInferred(state().tables)).toBe(3);
+  });
+
+  it('are all accepted in one step', () => {
+    state().load({ name: 'shop', engine: 'PostgreSQL', tables: inferredTables(), positions: ecommercePositions });
+
+    expect(state().acceptInferred()).toBe(4);
+    expect(countInferred(state().tables)).toBe(0);
+    expect(countRelations(state().tables)).toBe(4);
+    expect(state().acceptInferred()).toBe(0);
+    expect(history().pastStates).toHaveLength(1);
+
+    history().undo();
+    expect(countInferred(state().tables)).toBe(4);
+  });
+});
+
+describe('arrangeTables', () => {
+  it('moves every table in one step that undo takes back', () => {
+    const { tables, positions } = state();
+    state().select('orders');
+
+    expect(state().arrangeTables()).toBe(true);
+    expect(state().positions).toEqual(arrangeTables(tables));
+    expect(state().tables).toBe(tables);
+    expect(state().selected).toBe('orders');
+    expect(selectDirty(state())).toBe(true);
+    expect(history().pastStates).toHaveLength(1);
+
+    history().undo();
+    expect(state().positions).toEqual(positions);
+    expect(selectDirty(state())).toBe(false);
+  });
+
+  it('changes nothing when the tables are where it would put them', () => {
+    state().arrangeTables();
+    const { positions } = state();
+
+    expect(state().arrangeTables()).toBe(false);
+    expect(state().positions).toBe(positions);
+    expect(history().pastStates).toHaveLength(1);
+  });
+
+  it('moves only the tables it is given, among themselves, in one step that undo takes back', () => {
+    const { tables, positions } = state();
+    const only = ['orders', 'order_items', 'payments'];
+    state().selectTables(only);
+
+    expect(state().arrangeTables(only)).toBe(true);
+    expect(state().positions).toEqual(arrangeOnly(tables, positions, only));
+    expect(state().positions.users).toBe(positions.users);
+    expect(state().positions.products).toBe(positions.products);
+    expect(state().selection).toEqual(only);
+    expect(history().pastStates).toHaveLength(1);
+
+    expect(state().arrangeTables(only)).toBe(false);
+    expect(history().pastStates).toHaveLength(1);
+
+    history().undo();
+    expect(state().positions).toEqual(positions);
+  });
+
+  it('places a table that has no position yet', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const placed = Object.fromEntries(Object.entries(positions).filter(([name]) => name !== 'payments'));
+    state().load({ name: 'shop', engine: 'PostgreSQL', tables, positions: placed });
+
+    expect(state().arrangeTables()).toBe(true);
+    expect(Object.keys(state().positions)).toEqual(names());
+  });
+});
+
+describe('groups of tables', () => {
+  it('are edited in one undo step each, and make the schema dirty', () => {
+    expect(state().groups).toEqual([]);
+    expect(state().editGroups((groups) => assignGroup(groups, ['orders', 'order_items'], 'sales'))).toBe(true);
+    expect(state().groups).toEqual([{ name: 'sales', color: 'violet', tables: ['orders', 'order_items'] }]);
+    expect(selectDirty(state())).toBe(true);
+    expect(selectDirtyTables(state())).toEqual(['orders', 'order_items']);
+    expect(history().pastStates).toHaveLength(1);
+
+    // An edit that changes nothing is no step.
+    expect(state().editGroups((groups) => assignGroup(groups, ['orders'], 'sales'))).toBe(false);
+    expect(state().editGroups((groups) => renameGroup(groups, 'sales', ' '))).toBe(false);
+    expect(history().pastStates).toHaveLength(1);
+
+    state().editGroups((groups) => recolorGroup(groups, 'sales', 'lime'));
+    expect(history().pastStates).toHaveLength(2);
+    history().undo();
+    expect(state().groups[0].color).toBe('violet');
+    history().undo();
+    expect(state().groups).toEqual([]);
+    expect(selectDirty(state())).toBe(false);
+    history().redo();
+    expect(state().groups.map((g) => g.name)).toEqual(['sales']);
+  });
+
+  it('follow the tables that are renamed, duplicated and deleted, and come back with an undo', () => {
+    state().editGroups((groups) => assignGroup(groups, ['orders', 'order_items'], 'sales'));
+    state().renameTable('orders', 'purchases');
+    expect(state().groups[0].tables).toEqual(['purchases', 'order_items']);
+    state().duplicateTable('order_items');
+    expect(state().groups[0].tables).toEqual(['purchases', 'order_items', 'order_items_copy']);
+    state().deleteTable('purchases');
+    expect(state().groups[0].tables).toEqual(['order_items', 'order_items_copy']);
+    history().undo();
+    expect(state().groups[0].tables).toEqual(['purchases', 'order_items', 'order_items_copy']);
+  });
+
+  it('does not join the typing in a field with what was typed before the groups changed', () => {
+    const orders = tableNamed(state(), 'orders');
+    state().updateTable('orders', { ...orders, comment: 'One' }, 'comment');
+    state().editGroups((groups) => assignGroup(groups, ['orders'], 'sales'));
+    state().updateTable('orders', { ...tableNamed(state(), 'orders'), comment: 'One row' }, 'comment');
+    expect(history().pastStates).toHaveLength(3);
+  });
+
+  it('are saved with the version and loaded with a schema', async () => {
+    state().editGroups((groups) => assignGroup(groups, ['orders', 'order_items'], 'sales'));
+    await state().save();
+    expect(stored[0].groups).toEqual([{ name: 'sales', color: 'violet', tables: ['orders', 'order_items'] }]);
+    expect(selectDirty(state())).toBe(false);
+    expect(selectDirtyTables(state())).toEqual([]);
+
+    state().load({ name: 'shop', engine: 'MySQL', ...stored[0] });
+    expect(state().groups).toBe(stored[0].groups);
+    expect(selectDirty(state())).toBe(false);
+    // A version that was saved before there were groups has none.
+    state().load({ name: 'ecommerce', engine: 'PostgreSQL', ...ecommerceSnapshot() });
+    expect(state().groups).toEqual([]);
+    expect(selectDirty(state())).toBe(false);
   });
 });

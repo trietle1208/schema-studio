@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../components/Button';
+import { Checkbox } from '../components/Checkbox';
 import { DropZone } from '../components/DropZone';
 import { Field } from '../components/Field';
 import { Input } from '../components/Input';
@@ -18,6 +19,7 @@ import {
   MAX_IMPORT_BYTES,
   schemaNameFromFile,
 } from '../core/files';
+import { addInferred } from '../core/infer';
 import { EMPTY_CONNECTION_FORM, INTROSPECT_ENGINES } from '../core/introspect';
 import { IMPORT_ENGINES, parserFor, type ParseOutcome } from '../core/parse';
 import { plural } from '../core/plural';
@@ -82,6 +84,7 @@ export function ImportSchemaDialog() {
   const [read, setRead] = useState<DatabaseRead | null>(null);
   // The name follows the file until it is typed over.
   const [typedName, setTypedName] = useState<string | null>(null);
+  const [infer, setInfer] = useState(true);
   const [importing, setImporting] = useState(false);
   const editor = useRef<SqlEditorActions>(null);
 
@@ -98,7 +101,11 @@ export function ImportSchemaDialog() {
   const { outcome, pending } = useParsed(sql, engine);
 
   const blank = !sql.trim();
-  const tables = outcome?.ok ? outcome.tables : [];
+  // Many databases declare no foreign keys: the columns that are named after a table get an inferred one.
+  const tables = useMemo(() => {
+    const parsed = outcome?.ok ? outcome.tables : [];
+    return infer ? addInferred(parsed) : parsed;
+  }, [outcome, infer]);
   const state = blank ? 'idle' : !outcome ? 'parsing' : tables.length ? 'ok' : 'error';
   const error =
     state !== 'error' || !outcome
@@ -267,6 +274,12 @@ export function ImportSchemaDialog() {
       )}
       {mode === 'paste' && pasteEditor(280)}
       {mode === 'connect' && <ConnectDatabase engine={engine} form={connection} onForm={setConnection} read={read} onRead={setRead} />}
+      <Checkbox
+        label="Infer missing relationships"
+        description="Columns named after a table, such as user_id, are linked to it. Drawn dashed and left out of exported SQL."
+        checked={infer}
+        onChange={setInfer}
+      />
       {excerpt && (
         <SqlEditor
           value={excerpt.text}

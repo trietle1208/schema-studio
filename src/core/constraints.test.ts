@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { primaryKey, uniqueColumns, writtenIndexes, writtenRelations } from './constraints';
-import { ecommerceSnapshot, tableNamed, withColumn } from './fixtures/testing';
+import { ecommerceSnapshot, inferredTables, tableNamed, withColumn } from './fixtures/testing';
 import type { Table } from './model';
 
 const sample = () => ecommerceSnapshot().tables;
@@ -87,5 +87,13 @@ describe('writtenRelations', () => {
     expect(writtenRelations(tables).map((r) => r.from.column)).toEqual(['user_id', 'order_id', 'order_id']);
     const renamed = tables.map((t) => (t.name === 'users' ? withColumn(t, 'id', { name: 'uid' }) : t));
     expect(writtenRelations(renamed).map((r) => r.from.table)).toEqual(['order_items', 'payments']);
+  });
+});
+
+describe('inferred foreign keys', () => {
+  it('are not written: the database does not have them', () => {
+    expect(writtenRelations(inferredTables())).toEqual([]);
+    const mixed = [...sample().slice(0, 2), ...inferredTables().slice(2)];
+    expect(writtenRelations(mixed).map((r) => `${r.from.table}.${r.from.column}`)).toEqual(['orders.user_id']);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ecommerceSnapshot, tableNamed } from '../fixtures/testing';
+import { ecommerceSnapshot, inferredTables, tableNamed } from '../fixtures/testing';
+import { declareInferred } from '../relations';
 import { generateJson, type JsonOptions } from './json';
 
 const ALL: JsonOptions = { indexes: true, foreignKeys: true, comments: true };
@@ -64,6 +65,16 @@ describe('generateJson', () => {
       name: 'a"b',
       columns: [{ name: 'c', type: 'TEXT', default: `'x\\y'`, comment: 'line\nbreak' }],
       indexes: [],
+    });
+  });
+
+  it('leaves out a foreign key that was inferred, until it is declared', () => {
+    const orders = inferredTables().filter((t) => t.name === 'orders');
+    expect(JSON.parse(generateJson(info, orders, ALL)).tables[0].columns[1]).toEqual({ name: 'user_id', type: 'BIGINT' });
+    expect(JSON.parse(generateJson(info, declareInferred(orders), ALL)).tables[0].columns[1].fk).toEqual({
+      table: 'users',
+      column: 'id',
+      onDelete: 'RESTRICT',
     });
   });
 });

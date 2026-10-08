@@ -1,7 +1,17 @@
 import { writtenIndexes } from '../constraints';
 import type { Index, Table } from '../model';
 import { DEFAULT_ON_DELETE, type Relation } from '../relations';
-import { DEFAULT_GENERATE_OPTIONS, foreignKeyBlock, indexBlock, tableBlock, type DdlBlock, type GenerateOptions } from './options';
+import {
+  DEFAULT_GENERATE_OPTIONS,
+  foreignKeyBlock,
+  foreignKeyNotesBlock,
+  indexBlock,
+  indexNotesBlock,
+  tableBlock,
+  type DdlBlock,
+  type GenerateOptions,
+  type SqlGenerator,
+} from './options';
 
 // What the scripts of every engine share: the order of their blocks, laid out as in the design.
 // One CREATE TABLE per table with its comments, then its indexes, and the foreign keys last so
@@ -32,7 +42,8 @@ function foreignKeys(statements: Statements, table: Table, tables: ReadonlyMap<s
   const blocks: DdlBlock[] = [];
   const left: string[] = [];
   for (const c of table.columns) {
-    if (!c.fk) continue;
+    // An inferred foreign key is not in the database the script describes.
+    if (!c.fk || c.fk.inferred) continue;
     const target = tables.get(c.fk.table);
     if (!target?.columns.some((other) => other.name === c.fk?.column)) {
       left.push(
@@ -69,14 +80,14 @@ export function scriptBlocks(statements: Statements, tables: readonly Table[], g
         const said = statements.indexNote?.(index);
         if (said) notes.push(said);
       }
-      if (notes.length) blocks.push({ key: `index-notes:${table.name}`, lines: notes.map(note) });
+      if (notes.length) blocks.push({ key: indexNotesBlock(table.name), lines: notes.map(note) });
     }
   }
   if (options.foreignKeys) {
     for (const table of tables) {
       const keys = foreignKeys(statements, table, byName);
       blocks.push(...keys.blocks);
-      if (keys.left.length) blocks.push({ key: `fk-notes:${table.name}`, lines: keys.left.map(note) });
+      if (keys.left.length) blocks.push({ key: foreignKeyNotesBlock(table.name), lines: keys.left.map(note) });
     }
   }
   if (around) blocks.push({ key: 'close', lines: around.close });
@@ -86,4 +97,17 @@ export function scriptBlocks(statements: Statements, tables: readonly Table[], g
 /** Blocks as one script: a blank line goes between two of them. */
 export function joinBlocks(blocks: readonly DdlBlock[]): string {
   return blocks.length ? `${blocks.map((block) => block.lines.join('\n')).join('\n\n')}\n` : '';
+}
+
+/**
+ * What makes the table called `name` in the script of `tables`, as "Copy CREATE TABLE" hands it
+ * out: its CREATE TABLE with its comments, then its indexes and its foreign keys, which may
+ * reference the other tables. Empty for a table the schema does not have.
+ */
+export function tableScript(generator: SqlGenerator, tables: readonly Table[], name: string): string {
+  const keys = new Set([tableBlock(name), indexNotesBlock(name), foreignKeyNotesBlock(name)]);
+  const table = tables.find((t) => t.name === name);
+  for (const index of table?.indexes ?? []) keys.add(indexBlock(name, index.name));
+  for (const column of table?.columns ?? []) keys.add(foreignKeyBlock(name, column.name));
+  return joinBlocks(generator.blocks(tables).filter((block) => keys.has(block.key)));
 }

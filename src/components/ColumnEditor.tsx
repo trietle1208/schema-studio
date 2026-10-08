@@ -1,6 +1,7 @@
 import { setNullable, setPrimaryKey } from '../core/columns';
 import type { Column, Table } from '../core/model';
 import {
+  declareReference,
   DEFAULT_ON_DELETE,
   ON_DELETE_ACTIONS,
   qualifiedName,
@@ -53,7 +54,7 @@ export function ColumnEditor({ column: c, table: t, tables, onChange, onDelete }
           onChange={(v) => onChange(setReference(c, targets.find((r) => qualifiedName(r) === v) ?? null))}
         />
       </Field>
-      {c.fk && (
+      {c.fk && !c.fk.inferred && (
         <Field label="On delete" className="ss-span2">
           <SegmentedControl
             block
@@ -65,6 +66,17 @@ export function ColumnEditor({ column: c, table: t, tables, onChange, onDelete }
             options={ON_DELETE_ACTIONS.map((a) => ({ value: a, label: a }))}
           />
         </Field>
+      )}
+      {c.fk?.inferred && (
+        // An inferred reference is only a line on the canvas until it is made a foreign key.
+        <div className="ss-span2 ss-coledit-foot">
+          <span className="ss-faint" style={{ fontSize: 11 }}>
+            Inferred, not exported
+          </span>
+          <Button size="sm" icon="link" onClick={() => onChange(declareReference(c))}>
+            Make foreign key
+          </Button>
+        </div>
       )}
       <div className="ss-span2 ss-coledit-checks">
         <Checkbox label="Nullable" checked={c.nullable} disabled={c.pk} onChange={(v) => onChange(setNullable(c, v))} />

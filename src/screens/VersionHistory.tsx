@@ -6,6 +6,7 @@ import { ERCanvas, type ERCanvasActions } from '../components/ERCanvas';
 import { Input } from '../components/Input';
 import { VersionList } from '../components/VersionList';
 import { blockTable } from '../core/generate/options';
+import { groupsOf } from '../core/groups';
 import type { DiffItem } from '../core/model';
 import { plural } from '../core/plural';
 import { filterVersions, versionEntries, versionLabel, versionSummary, type VersionEntry } from '../core/versions';
@@ -98,6 +99,7 @@ function VersionDetail({ entry, current, now }: VersionDetailProps) {
   const name = useSchemaStore((s) => s.name);
   const summary = versionSummary(entry, current, now);
   const { tables, positions } = entry.snapshot;
+  const groups = groupsOf(entry.snapshot);
   const [change, setChange] = useState<string | null>(null);
   const [table, setTable] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -199,6 +201,7 @@ function VersionDetail({ entry, current, now }: VersionDetailProps) {
             <ERCanvas
               tables={tables}
               positions={positions}
+              groups={groups}
               zoom={zoom}
               onZoom={setZoom}
               selected={table}

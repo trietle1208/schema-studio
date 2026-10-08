@@ -29,7 +29,7 @@ function list(items: string[], indent: string): string {
 /**
  * The model as JSON, for tooling and CI: the schema's name, version and dialect, and every table
  * with its columns and indexes. A column lists only the flags that are set, so a column without
- * `nullable` is NOT NULL. Canvas positions are not part of it.
+ * `nullable` is NOT NULL. Canvas positions and inferred foreign keys are not part of it.
  */
 export function generateJson(info: JsonSchemaInfo, tables: readonly Table[], options: JsonOptions): string {
   const items = tables.map((table) => {
@@ -42,7 +42,7 @@ export function generateJson(info: JsonSchemaInfo, tables: readonly Table[], opt
         unique: c.unique ? true : undefined,
         default: c.default?.trim() ? c.default : undefined,
         comment: options.comments && c.comment?.trim() ? c.comment : undefined,
-        fk: options.foreignKeys && c.fk ? { table: c.fk.table, column: c.fk.column, onDelete: c.fk.onDelete } : undefined,
+        fk: options.foreignKeys && c.fk && !c.fk.inferred ? { table: c.fk.table, column: c.fk.column, onDelete: c.fk.onDelete } : undefined,
       }),
     );
     const fields = [

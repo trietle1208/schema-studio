@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { addColumn, removeColumn, setColumn, setNullable, setPrimaryKey } from '../core/columns';
-import type { Column, Table } from '../core/model';
+import { groupOf } from '../core/groups';
+import type { Column, Table, TableGroup } from '../core/model';
 import { incomingRelations, outgoingRelations, qualifiedName } from '../core/relations';
 import { validateColumns, validateTableName } from '../core/validate';
 import { Badge } from './Badge';
@@ -15,6 +16,10 @@ import { Select } from './Select';
 import { TypeSelect } from './TypeSelect';
 
 const DEFAULT_SCHEMA = 'public';
+// What the Group field holds besides the name of a group, which is never empty.
+const NO_GROUP = '';
+const NEW_GROUP = '\0new';
+const SEVERAL_GROUPS = '\0several';
 
 export interface InspectorProps {
   table: Table | null;
@@ -26,11 +31,29 @@ export interface InspectorProps {
   onRename?: (from: string, to: string) => void;
   onDuplicate?: (name: string) => void;
   onDelete?: (name: string) => void;
-  /** Adding indexes and foreign keys has no editor yet; the buttons stay disabled without a handler. */
+  /** Adding indexes has no editor yet; the buttons of either stay disabled without a handler. */
   onAddIndex?: (name: string) => void;
   onAddForeignKey?: (name: string) => void;
   /** A "New table" button for when no table is selected. */
   onNewTable?: () => void;
+  /** "Infer relationships" under the hint of a schema with no table selected. Without it the button is not there. */
+  onInferRelations?: () => void;
+  /** "Review inferred" next to it. Left out when there are none to review. */
+  onReviewInferred?: () => void;
+  /** "Remove inferred" next to them. Left out when there are none to remove. */
+  onRemoveInferred?: () => void;
+  /** How many tables are selected when `table` is null because several are: the hint then says what can be done with them. */
+  selectedCount?: number;
+  /** The tables that are selected when several are: the Group field is then for all of them. */
+  selection?: readonly string[];
+  /** The groups of tables of the schema. */
+  groups?: readonly TableGroup[];
+  /** The Group field: the tables are to be in the group called `group`, or in none with null. Without it there is no such field. */
+  onGroup?: (tables: readonly string[], group: string | null) => void;
+  /** "New group…" in the Group field: the tables are to be a group of their own. */
+  onNewGroup?: (tables: readonly string[]) => void;
+  /** "Table groups" under the hint of a schema with no table selected. Without it the button is not there. */
+  onGroups?: () => void;
   typeMenuOpen?: boolean;
   renaming?: boolean;
   /** Each change puts the table title into rename mode (F2). */
@@ -50,6 +73,39 @@ interface InspectorSectionProps {
   addLabel?: string;
   onAdd?: () => void;
   children: ReactNode;
+}
+
+interface GroupFieldProps {
+  groups: readonly TableGroup[];
+  /** The tables the field is for. */
+  tables: readonly string[];
+  onGroup: (tables: readonly string[], group: string | null) => void;
+  onNewGroup?: (tables: readonly string[]) => void;
+}
+
+/** The group of a table, or of several when they are all in one, to be changed for another, for none or for a new one. */
+function GroupField({ groups, tables, onGroup, onNewGroup }: GroupFieldProps) {
+  const own = [...new Set(tables.map((t) => groupOf(groups, t)))];
+  const value = own.length === 1 ? (own[0]?.name ?? NO_GROUP) : SEVERAL_GROUPS;
+  return (
+    <span className={cx('ss-row', own.length === 1 && own[0] && `ss-group--${own[0].color}`)} style={{ minWidth: 0 }}>
+      {own.length === 1 && own[0] && <span className="ss-group-swatch" />}
+      <Select
+        size="sm"
+        mono
+        label="Group"
+        style={{ flex: 1, minWidth: 0 }}
+        value={value}
+        options={[
+          ...(value === SEVERAL_GROUPS ? [{ value: SEVERAL_GROUPS, label: 'Several groups', disabled: true }] : []),
+          { value: NO_GROUP, label: 'None' },
+          ...groups.map((g) => ({ value: g.name, label: g.name })),
+          ...(onNewGroup ? [{ value: NEW_GROUP, label: 'New group…' }] : []),
+        ]}
+        onChange={(v) => (v === NEW_GROUP ? onNewGroup?.(tables) : onGroup(tables, v === NO_GROUP ? null : v))}
+      />
+    </span>
+  );
 }
 
 function InspectorSection({ title, count, collapsed: initiallyCollapsed, addLabel, onAdd, children }: InspectorSectionProps) {
@@ -175,6 +231,15 @@ export function Inspector({
   onAddIndex,
   onAddForeignKey,
   onNewTable,
+  onInferRelations,
+  onReviewInferred,
+  onRemoveInferred,
+  selectedCount,
+  selection,
+  groups = [],
+  onGroup,
+  onNewGroup,
+  onGroups,
   typeMenuOpen,
   renaming,
   renameSignal,
@@ -190,6 +255,7 @@ export function Inspector({
   });
 
   if (!t) {
+    const several = selectedCount !== undefined && selectedCount > 1;
     return (
       <aside className="ss-inspector">
         <div className="ss-insp-head">
@@ -201,18 +267,81 @@ export function Inspector({
           </div>
         </div>
         <div className="ss-insp-empty" style={{ padding: 16 }}>
-          {'Select a table to edit its columns, indexes and foreign keys. '}
+          {several
+            ? `${selectedCount} tables selected. Drag one of them to move them together. `
+            : 'Select a table to edit its columns, indexes and foreign keys. '}
           <br />
           <br />
-          <span className="ss-row">
-            <Kbd keys={['⌘', 'K']} />
-            Jump to table
-          </span>
+          {several ? (
+            <span className="ss-row">
+              <Kbd keys={['⇧', 'A']} />
+              Arrange selected tables
+            </span>
+          ) : (
+            <>
+              <span className="ss-row">
+                <Kbd keys={['⌘', 'K']} />
+                Jump to table
+              </span>
+              <br />
+              <span className="ss-row">
+                <Kbd keys={['⇧']} />
+                Click tables or drag a frame to select several
+              </span>
+            </>
+          )}
+          {several && selection && onGroup && (
+            <>
+              <br />
+              <span className="ss-row">
+                Group
+                <GroupField groups={groups} tables={selection} onGroup={onGroup} onNewGroup={onNewGroup} />
+              </span>
+            </>
+          )}
           {onNewTable && (
             <>
               <br />
               <Button size="sm" icon="plus" onClick={onNewTable}>
                 New table
+              </Button>
+            </>
+          )}
+          {(onInferRelations || onReviewInferred || onRemoveInferred) && (
+            <>
+              <br />
+              <br />
+              {'Foreign keys the database does not declare can be inferred from the names of the columns.'}
+              <br />
+              <br />
+              <span className="ss-row" style={{ flexWrap: 'wrap' }}>
+                {onInferRelations && (
+                  <Button size="sm" icon="link" onClick={onInferRelations}>
+                    Infer relationships
+                  </Button>
+                )}
+                {onReviewInferred && (
+                  <Button size="sm" icon="check" onClick={onReviewInferred}>
+                    Review inferred
+                  </Button>
+                )}
+                {onRemoveInferred && (
+                  <Button size="sm" variant="ghost" icon="x" onClick={onRemoveInferred}>
+                    Remove inferred
+                  </Button>
+                )}
+              </span>
+            </>
+          )}
+          {onGroups && (
+            <>
+              <br />
+              <br />
+              {'The tables of one module can have a colour and a label on the canvas.'}
+              <br />
+              <br />
+              <Button size="sm" icon="folder" onClick={onGroups}>
+                Table groups
               </Button>
             </>
           )}
@@ -228,6 +357,7 @@ export function Inspector({
   const relationCount = outgoing.length + incoming.length;
   const schema = t.schema || DEFAULT_SCHEMA;
   const schemas = [...new Set([DEFAULT_SCHEMA, schema, ...tables.map((o) => o.schema || DEFAULT_SCHEMA)])];
+  const group = groupOf(groups, t.name);
 
   // Two edits in one event (a type committed by ⌘⏎, then the column it adds) must build on each
   // other, but `t` only changes on the next render: later edits start from the table already sent.
@@ -284,6 +414,15 @@ export function Inspector({
           <span>{`${indexes.length} indexes`}</span>
           {'·'}
           <span>{`${relationCount} relations`}</span>
+          {group && (
+            <>
+              {'·'}
+              <span className={cx('ss-row', `ss-group--${group.color}`)} style={{ gap: 4 }} title={`Group ${group.name}`}>
+                <span className="ss-group-swatch" />
+                {group.name}
+              </span>
+            </>
+          )}
         </div>
       </div>
       <div className="ss-insp-body">
@@ -436,8 +575,8 @@ export function Inspector({
                 <span className="ss-faint">{' → '}</span>
                 {qualifiedName(r.to)}
               </span>
-              <Badge>{r.onDelete}</Badge>
-              <span className="ss-insp-item-sub">{`outgoing · ON DELETE ${r.onDelete}`}</span>
+              <Badge>{r.inferred ? 'inferred' : r.onDelete}</Badge>
+              <span className="ss-insp-item-sub">{`outgoing · ${r.inferred ? 'inferred from the column name' : `ON DELETE ${r.onDelete}`}`}</span>
             </div>
           ))}
           {incoming.map((r) => (
@@ -448,7 +587,7 @@ export function Inspector({
                 <span className="ss-faint">{' → '}</span>
                 {qualifiedName(r.to)}
               </span>
-              <Badge>{r.onDelete}</Badge>
+              <Badge>{r.inferred ? 'inferred' : r.onDelete}</Badge>
               <span className="ss-insp-item-sub">{`incoming · referenced by ${r.from.table}`}</span>
             </div>
           ))}
@@ -476,6 +615,12 @@ export function Inspector({
             />
             <label>Schema</label>
             <Select size="sm" mono value={schema} options={schemas} onChange={(v) => edit((table) => ({ ...table, schema: v }))} />
+            {onGroup && (
+              <>
+                <label>Group</label>
+                <GroupField groups={groups} tables={[t.name]} onGroup={onGroup} onNewGroup={onNewGroup} />
+              </>
+            )}
           </div>
         </InspectorSection>
       </div>

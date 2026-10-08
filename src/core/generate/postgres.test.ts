@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ecommerceTables } from '../fixtures/ecommerce';
 import { ecommerceDump, ecommerceSql } from '../fixtures/sql';
-import { ecommerceSnapshot, tableNamed } from '../fixtures/testing';
+import { ecommerceSnapshot, inferredTables, tableNamed } from '../fixtures/testing';
 import type { Table } from '../model';
 import { postgresParser } from '../parse/postgres';
+import { declareInferred } from '../relations';
 import { generatorFor, EXPORT_ENGINES, type GenerateOptions } from './index';
 import { postgresGenerator, quoteName } from './postgres';
 
@@ -242,5 +243,19 @@ describe('generatorFor', () => {
     expect(generatorFor('PostgreSQL')).toBe(postgresGenerator);
     expect(generatorFor('ClickHouse')).toBeNull();
     expect(EXPORT_ENGINES[0]).toBe('PostgreSQL');
+  });
+});
+
+describe('inferred foreign keys', () => {
+  it('are left out of the script, which is otherwise the same', () => {
+    const sql = generate(inferredTables());
+    expect(sql).not.toContain('FOREIGN KEY');
+    expect(sql).toBe(generate(sample(), { foreignKeys: false }));
+  });
+
+  it('are written once they are declared', () => {
+    const cascade = /ON DELETE CASCADE/g;
+    // An inferred foreign key has no action of its own: it is declared with the default one.
+    expect(generate(declareInferred(inferredTables()))).toBe(generate(sample()).replace(cascade, 'ON DELETE RESTRICT'));
   });
 });
