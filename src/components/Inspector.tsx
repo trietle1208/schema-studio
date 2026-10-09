@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { addColumn, removeColumn, setColumn, setNullable, setPrimaryKey } from '../core/columns';
 import { groupOf } from '../core/groups';
+import { t } from '../core/i18n';
 import type { Column, Table, TableGroup } from '../core/model';
 import { incomingRelations, outgoingRelations, qualifiedName } from '../core/relations';
 import { validateColumns, validateTableName } from '../core/validate';
@@ -85,7 +86,7 @@ interface GroupFieldProps {
 
 /** The group of a table, or of several when they are all in one, to be changed for another, for none or for a new one. */
 function GroupField({ groups, tables, onGroup, onNewGroup }: GroupFieldProps) {
-  const own = [...new Set(tables.map((t) => groupOf(groups, t)))];
+  const own = [...new Set(tables.map((table) => groupOf(groups, table)))];
   const value = own.length === 1 ? (own[0]?.name ?? NO_GROUP) : SEVERAL_GROUPS;
   return (
     <span className={cx('ss-row', own.length === 1 && own[0] && `ss-group--${own[0].color}`)} style={{ minWidth: 0 }}>
@@ -93,14 +94,14 @@ function GroupField({ groups, tables, onGroup, onNewGroup }: GroupFieldProps) {
       <Select
         size="sm"
         mono
-        label="Group"
+        label={t('inspector.group')}
         style={{ flex: 1, minWidth: 0 }}
         value={value}
         options={[
-          ...(value === SEVERAL_GROUPS ? [{ value: SEVERAL_GROUPS, label: 'Several groups', disabled: true }] : []),
-          { value: NO_GROUP, label: 'None' },
+          ...(value === SEVERAL_GROUPS ? [{ value: SEVERAL_GROUPS, label: t('inspector.severalGroups'), disabled: true }] : []),
+          { value: NO_GROUP, label: t('common.none') },
           ...groups.map((g) => ({ value: g.name, label: g.name })),
-          ...(onNewGroup ? [{ value: NEW_GROUP, label: 'New group…' }] : []),
+          ...(onNewGroup ? [{ value: NEW_GROUP, label: t('inspector.newGroup') }] : []),
         ]}
         onChange={(v) => (v === NEW_GROUP ? onNewGroup?.(tables) : onGroup(tables, v === NO_GROUP ? null : v))}
       />
@@ -149,7 +150,7 @@ interface TableTitleProps {
 
 // Keyed by table name, so an unfinished rename never carries over to another table.
 function TableTitle({
-  table: t,
+  table,
   tables,
   renaming: initiallyRenaming,
   renameSignal,
@@ -158,25 +159,25 @@ function TableTitle({
   onDelete,
 }: TableTitleProps) {
   /** The name being typed, or null when the title is not being renamed. */
-  const [draft, setDraft] = useState<string | null>(initiallyRenaming ? t.name : null);
+  const [draft, setDraft] = useState<string | null>(initiallyRenaming ? table.name : null);
   const [seenSignal, setSeenSignal] = useState(renameSignal);
   if (renameSignal !== seenSignal) {
     setSeenSignal(renameSignal);
-    if (draft === null) setDraft(t.name);
+    if (draft === null) setDraft(table.name);
   }
-  const name = draft?.trim() ?? t.name;
+  const name = draft?.trim() ?? table.name;
   const error =
     draft === null
       ? null
       : validateTableName(
           name,
-          tables.filter((o) => o.name !== t.name).map((o) => o.name),
+          tables.filter((o) => o.name !== table.name).map((o) => o.name),
         );
 
   function commit() {
     if (draft === null || error) return;
     setDraft(null);
-    if (name !== t.name) onRename?.(t.name, name);
+    if (name !== table.name) onRename?.(table.name, name);
   }
 
   return (
@@ -197,17 +198,17 @@ function TableTitle({
               if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) commit();
               if (e.key === 'Escape') setDraft(null);
             }}
-            aria-label="Table name"
+            aria-label={t('inspector.tableName')}
             aria-invalid={!!error}
           />
         ) : (
-          <button type="button" className="ss-insp-name" onClick={() => setDraft(t.name)} title="Rename (F2)">
-            {t.name}
+          <button type="button" className="ss-insp-name" onClick={() => setDraft(table.name)} title={t('inspector.rename')}>
+            {table.name}
           </button>
         )}
-        <IconButton icon="pencil" label="Rename (F2)" onClick={() => setDraft(t.name)} />
-        <IconButton icon="copy" label="Duplicate (⌘D)" disabled={!onDuplicate} onClick={() => onDuplicate?.(t.name)} />
-        <IconButton icon="trash" label="Delete (⌫)" disabled={!onDelete} onClick={() => onDelete?.(t.name)} />
+        <IconButton icon="pencil" label={t('inspector.rename')} onClick={() => setDraft(table.name)} />
+        <IconButton icon="copy" label={t('inspector.duplicate')} disabled={!onDuplicate} onClick={() => onDuplicate?.(table.name)} />
+        <IconButton icon="trash" label={t('inspector.delete')} disabled={!onDelete} onClick={() => onDelete?.(table.name)} />
       </div>
       {error && (
         <div className="ss-field-error" role="alert">
@@ -220,7 +221,7 @@ function TableTitle({
 }
 
 export function Inspector({
-  table: t,
+  table,
   tables = [],
   selectedColumn,
   onSelectColumn,
@@ -254,7 +255,7 @@ export function Inspector({
     sent.current = null;
   });
 
-  if (!t) {
+  if (!table) {
     const several = selectedCount !== undefined && selectedCount > 1;
     return (
       <aside className="ss-inspector">
@@ -267,26 +268,24 @@ export function Inspector({
           </div>
         </div>
         <div className="ss-insp-empty" style={{ padding: 16 }}>
-          {several
-            ? `${selectedCount} tables selected. Drag one of them to move them together. `
-            : 'Select a table to edit its columns, indexes and foreign keys. '}
+          {several ? `${t('inspector.selected', { count: selectedCount })} ` : `${t('inspector.empty')} `}
           <br />
           <br />
           {several ? (
             <span className="ss-row">
               <Kbd keys={['⇧', 'A']} />
-              Arrange selected tables
+              {t('action.arrangeSelected')}
             </span>
           ) : (
             <>
               <span className="ss-row">
                 <Kbd keys={['⌘', 'K']} />
-                Jump to table
+                {t('inspector.jump')}
               </span>
               <br />
               <span className="ss-row">
                 <Kbd keys={['⇧']} />
-                Click tables or drag a frame to select several
+                {t('inspector.selectSeveral')}
               </span>
             </>
           )}
@@ -294,7 +293,7 @@ export function Inspector({
             <>
               <br />
               <span className="ss-row">
-                Group
+                {t('inspector.group')}
                 <GroupField groups={groups} tables={selection} onGroup={onGroup} onNewGroup={onNewGroup} />
               </span>
             </>
@@ -303,7 +302,7 @@ export function Inspector({
             <>
               <br />
               <Button size="sm" icon="plus" onClick={onNewTable}>
-                New table
+                {t('action.newTable')}
               </Button>
             </>
           )}
@@ -311,23 +310,23 @@ export function Inspector({
             <>
               <br />
               <br />
-              {'Foreign keys the database does not declare can be inferred from the names of the columns.'}
+              {t('inspector.inferHint')}
               <br />
               <br />
               <span className="ss-row" style={{ flexWrap: 'wrap' }}>
                 {onInferRelations && (
                   <Button size="sm" icon="link" onClick={onInferRelations}>
-                    Infer relationships
+                    {t('action.inferRelationships')}
                   </Button>
                 )}
                 {onReviewInferred && (
                   <Button size="sm" icon="check" onClick={onReviewInferred}>
-                    Review inferred
+                    {t('inspector.reviewInferred')}
                   </Button>
                 )}
                 {onRemoveInferred && (
                   <Button size="sm" variant="ghost" icon="x" onClick={onRemoveInferred}>
-                    Remove inferred
+                    {t('inspector.removeInferred')}
                   </Button>
                 )}
               </span>
@@ -337,11 +336,11 @@ export function Inspector({
             <>
               <br />
               <br />
-              {'The tables of one module can have a colour and a label on the canvas.'}
+              {t('inspector.groupsHint')}
               <br />
               <br />
               <Button size="sm" icon="folder" onClick={onGroups}>
-                Table groups
+                {t('action.tableGroups')}
               </Button>
             </>
           )}
@@ -350,23 +349,23 @@ export function Inspector({
     );
   }
 
-  const errors = validateColumns(t);
-  const indexes = t.indexes ?? [];
-  const outgoing = outgoingRelations(t);
-  const incoming = incomingRelations(t, tables);
+  const errors = validateColumns(table);
+  const indexes = table.indexes ?? [];
+  const outgoing = outgoingRelations(table);
+  const incoming = incomingRelations(table, tables);
   const relationCount = outgoing.length + incoming.length;
-  const schema = t.schema || DEFAULT_SCHEMA;
+  const schema = table.schema || DEFAULT_SCHEMA;
   const schemas = [...new Set([DEFAULT_SCHEMA, schema, ...tables.map((o) => o.schema || DEFAULT_SCHEMA)])];
-  const group = groupOf(groups, t.name);
+  const group = groupOf(groups, table.name);
 
   // Two edits in one event (a type committed by ⌘⏎, then the column it adds) must build on each
-  // other, but `t` only changes on the next render: later edits start from the table already sent.
+  // other, but `table` only changes on the next render: later edits start from the table already sent.
   function edit(apply: (table: Table) => Table, field?: string): Table | null {
-    if (!t) return null;
-    const base = sent.current?.from === t ? sent.current.to : t;
+    if (!table) return null;
+    const base = sent.current?.from === table ? sent.current.to : table;
     const next = apply(base);
     if (next === base) return base;
-    sent.current = { from: t, to: next };
+    sent.current = { from: table, to: next };
     onChange(next, field);
     return next;
   }
@@ -388,7 +387,7 @@ export function Inspector({
   return (
     <aside
       className="ss-inspector"
-      aria-label="Inspector"
+      aria-label={t('inspector.label')}
       onKeyDown={(e) => {
         if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return;
         e.preventDefault();
@@ -397,8 +396,8 @@ export function Inspector({
     >
       <div className="ss-insp-head">
         <TableTitle
-          key={t.name}
-          table={t}
+          key={table.name}
+          table={table}
           tables={tables}
           renaming={renaming}
           renameSignal={renameSignal}
@@ -409,15 +408,15 @@ export function Inspector({
         <div className="ss-insp-meta">
           <span>{schema}</span>
           {'·'}
-          <span>{`${t.columns.length} columns`}</span>
+          <span>{t('count.columns', { count: table.columns.length })}</span>
           {'·'}
-          <span>{`${indexes.length} indexes`}</span>
+          <span>{t('count.indexes', { count: indexes.length })}</span>
           {'·'}
-          <span>{`${relationCount} relations`}</span>
+          <span>{t('count.relations', { count: relationCount })}</span>
           {group && (
             <>
               {'·'}
-              <span className={cx('ss-row', `ss-group--${group.color}`)} style={{ gap: 4 }} title={`Group ${group.name}`}>
+              <span className={cx('ss-row', `ss-group--${group.color}`)} style={{ gap: 4 }} title={t('group.title', { name: group.name })}>
                 <span className="ss-group-swatch" />
                 {group.name}
               </span>
@@ -426,16 +425,16 @@ export function Inspector({
         </div>
       </div>
       <div className="ss-insp-body">
-        <InspectorSection title="Columns" count={t.columns.length} onAdd={addCol} addLabel="Add column (⌘⏎)">
+        <InspectorSection title={t('inspector.columns')} count={table.columns.length} onAdd={addCol} addLabel={`${t('action.addColumn')} (⌘⏎)`}>
           <div className="ss-col-head">
             <span />
-            <span>Name</span>
-            <span>Type</span>
-            <span title="Not null">NN</span>
-            <span title="Primary key">PK</span>
-            <span title="Unique">UQ</span>
+            <span>{t('field.name')}</span>
+            <span>{t('field.type')}</span>
+            <span title={t('flag.notNull')}>NN</span>
+            <span title={t('flag.primaryKey')}>PK</span>
+            <span title={t('flag.unique')}>UQ</span>
           </div>
-          {t.columns.map((c, i) => {
+          {table.columns.map((c, i) => {
             const selected = selectedColumn === i;
             const err = errors[i];
             return (
@@ -450,7 +449,7 @@ export function Inspector({
                     value={c.name}
                     placeholder="column_name"
                     spellCheck={false}
-                    aria-label="Column name"
+                    aria-label={t('field.columnName')}
                     aria-invalid={!!err}
                     autoFocus={!!(c.draft && selected && autoFocusDraft)}
                     onClick={(e) => {
@@ -479,7 +478,7 @@ export function Inspector({
                   <button
                     type="button"
                     className={cx('ss-flag', !c.nullable && 'is-on')}
-                    title={c.nullable ? 'Nullable — click for NOT NULL' : 'NOT NULL'}
+                    title={c.nullable ? t('inspector.nullableToggle') : 'NOT NULL'}
                     onClick={(e) => {
                       e.stopPropagation();
                       setCol(i, setNullable(c, !c.nullable));
@@ -490,7 +489,7 @@ export function Inspector({
                   <button
                     type="button"
                     className={cx('ss-flag ss-flag--pk', c.pk && 'is-on')}
-                    title="Primary key"
+                    title={t('flag.primaryKey')}
                     onClick={(e) => {
                       e.stopPropagation();
                       setCol(i, setPrimaryKey(c, !c.pk));
@@ -501,7 +500,7 @@ export function Inspector({
                   <button
                     type="button"
                     className={cx('ss-flag', c.unique && 'is-on')}
-                    title="Unique"
+                    title={t('flag.unique')}
                     onClick={(e) => {
                       e.stopPropagation();
                       setCol(i, { ...c, unique: !c.unique });
@@ -521,7 +520,7 @@ export function Inspector({
                 {selected && (
                   <ColumnEditor
                     column={c}
-                    table={t}
+                    table={table}
                     tables={tables}
                     onChange={(column, field) => setCol(i, column, field)}
                     onDelete={() => deleteCol(i)}
@@ -532,15 +531,15 @@ export function Inspector({
           })}
           <div className="ss-insp-add">
             <Button variant="ghost" size="sm" icon="plus" onClick={addCol} kbd={['⌘', '⏎']}>
-              Add column
+              {t('action.addColumn')}
             </Button>
           </div>
         </InspectorSection>
         <InspectorSection
-          title="Indexes"
+          title={t('noun.indexes')}
           count={indexes.length}
-          addLabel="Add index"
-          onAdd={onAddIndex && (() => onAddIndex(t.name))}
+          addLabel={t('inspector.addIndex')}
+          onAdd={onAddIndex && (() => onAddIndex(table.name))}
         >
           {indexes.map((ix) => (
             <div key={ix.name} className="ss-insp-item">
@@ -555,18 +554,18 @@ export function Inspector({
             </div>
           ))}
           <div className="ss-insp-add">
-            <Button variant="ghost" size="sm" icon="plus" disabled={!onAddIndex} onClick={() => onAddIndex?.(t.name)}>
-              Add index
+            <Button variant="ghost" size="sm" icon="plus" disabled={!onAddIndex} onClick={() => onAddIndex?.(table.name)}>
+              {t('inspector.addIndex')}
             </Button>
           </div>
         </InspectorSection>
         <InspectorSection
-          title="Foreign keys"
+          title={t('inspector.foreignKeys')}
           count={relationCount}
-          addLabel="Add foreign key"
-          onAdd={onAddForeignKey && (() => onAddForeignKey(t.name))}
+          addLabel={t('action.addForeignKey')}
+          onAdd={onAddForeignKey && (() => onAddForeignKey(table.name))}
         >
-          {relationCount === 0 && <div className="ss-insp-empty">No relationships yet.</div>}
+          {relationCount === 0 && <div className="ss-insp-empty">{t('inspector.noRelationships')}</div>}
           {outgoing.map((r) => (
             <div key={`o${qualifiedName(r.from)}`} className="ss-insp-item">
               <Icon name="arrow-right" size={14} style={{ color: 'var(--fk)' }} />
@@ -575,8 +574,8 @@ export function Inspector({
                 <span className="ss-faint">{' → '}</span>
                 {qualifiedName(r.to)}
               </span>
-              <Badge>{r.inferred ? 'inferred' : r.onDelete}</Badge>
-              <span className="ss-insp-item-sub">{`outgoing · ${r.inferred ? 'inferred from the column name' : `ON DELETE ${r.onDelete}`}`}</span>
+              <Badge>{r.inferred ? t('relation.inferred') : r.onDelete}</Badge>
+              <span className="ss-insp-item-sub">{t('inspector.outgoing', { detail: r.inferred ? t('inspector.inferredFromName') : `ON DELETE ${r.onDelete}` })}</span>
             </div>
           ))}
           {incoming.map((r) => (
@@ -587,8 +586,8 @@ export function Inspector({
                 <span className="ss-faint">{' → '}</span>
                 {qualifiedName(r.to)}
               </span>
-              <Badge>{r.inferred ? 'inferred' : r.onDelete}</Badge>
-              <span className="ss-insp-item-sub">{`incoming · referenced by ${r.from.table}`}</span>
+              <Badge>{r.inferred ? t('relation.inferred') : r.onDelete}</Badge>
+              <span className="ss-insp-item-sub">{t('inspector.incoming', { table: r.from.table })}</span>
             </div>
           ))}
           <div className="ss-insp-add">
@@ -597,28 +596,28 @@ export function Inspector({
               size="sm"
               icon="plus"
               disabled={!onAddForeignKey}
-              onClick={() => onAddForeignKey?.(t.name)}
+              onClick={() => onAddForeignKey?.(table.name)}
             >
-              Add foreign key
+              {t('action.addForeignKey')}
             </Button>
           </div>
         </InspectorSection>
-        <InspectorSection title="Table settings" collapsed={settingsCollapsed}>
+        <InspectorSection title={t('inspector.tableSettings')} collapsed={settingsCollapsed}>
           <div className="ss-insp-kv">
-            <label>Comment</label>
+            <label>{t('field.comment')}</label>
             <textarea
               className="ss-input"
               rows={2}
-              value={t.comment || ''}
-              placeholder="What does a row represent?"
+              value={table.comment || ''}
+              placeholder={t('inspector.commentPlaceholder')}
               onChange={(e) => edit((table) => ({ ...table, comment: e.target.value }), 'comment')}
             />
-            <label>Schema</label>
+            <label>{t('field.schema')}</label>
             <Select size="sm" mono value={schema} options={schemas} onChange={(v) => edit((table) => ({ ...table, schema: v }))} />
             {onGroup && (
               <>
-                <label>Group</label>
-                <GroupField groups={groups} tables={[t.name]} onGroup={onGroup} onNewGroup={onNewGroup} />
+                <label>{t('inspector.group')}</label>
+                <GroupField groups={groups} tables={[table.name]} onGroup={onGroup} onNewGroup={onNewGroup} />
               </>
             )}
           </div>

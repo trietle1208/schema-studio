@@ -31,7 +31,7 @@ The user is Vietnamese; reply in Vietnamese unless asked otherwise. Code, identi
 
 ```
 src/
-  core/            # pure TS, no React: model, parse/, generate/, diff/, introspect/, validate.ts
+  core/            # pure TS, no React: model, parse/, generate/, diff/, introspect/, i18n/, validate.ts
   store/           # Zustand stores (schema, ui, settings), undo/redo
   db/              # Dexie setup and repositories
   bridge/          # the app's client of the connection bridge
@@ -46,6 +46,7 @@ bridge/            # the connection bridge itself: a Node process, never bundled
 - Keep `src/core` free of React and DOM so it is testable.
 - Every new core function gets a Vitest test with a realistic SQL fixture (the ecommerce sample in `design-system/components/bundle.js` → `sample`).
 - Validation messages follow the design system wording, e.g. "Column name cannot be empty.", "Unable to parse SQL near line 42."
+- No user-facing text is written in a component, an action or the core: add a message to `src/core/i18n/en.ts` (the wording) and its Vietnamese to `vi.ts`, and say it with `t('key', { params })`, or `rich()` from `src/components/rich.tsx` when a placeholder is an element. A list of labels is built when it is rendered, not in a module-level constant. What goes into an exported file (SQL, JSON, comments) stays in English: use `translate('en', …)` when the same message is also shown.
 - Keyboard shortcuts listed in `design-system/README.md` (⌘S, ⌘Z, ⌘K, F2, ⌘⏎, ⌫, Esc) must work; on Windows use Ctrl.
 - Dark theme is the default; light theme via `data-theme="light"` on `<html>`.
 - Work in small steps from `docs/ROADMAP.md`. After each step: run `npm run build` and `npm test`, then summarise what changed.

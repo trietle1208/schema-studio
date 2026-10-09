@@ -19,10 +19,10 @@ import {
   MAX_IMPORT_BYTES,
   schemaNameFromFile,
 } from '../core/files';
+import { t } from '../core/i18n';
 import { addInferred } from '../core/infer';
 import { EMPTY_CONNECTION_FORM, INTROSPECT_ENGINES } from '../core/introspect';
 import { IMPORT_ENGINES, parserFor, type ParseOutcome } from '../core/parse';
-import { plural } from '../core/plural';
 import { ENGINES } from '../core/schemaList';
 import { summarize } from '../core/summary';
 import { validateSchemaName } from '../core/validate';
@@ -49,10 +49,11 @@ const WARNINGS_SHOWN = 5;
 /** The command whose output the drop zone says it reads, by dialect. */
 const DUMP_COMMANDS: Record<string, string> = { PostgreSQL: 'pg_dump --schema-only', MySQL: 'mysqldump --no-data' };
 
-const DIALECTS = ENGINES.map((engine) => {
-  const supported = IMPORT_ENGINES.includes(engine);
-  return { value: engine, label: supported ? engine : `${engine} (soon)`, disabled: !supported };
-});
+const dialects = () =>
+  ENGINES.map((engine) => {
+    const supported = IMPORT_ENGINES.includes(engine);
+    return { value: engine, label: supported ? engine : t('common.soon', { name: engine }), disabled: !supported };
+  });
 
 /**
  * Parses `sql` a moment after it stops changing. `outcome` is that of the latest parse, which is
@@ -111,7 +112,7 @@ export function ImportSchemaDialog() {
     state !== 'error' || !outcome
       ? null
       : outcome.ok
-        ? { message: 'No CREATE TABLE statement found.', line: null, detail: 'Import needs at least one table.' }
+        ? { message: t('import.noTable'), line: null, detail: t('import.noTableDetail') }
         : outcome.error;
   const errorLine = error?.line ?? null;
   // A file and a database have no editor to go to: the lines around the error are shown instead.
@@ -128,15 +129,15 @@ export function ImportSchemaDialog() {
     setFileProblem(null);
     if (!picked) return setFile(null);
     if (picked.size > MAX_IMPORT_BYTES) {
-      setFileProblem(`${picked.name} is ${formatBytes(picked.size)}. Files up to 10 MB can be imported.`);
+      setFileProblem(t('import.fileTooLarge', { name: picked.name, size: formatBytes(picked.size) }));
       return;
     }
     try {
       const text = await picked.text();
-      setFile({ name: picked.name, meta: `${formatBytes(picked.size)} · ${plural(countLines(text), 'line')}`, sql: text });
+      setFile({ name: picked.name, meta: `${formatBytes(picked.size)} · ${t('count.lines', { count: countLines(text) })}`, sql: text });
     } catch (thrown) {
       console.error(thrown);
-      setFileProblem(`${picked.name} could not be read.`);
+      setFileProblem(t('import.fileUnreadable', { name: picked.name }));
     }
   };
 
@@ -182,8 +183,8 @@ export function ImportSchemaDialog() {
 
   return (
     <Modal
-      title="Import Schema"
-      subtitle="Bring in existing DDL. Nothing is written until you confirm."
+      title={t('action.importSchema')}
+      subtitle={t('import.subtitle')}
       width={680}
       onClose={closeDialog}
       footerStart={
@@ -200,21 +201,21 @@ export function ImportSchemaDialog() {
         ) : (
           <span className="ss-modal-foot-hint">
             <Kbd keys={['⌘', '⏎']} />
-            to import
+            {t('import.toImport')}
           </span>
         )
       }
       footer={
         <>
-          <Button onClick={closeDialog}>Cancel</Button>
+          <Button onClick={closeDialog}>{t('common.cancel')}</Button>
           <Button variant="primary" icon="download" disabled={!ready} onClick={() => void submit()}>
-            Import Schema
+            {t('action.importSchema')}
           </Button>
         </>
       }
     >
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px', gap: 12 }}>
-        <Field label="Schema name" error={nameProblem}>
+        <Field label={t('field.schemaName')} error={nameProblem}>
           <Input
             mono
             value={name}
@@ -225,7 +226,7 @@ export function ImportSchemaDialog() {
             data-autofocus
           />
         </Field>
-        <Field label="Dialect">
+        <Field label={t('import.dialect')}>
           <Select
             value={engine}
             onChange={(picked) => {
@@ -233,8 +234,8 @@ export function ImportSchemaDialog() {
               // What was read is the DDL of the other dialect.
               setRead(null);
             }}
-            options={DIALECTS}
-            label="Dialect"
+            options={dialects()}
+            label={t('import.dialect')}
           />
         </Field>
       </div>
@@ -243,9 +244,9 @@ export function ImportSchemaDialog() {
         value={mode}
         onChange={(v) => setMode(v as Mode)}
         options={[
-          { value: 'file', label: 'Upload SQL file', icon: 'upload' },
-          { value: 'paste', label: 'Paste SQL', icon: 'clipboard' },
-          { value: 'connect', label: 'Connect to database', icon: 'plug', disabled: !INTROSPECT_ENGINES.includes(engine) },
+          { value: 'file', label: t('import.mode.file'), icon: 'upload' },
+          { value: 'paste', label: t('import.mode.paste'), icon: 'clipboard' },
+          { value: 'connect', label: t('import.mode.connect'), icon: 'plug', disabled: !INTROSPECT_ENGINES.includes(engine) },
         ]}
       />
       {mode === 'file' && (
@@ -253,20 +254,20 @@ export function ImportSchemaDialog() {
           <DropZone
             file={file}
             onFile={(picked) => void choose(picked)}
-            hint={`.sql or .ddl · up to 10 MB · ${DUMP_COMMANDS[engine]} output works`}
+            hint={t('dropzone.hint', { command: DUMP_COMMANDS[engine] })}
           />
           {fileProblem && <Alert tone="error" title={fileProblem} />}
           {!file && (
             <>
-              <div className="ss-or">or</div>
+              <div className="ss-or">{t('import.or')}</div>
               <div>
                 <div className="ss-field-label" style={{ marginBottom: 6 }}>
-                  <span>Paste SQL</span>
+                  <span>{t('import.mode.paste')}</span>
                   <span className="ss-faint" style={{ fontWeight: 400 }}>
                     CREATE TABLE, ALTER TABLE, CREATE INDEX
                   </span>
                 </div>
-                {pasteEditor(132, '-- paste DDL here')}
+                {pasteEditor(132, t('import.pastePlaceholder'))}
               </div>
             </>
           )}
@@ -275,8 +276,8 @@ export function ImportSchemaDialog() {
       {mode === 'paste' && pasteEditor(280)}
       {mode === 'connect' && <ConnectDatabase engine={engine} form={connection} onForm={setConnection} read={read} onRead={setRead} />}
       <Checkbox
-        label="Infer missing relationships"
-        description="Columns named after a table, such as user_id, are linked to it. Drawn dashed and left out of exported SQL."
+        label={t('import.infer')}
+        description={t('import.inferDescription')}
         checked={infer}
         onChange={setInfer}
       />
@@ -288,7 +289,7 @@ export function ImportSchemaDialog() {
           height={countLines(excerpt.text) * 18 + 18}
           firstLine={excerpt.firstLine}
           errorLine={errorLine}
-          label={`${source ?? 'SQL'} near the error`}
+          label={t('import.nearError', { source: source ?? 'SQL' })}
         />
       )}
       {error && (
@@ -297,18 +298,18 @@ export function ImportSchemaDialog() {
         </Alert>
       )}
       {state === 'ok' && (fromFile || fromDatabase || warnings.length > 0 || skipped > 0) && (
-        <Alert tone="success" title="Ready to import">
+        <Alert tone="success" title={t('import.ready')}>
           <div>
             <code>{summary}</code>
-            {skipped > 0 && ` · ${plural(skipped, 'other statement')} skipped`}
-            {warnings.length > 0 && ` · ${plural(warnings.length, 'warning')}:`}
+            {skipped > 0 && ` · ${t('import.skipped', { count: skipped })}`}
+            {warnings.length > 0 && ` · ${t('count.warnings', { count: warnings.length })}:`}
           </div>
           {warnings.slice(0, WARNINGS_SHOWN).map((warning, i) => (
             <div key={i}>
               <Marked text={warning} />
             </div>
           ))}
-          {warnings.length > WARNINGS_SHOWN && <div>{`and ${warnings.length - WARNINGS_SHOWN} more.`}</div>}
+          {warnings.length > WARNINGS_SHOWN && <div>{t('import.moreWarnings', { count: warnings.length - WARNINGS_SHOWN })}</div>}
         </Alert>
       )}
     </Modal>

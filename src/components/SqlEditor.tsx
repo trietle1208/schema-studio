@@ -1,4 +1,5 @@
 import { useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react';
+import { t } from '../core/i18n';
 import { highlightJson, highlightSql } from '../core/highlight';
 import { cx } from './cx';
 import { Icon } from './Icon';
@@ -121,7 +122,7 @@ export function ParseStatus({ state = 'idle', summary, message, onJump, aside }:
     return (
       <div className="ss-parse is-ok" role="status">
         <Icon name="check-circle" size={16} />
-        <span>Parsed</span>
+        <span>{t('parse.status.parsed')}</span>
         <span className="ss-parse-sum">{summary}</span>
         {aside}
       </div>
@@ -131,7 +132,7 @@ export function ParseStatus({ state = 'idle', summary, message, onJump, aside }:
     return (
       <div className="ss-parse is-error" role="alert">
         <Icon name="alert" size={16} />
-        <span>{message || 'Unable to parse SQL.'}</span>
+        <span>{message || t('parse.status.failed')}</span>
         {onJump && (
           <a
             role="button"
@@ -141,7 +142,7 @@ export function ParseStatus({ state = 'idle', summary, message, onJump, aside }:
               if (e.key === 'Enter') onJump();
             }}
           >
-            Go to line
+            {t('parse.status.goToLine')}
           </a>
         )}
       </div>
@@ -151,14 +152,14 @@ export function ParseStatus({ state = 'idle', summary, message, onJump, aside }:
     return (
       <div className="ss-parse" role="status">
         <Icon name="clock" size={16} />
-        Parsing…
+        {t('parse.status.parsing')}
       </div>
     );
   }
   return (
     <div className="ss-parse">
       <Icon name="info" size={16} style={{ color: 'var(--ink-3)' }} />
-      {message || 'Paste DDL or drop a file — we parse it locally before importing.'}
+      {message || t('parse.status.idle')}
     </div>
   );
 }

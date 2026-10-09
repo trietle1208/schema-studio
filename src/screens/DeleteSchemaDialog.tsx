@@ -1,6 +1,7 @@
 import { ConfirmDialog } from '../components/Modal';
+import { rich } from '../components/rich';
 import { Alert } from '../components/Toast';
-import { plural } from '../core/plural';
+import { t } from '../core/i18n';
 import { selectDirty, useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
 import { deleteSchema } from './schemaActions';
@@ -18,26 +19,29 @@ export function DeleteSchemaDialog({ id, name, versions }: DeleteSchemaDialogPro
 
   return (
     <ConfirmDialog
-      title={`Delete schema "${name}"?`}
+      title={t('deleteSchema.title', { name })}
       danger
-      confirmLabel="Delete schema"
+      confirmLabel={t('action.deleteSchema')}
       onCancel={closeDialog}
       onConfirm={() => void deleteSchema(id)}
     >
       <div style={{ color: 'var(--ink-2)' }}>
-        This removes{' '}
-        <code className="ss-mono" style={{ color: 'var(--ink-1)' }}>
-          {name}
-        </code>
-        {` and its ${plural(versions, 'saved version')} from this browser.`}
+        {rich('deleteSchema.body', {
+          schema: (
+            <code className="ss-mono" style={{ color: 'var(--ink-1)' }}>
+              {name}
+            </code>
+          ),
+          versions: t('count.savedVersions', { count: versions }),
+        })}
       </div>
       {unsaved && (
-        <Alert tone="warn" title="Unsaved changes will be lost">
-          The schema is open in the workspace with changes that are not saved.
+        <Alert tone="warn" title={t('dialog.unsavedLost')}>
+          {t('deleteSchema.unsaved')}
         </Alert>
       )}
       <div className="ss-faint" style={{ fontSize: 12 }}>
-        This cannot be undone.
+        {t('dialog.cannotUndo')}
       </div>
     </ConfirmDialog>
   );

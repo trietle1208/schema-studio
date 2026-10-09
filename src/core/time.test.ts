@@ -10,6 +10,17 @@ const now = new Date(2026, 9, 6, 8, 14).getTime();
 const before = (ms: number) => relativeTime(now - ms, now);
 
 describe('relativeTime', () => {
+  it('is short for a narrow column, with the date as it is', () => {
+    const short = (ms: number) => relativeTime(now - ms, now, true);
+    expect(short(0)).toBe('now');
+    expect(short(59 * MINUTE)).toBe('59m');
+    expect(short(2 * HOUR + 12 * MINUTE)).toBe('2h');
+    expect(short(DAY)).toBe('1d');
+    expect(short(3 * DAY)).toBe('3d');
+    expect(short(8 * DAY)).toBe('1w');
+    expect(short(40 * DAY)).toBe(before(40 * DAY));
+  });
+
   it('says "just now" for the first minute, and for a clock that ran backwards', () => {
     expect(before(0)).toBe('just now');
     expect(before(59_000)).toBe('just now');

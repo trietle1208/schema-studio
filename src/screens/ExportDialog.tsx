@@ -13,11 +13,11 @@ import { byteLength, countLines, exportFileName, formatBytes, migrationFileName,
 import { DEFAULT_GENERATE_OPTIONS, EXPORT_ENGINES, generatorFor, migratorFor, type GenerateOptions } from '../core/generate';
 import { convertsTypes, convertTables } from '../core/generate/convert';
 import { generateJson } from '../core/generate/json';
+import { t } from '../core/i18n';
 import type { Table } from '../core/model';
-import { plural } from '../core/plural';
 import { countInferred, declareInferred } from '../core/relations';
 import { ENGINES } from '../core/schemaList';
-import { parseTheme, THEMES, type Theme } from '../core/theme';
+import { parseTheme, themeOptions, type Theme } from '../core/theme';
 import { timestamp } from '../core/time';
 import { findProblems } from '../core/validate';
 import { versionLabel } from '../core/versions';
@@ -34,10 +34,11 @@ type Option = Exclude<keyof GenerateOptions, 'header'>;
 /** How many destructive changes the warning spells out before it only counts the rest. */
 const SPELLED_OUT = 2;
 
-const DATABASES = ENGINES.map((engine) => {
-  const supported = EXPORT_ENGINES.includes(engine);
-  return { value: engine, label: supported ? engine : `${engine} (soon)`, disabled: !supported };
-});
+const databases = () =>
+  ENGINES.map((engine) => {
+    const supported = EXPORT_ENGINES.includes(engine);
+    return { value: engine, label: supported ? engine : t('common.soon', { name: engine }), disabled: !supported };
+  });
 
 /** How many px of a PNG a unit of the canvas can be. */
 const SCALES = [1, 2, 3].map((scale) => ({ value: String(scale), label: `${scale}×` }));
@@ -55,7 +56,7 @@ function DiagramPreview({ svg, theme }: DiagramPreviewProps) {
   return (
     // In the theme of the picture, whatever the app is painted in: a picture without a background is to be read on its own.
     <div className="ss-diagram-preview" data-theme={theme} style={{ height: PREVIEW_HEIGHT }}>
-      {source && <img src={source} alt="Diagram preview" />}
+      {source && <img src={source} alt={t('export.previewAlt')} />}
     </div>
   );
 }
@@ -90,8 +91,9 @@ export function ExportDialog({ schema }: ExportDialogProps) {
   const canMigrate = format === 'sql' && base !== null && migratorFor(database) !== null;
   const migrating = wantsMigration && canMigrate;
 
-  const version = schema.version === null ? 'not saved' : versionLabel(schema.version);
-  const target = `${version}${schema.unsaved ? ' + unsaved changes' : ''}`;
+  const version = schema.version === null ? t('export.notSaved') : versionLabel(schema.version);
+  // What the file says it holds. A file reads the same whatever language the app is in.
+  const target = `${schema.version === null ? 'not saved' : versionLabel(schema.version)}${schema.unsaved ? ' + unsaved changes' : ''}`;
   // A schema made for another engine is written with the types of the database it is exported for.
   const converted = format === 'sql' && convertsTypes(schema.engine, database);
   const migration = useMemo(() => {
@@ -174,8 +176,8 @@ export function ExportDialog({ schema }: ExportDialogProps) {
 
   return (
     <Modal
-      title="Export Schema"
-      subtitle={`${schema.name} · ${version} · ${plural(schema.tables.length, 'table')}${schema.unsaved ? ' · unsaved changes' : ''}`}
+      title={t('export.title')}
+      subtitle={`${schema.name} · ${version} · ${t('count.tables', { count: schema.tables.length })}${schema.unsaved ? ` · ${t('export.unsaved')}` : ''}`}
       width={860}
       onClose={closeDialog}
       bodyStyle={{ padding: 0 }}
@@ -189,11 +191,11 @@ export function ExportDialog({ schema }: ExportDialogProps) {
       footer={
         <>
           <Button icon="copy" disabled={!ready} onClick={copy}>
-            Copy
+            {t('common.copy')}
           </Button>
-          <Button onClick={closeDialog}>Cancel</Button>
+          <Button onClick={closeDialog}>{t('common.cancel')}</Button>
           <Button variant="primary" icon="download" kbd={['⌘', '⏎']} disabled={!ready} onClick={save} data-autofocus>
-            Export
+            {t('common.export')}
           </Button>
         </>
       }
@@ -202,34 +204,34 @@ export function ExportDialog({ schema }: ExportDialogProps) {
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16, borderRight: '1px solid var(--line-1)' }}>
           <div>
             <div className="ss-caption" style={{ marginBottom: 8 }}>
-              Format
+              {t('export.format')}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Radio
                 name="fmt"
                 label="SQL"
-                description="DDL statements for the target database"
+                description={t('export.sqlDescription')}
                 checked={format === 'sql'}
                 onChange={() => setFormat('sql')}
               />
               <Radio
                 name="fmt"
                 label="JSON"
-                description="Schema Studio model, for tooling and CI"
+                description={t('export.jsonDescription')}
                 checked={format === 'json'}
                 onChange={() => setFormat('json')}
               />
               <Radio
                 name="fmt"
                 label="SVG"
-                description="The diagram as a picture that scales"
+                description={t('export.svgDescription')}
                 checked={format === 'svg'}
                 onChange={() => setFormat('svg')}
               />
               <Radio
                 name="fmt"
                 label="PNG"
-                description="The diagram as an image, for documents and chat"
+                description={t('export.pngDescription')}
                 checked={format === 'png'}
                 onChange={() => setFormat('png')}
               />
@@ -237,36 +239,36 @@ export function ExportDialog({ schema }: ExportDialogProps) {
           </div>
           {pictured ? (
             <>
-              <Field label="Theme">
-                <SegmentedControl options={[...THEMES]} value={theme} onChange={(value) => setTheme(parseTheme(value))} />
+              <Field label={t('field.theme')}>
+                <SegmentedControl options={themeOptions()} value={theme} onChange={(value) => setTheme(parseTheme(value))} />
               </Field>
               {format === 'png' && (
                 <Field
-                  label="Scale"
+                  label={t('export.scale')}
                   hint={
                     diagram && diagram.scale < scale
-                      ? `Drawn at ${diagram.scale}×: the diagram is too large for more.`
-                      : 'How many px of the image a unit of the canvas is.'
+                      ? t('export.scaleLimited', { scale: diagram.scale })
+                      : t('export.scaleHint')
                   }
                 >
-                  <Select value={String(scale)} onChange={(v) => setScale(Number(v))} options={SCALES} label="Scale" />
+                  <Select value={String(scale)} onChange={(v) => setScale(Number(v))} options={SCALES} label={t('export.scale')} />
                 </Field>
               )}
               <div>
                 <div className="ss-caption" style={{ marginBottom: 8 }}>
-                  Options
+                  {t('export.options')}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <Checkbox
-                    label="Transparent background"
-                    description="Without the colour of the canvas behind the tables"
+                    label={t('export.transparent')}
+                    description={t('export.transparentDescription')}
                     checked={transparent}
                     onChange={setTransparent}
                   />
                   {format === 'svg' && (
                     <Checkbox
-                      label="Embed fonts"
-                      description="Geist Mono goes into the file, so that it reads the same anywhere"
+                      label={t('export.embedFonts')}
+                      description={t('export.embedFontsDescription')}
                       checked={embedFonts}
                       onChange={setEmbedFonts}
                     />
@@ -276,29 +278,29 @@ export function ExportDialog({ schema }: ExportDialogProps) {
             </>
           ) : (
             <>
-              <Field label="Database" hint={converted ? `Data types are converted from ${schema.engine}.` : undefined}>
-                <Select value={database} onChange={setDatabase} options={DATABASES} disabled={format === 'json'} label="Database" />
+              <Field label={t('field.database')} hint={converted ? t('export.converted', { engine: schema.engine }) : undefined}>
+                <Select value={database} onChange={setDatabase} options={databases()} disabled={format === 'json'} label={t('field.database')} />
               </Field>
               <div>
                 <div className="ss-caption" style={{ marginBottom: 8 }}>
-                  Options
+                  {t('export.options')}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {/* A migration is everything that changed: there is nothing to leave out of it. */}
-                  <Checkbox label="Include indexes" checked={options.indexes} disabled={migrating} onChange={toggle('indexes')} />
-                  <Checkbox label="Include foreign keys" checked={options.foreignKeys} disabled={migrating} onChange={toggle('foreignKeys')} />
+                  <Checkbox label={t('export.indexes')} checked={options.indexes} disabled={migrating} onChange={toggle('indexes')} />
+                  <Checkbox label={t('export.foreignKeys')} checked={options.foreignKeys} disabled={migrating} onChange={toggle('foreignKeys')} />
                   {inferred > 0 && (
                     <Checkbox
-                      label="Include inferred foreign keys"
-                      description={`${plural(inferred, 'relationship')} guessed from column names`}
+                      label={t('export.inferred')}
+                      description={t('export.inferredDescription', { count: inferred })}
                       checked={wantsInferred && options.foreignKeys && !migrating}
                       disabled={!options.foreignKeys || migrating}
                       onChange={setWantsInferred}
                     />
                   )}
-                  <Checkbox label="Include comments" checked={options.comments} disabled={migrating} onChange={toggle('comments')} />
+                  <Checkbox label={t('export.comments')} checked={options.comments} disabled={migrating} onChange={toggle('comments')} />
                   <Checkbox
-                    label="Add DROP … IF EXISTS"
+                    label={t('export.dropIfExists')}
                     checked={options.dropIfExists && format === 'sql' && !migrating}
                     // JSON describes the schema; it has no statements to drop anything.
                     disabled={format === 'json' || migrating}
@@ -308,11 +310,11 @@ export function ExportDialog({ schema }: ExportDialogProps) {
               </div>
               <div style={{ borderTop: '1px solid var(--line-1)', paddingTop: 14 }}>
                 <Checkbox
-                  label="Generate migration from previous version"
+                  label={t('export.migration')}
                   description={
                     base
-                      ? `ALTER statements from ${versionLabel(base.version)} to ${version} instead of full DDL`
-                      : 'ALTER statements between two versions instead of full DDL'
+                      ? t('export.migrationBetween', { from: versionLabel(base.version), to: version })
+                      : t('export.migrationAny')
                   }
                   checked={migrating}
                   // It takes an earlier saved version to start from, and SQL to write.
@@ -327,12 +329,12 @@ export function ExportDialog({ schema }: ExportDialogProps) {
                       value={String(base.version)}
                       onChange={(v) => setPickedBase(Number(v))}
                       options={bases.map((v) => ({ value: String(v.version), label: versionLabel(v.version) }))}
-                      label="Base version"
+                      label={t('export.baseVersion')}
                       style={{ width: 72 }}
                     />
                     <Icon name="arrow-right" size={14} style={{ color: 'var(--ink-3)' }} />
                     <Badge tone="accent">{version}</Badge>
-                    {schema.unsaved && <Badge tone="modified">unsaved</Badge>}
+                    {schema.unsaved && <Badge tone="modified">{t('export.unsavedBadge')}</Badge>}
                   </div>
                 )}
               </div>
@@ -341,34 +343,34 @@ export function ExportDialog({ schema }: ExportDialogProps) {
         </div>
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, background: 'var(--bg-2)' }}>
           <div className="ss-row">
-            <span className="ss-caption">Preview</span>
+            <span className="ss-caption">{t('export.preview')}</span>
             <span className="ss-spacer" />
             {pictured ? (
               <span className="ss-faint" style={{ fontSize: 12 }}>
-                {diagram?.preview && placed > 0 ? `${plural(placed, 'table')} · ${diagram.preview.width} × ${diagram.preview.height}` : ''}
+                {diagram?.preview && placed > 0 ? `${t('count.tables', { count: placed })} · ${diagram.preview.width} × ${diagram.preview.height}` : ''}
               </span>
             ) : migration ? (
               <Badge tone="modified" sans>
-                {plural(migration.statements, 'statement')}
+                {t('count.statements', { count: migration.statements })}
               </Badge>
             ) : (
               <span className="ss-faint" style={{ fontSize: 12 }}>
-                {plural(countLines(text), 'line')}
+                {t('count.lines', { count: countLines(text) })}
               </span>
             )}
           </div>
           {problems > 0 && !pictured && (
-            <Alert tone="warn" title={`${plural(problems, 'column')} with validation errors`}>
-              The exported file may not run until they are fixed. Errors are marked in the inspector.
+            <Alert tone="warn" title={t('count.invalidColumns', { count: problems })}>
+              {t('export.problemsBody')}
             </Alert>
           )}
           {destructive.length > 0 && (
-            <Alert tone="warn" title={plural(destructive.length, 'destructive change')}>
+            <Alert tone="warn" title={t('count.destructiveChanges', { count: destructive.length })}>
               {destructive
                 .slice(0, SPELLED_OUT)
                 .map((d) => d.message)
                 .join(' ')}
-              {destructive.length > SPELLED_OUT ? ` And ${destructive.length - SPELLED_OUT} more.` : ''}
+              {destructive.length > SPELLED_OUT ? ` ${t('common.andMore', { count: destructive.length - SPELLED_OUT })}` : ''}
             </Alert>
           )}
           {!pictured && (
@@ -378,13 +380,13 @@ export function ExportDialog({ schema }: ExportDialogProps) {
               // The preview gives up the height of the warnings above it.
               height={PREVIEW_HEIGHT - (problems > 0 ? 72 : 0) - (destructive.length > 0 ? 72 : 0)}
               language={format}
-              label="Export preview"
+              label={t('export.previewLabel')}
             />
           )}
           {pictured && placed > 0 && <DiagramPreview svg={diagram?.preview?.svg ?? null} theme={theme} />}
           {pictured && placed === 0 && (
-            <Alert tone="info" title="No tables to draw">
-              The diagram has no table on its canvas yet.
+            <Alert tone="info" title={t('export.noTables')}>
+              {t('export.noTablesBody')}
             </Alert>
           )}
         </div>

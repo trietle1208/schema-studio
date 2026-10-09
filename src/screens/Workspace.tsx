@@ -3,13 +3,15 @@ import { useShallow } from 'zustand/react/shallow';
 import { Button } from '../components/Button';
 import { ERCanvas, type ERCanvasActions } from '../components/ERCanvas';
 import { Inspector } from '../components/Inspector';
+import { rich } from '../components/rich';
 import { StatusBar } from '../components/StatusBar';
 import { Toolbar } from '../components/Toolbar';
+import { t } from '../core/i18n';
 import { newTablePosition } from '../core/layout';
-import { plural } from '../core/plural';
 import { countInferred, countRelations, relatedTables } from '../core/relations';
 import { SCHEMAS_ROUTE } from '../core/routes';
 import { searchTables } from '../core/search';
+import { relationshipCount } from '../core/summary';
 import { findProblems } from '../core/validate';
 import { versionLabel } from '../core/versions';
 import {
@@ -112,7 +114,7 @@ export function Workspace() {
 
   const column = table && selectedColumn !== null ? table.columns[selectedColumn] : undefined;
   const several = selection.length > 1;
-  let selectionText = several ? `${selection.length} tables selected` : 'Nothing selected';
+  let selectionText = several ? t('status.selected', { count: selection.length }) : t('status.nothingSelected');
   if (table) selectionText = `${table.schema || 'public'}.${table.name}${column ? `.${column.name || '?'}` : ''}`;
 
   return (
@@ -179,19 +181,22 @@ export function Workspace() {
           onRemoveInferred={inferred ? removeInferredRelationships : undefined}
           hint={
             tables.length === 0 ? (
-              'No tables yet. Right-click the canvas to add one.'
+              t('workspace.noTables')
             ) : focused !== null ? (
               // The canvas takes a press on it as the start of a pan, which would swallow the click on the button.
               <span className="ss-row" onPointerDown={(e) => e.stopPropagation()}>
                 <span>
-                  {'Showing '}
-                  <span className="ss-mono" style={{ color: 'var(--ink-1)' }}>
-                    {focused}
-                  </span>
-                  {` and ${plural(inFocus.length - 1, 'related table')}`}
+                  {rich('workspace.focus', {
+                    count: inFocus.length - 1,
+                    table: (
+                      <span className="ss-mono" style={{ color: 'var(--ink-1)' }}>
+                        {focused}
+                      </span>
+                    ),
+                  })}
                 </span>
                 <Button variant="ghost" size="sm" kbd="Esc" onClick={showAllTables}>
-                  Show all tables
+                  {t('action.showAllTables')}
                 </Button>
               </span>
             ) : undefined
@@ -230,12 +235,12 @@ export function Workspace() {
         />
       </div>
       <StatusBar
-        left={[`${visible.length} of ${tables.length} tables in view`, `${relationships} relationships${inferred ? ` (${inferred} inferred)` : ''}`, selectionText]}
+        left={[t('status.inView', { shown: visible.length, total: tables.length }), relationshipCount(relationships, inferred), selectionText]}
         right={[
           problems.length ? (
-            <span style={{ color: 'var(--removed)' }}>{`${problems.length} problem${problems.length > 1 ? 's' : ''}`}</span>
+            <span style={{ color: 'var(--removed)' }}>{t('count.problems', { count: problems.length })}</span>
           ) : (
-            '0 problems'
+            t('count.problems', { count: 0 })
           ),
           engine,
           `${Math.round(zoom * 100)}%`,

@@ -1,4 +1,5 @@
 import type { CSSProperties, MouseEvent, MouseEventHandler, PointerEvent, PointerEventHandler } from 'react';
+import { t } from '../core/i18n';
 import type { Column, Table, TableGroup } from '../core/model';
 import { cx } from './cx';
 import { Icon } from './Icon';
@@ -78,27 +79,27 @@ function NodeRow({ column: c, index, selected, invalid, linked, refused, onClick
       data-column={index}
     >
       {c.pk ? (
-        <Icon name="key" size={13} className="ss-node-key" label="Primary key" />
+        <Icon name="key" size={13} className="ss-node-key" label={t('flag.primaryKey')} />
       ) : c.fk ? (
         <Icon
           name="link"
           size={13}
           className={cx('ss-node-fk', c.fk.inferred && 'is-inferred')}
-          label={`${c.fk.inferred ? 'Inferred foreign key' : 'Foreign key'} → ${c.fk.table}.${c.fk.column}`}
+          label={t(c.fk.inferred ? 'node.inferredForeignKey' : 'node.foreignKey', { target: `${c.fk.table}.${c.fk.column}` })}
         />
       ) : (
         <span />
       )}
-      <span className={cx('ss-node-col', empty && 'is-empty')}>{empty ? 'unnamed' : c.name}</span>
+      <span className={cx('ss-node-col', empty && 'is-empty')}>{empty ? t('common.unnamed') : c.name}</span>
       <span className="ss-node-type">
         {c.type || '—'}
         {c.nullable && (
-          <span className="ss-node-null" title="Nullable">
+          <span className="ss-node-null" title={t('flag.nullable')}>
             ?
           </span>
         )}
       </span>
-      <span className="ss-node-flag" title={c.unique ? 'Unique' : undefined}>
+      <span className="ss-node-flag" title={c.unique ? t('flag.unique') : undefined}>
         {c.unique ? 'UQ' : ''}
       </span>
     </div>
@@ -106,7 +107,7 @@ function NodeRow({ column: c, index, selected, invalid, linked, refused, onClick
 }
 
 export function TableNode({
-  table: t,
+  table,
   x,
   y,
   width,
@@ -153,23 +154,23 @@ export function TableNode({
       onContextMenu={onContextMenu}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect?.(t.name, e);
+        onSelect?.(table.name, e);
       }}
-      data-table={t.name}
+      data-table={table.name}
       role="group"
-      aria-label={`Table ${t.name}`}
+      aria-label={t('node.label', { name: table.name })}
     >
-      <div className="ss-node-head" data-drag="1" title={group ? `Group ${group.name}` : undefined}>
+      <div className="ss-node-head" data-drag="1" title={group ? t('group.title', { name: group.name }) : undefined}>
         <Icon name="table" size={14} />
         <span className="ss-node-name">
-          {t.schema && t.schema !== 'public' ? <span className="ss-node-schema">{`${t.schema}.`}</span> : null}
-          {t.name || 'unnamed'}
+          {table.schema && table.schema !== 'public' ? <span className="ss-node-schema">{`${table.schema}.`}</span> : null}
+          {table.name || t('common.unnamed')}
         </span>
-        {dirty && <span className="ss-dirty-dot" title="Unsaved changes" />}
-        <span className="ss-node-count">{t.columns.length}</span>
+        {dirty && <span className="ss-dirty-dot" title={t('save.dirty')} />}
+        <span className="ss-node-count">{table.columns.length}</span>
       </div>
       <div className="ss-node-body">
-        {t.columns.map((c, i) => (
+        {table.columns.map((c, i) => (
           <NodeRow
             key={i}
             column={c}
@@ -181,7 +182,7 @@ export function TableNode({
             onPointerDown={onColumnPointerDown && ((e) => onColumnPointerDown(i, e))}
             onClick={(e) => {
               e.stopPropagation();
-              onSelect?.(t.name, e);
+              onSelect?.(table.name, e);
               onSelectColumn?.(i, e);
             }}
           />
@@ -192,7 +193,7 @@ export function TableNode({
           <div
             key={side}
             className={cx('ss-node-resize', side === 1 ? 'ss-node-resize--right' : 'ss-node-resize--left')}
-            title="Drag to resize. Double-click to fit the columns."
+            title={t('node.resize')}
             onPointerDown={(e) => {
               e.stopPropagation();
               onResizeDown(side, e);

@@ -1,6 +1,7 @@
 import { primaryKey, uniqueColumns, writtenIndexes, type PrimaryKey } from '../constraints';
 import { serialType, widensType } from '../datatypes';
 import { diffSchemas, schemaOf, type ColumnChange } from '../diff';
+import { getLocale, translate, type Locale } from '../i18n';
 import type { Column, Table } from '../model';
 import { DEFAULT_GENERATE_OPTIONS, type DestructiveChange, type MigrateOptions, type Migration, type SqlMigrator } from './options';
 import { addForeignKey, columnList, createIndex, createTable, quoteName, quoteText, tableName } from './postgres';
@@ -45,10 +46,13 @@ function migrate(before: readonly Table[], after: readonly Table[], options: Mig
   /** Groups of lines; a blank line goes between two groups. */
   const blocks: string[][] = [];
   const destructive: DestructiveChange[] = [];
-  /** Records a change that deletes data and gives the line that says so above its statement. */
-  const flag = (path: string, message: string) => {
-    destructive.push({ path, message });
-    return `-- Destructive: ${message}`;
+  /**
+   * Records a change that deletes data and gives the line that says so above its statement. The
+   * line is of the script, which reads the same whatever language the app is in.
+   */
+  const flag = (path: string, message: (locale: Locale) => string) => {
+    destructive.push({ path, message: message(getLocale()) });
+    return `-- Destructive: ${message('en')}`;
   };
 
   // A table that moves to another schema does so first, so that every later statement finds it there.
@@ -73,7 +77,7 @@ function migrate(before: readonly Table[], after: readonly Table[], options: Mig
   const gone = changes.tables.flatMap((change) => (change.op === 'del' ? [change.before] : []));
   if (gone.length) {
     blocks.push([
-      ...gone.map((table) => flag(table.name, `Dropping ${table.name} deletes its data.`)),
+      ...gone.map((table) => flag(table.name, (locale) => translate(locale, 'migration.dropData', { path: table.name }))),
       `DROP TABLE ${gone.map(tableName).join(', ')};`,
     ]);
   }
@@ -111,7 +115,7 @@ function migrate(before: readonly Table[], after: readonly Table[], options: Mig
     for (const change of columns) {
       if (change.op !== 'del') continue;
       const path = `${table.name}.${change.before.name}`;
-      notes.push(flag(path, `Dropping ${path} deletes its data.`));
+      notes.push(flag(path, (locale) => translate(locale, 'migration.dropData', { path })));
       actions.push(`DROP COLUMN ${quoteName(change.before.name)}`);
     }
     for (const change of columns) if (change.op === 'add') actions.push(`ADD COLUMN ${columnDefinition(change.after)}`);
@@ -130,7 +134,7 @@ function migrate(before: readonly Table[], after: readonly Table[], options: Mig
 
       if (typeWas !== typeIs) {
         const safe = widensType(typeWas, typeIs);
-        if (!safe) notes.push(flag(path, `Changing ${path} from ${from.type} to ${to.type} can fail or lose data.`));
+        if (!safe) notes.push(flag(path, (locale) => translate(locale, 'migration.changeType', { path, from: from.type, to: to.type })));
         actions.push(`ALTER COLUMN ${column} TYPE ${typeIs}${safe ? '' : ` USING ${column}::${typeIs}`}`);
         if (serialWas && serialIs) later.push([`ALTER SEQUENCE ${sequence} AS ${typeIs};`]);
       }

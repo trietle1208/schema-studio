@@ -1,4 +1,5 @@
 import { quoteName, quoteText } from '../generate/postgres';
+import { t } from '../i18n';
 import type { Catalog, Connection, MysqlCatalog, PostgresCatalog } from './catalog';
 
 // A live database → DDL. The catalog the bridge read is written out as the script the engine's own
@@ -94,11 +95,11 @@ export type ConnectionField = 'host' | 'port' | 'database' | 'user';
 /** The first problem of each field that has one, in the wording of the design system. A password may be blank. */
 export function validateConnection(form: ConnectionForm): Partial<Record<ConnectionField, string>> {
   const problems: Partial<Record<ConnectionField, string>> = {};
-  if (!form.host.trim()) problems.host = 'Host cannot be empty.';
+  if (!form.host.trim()) problems.host = t('connection.hostEmpty');
   const port = form.port.trim();
-  if (port && !(/^\d+$/.test(port) && Number(port) >= 1 && Number(port) <= 65535)) problems.port = 'Port must be a number from 1 to 65535.';
-  if (!form.database.trim()) problems.database = 'Database name cannot be empty.';
-  if (!form.user.trim()) problems.user = 'User cannot be empty.';
+  if (port && !(/^\d+$/.test(port) && Number(port) >= 1 && Number(port) <= 65535)) problems.port = t('connection.portInvalid');
+  if (!form.database.trim()) problems.database = t('connection.databaseEmpty');
+  if (!form.user.trim()) problems.user = t('connection.userEmpty');
   return problems;
 }
 

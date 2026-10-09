@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from './components/AppShell';
 import { Sidebar } from './components/Sidebar';
+import { t } from './core/i18n';
 import { routeSchema, SCHEMAS_ROUTE, type Route } from './core/routes';
 import { schemaSummary } from './db/schemas';
 import { useSchemas } from './db/useSchemas';
@@ -14,6 +15,7 @@ import { requestSettings } from './screens/settingsActions';
 import { useAppShortcuts } from './screens/useAppShortcuts';
 import { VersionHistory } from './screens/VersionHistory';
 import { Workspace } from './screens/Workspace';
+import { useSettingsStore } from './store/settings';
 import { useUiStore } from './store/ui';
 
 const MINUTE = 60_000;
@@ -31,12 +33,21 @@ function useNow(): number {
 
 /** What the tab and the browser's history call a route. */
 function routeTitle(route: Route): string {
-  if (route.screen === 'schemas') return `Schemas · ${APP_NAME}`;
+  if (route.screen === 'schemas') return `${t('common.schemas')} · ${APP_NAME}`;
   if (route.screen === 'workspace') return `${route.schema} · ${APP_NAME}`;
-  return `${route.schema} · ${route.screen === 'history' ? 'Version history' : 'Compare'} · ${APP_NAME}`;
+  return `${route.schema} · ${route.screen === 'history' ? t('history.title') : t('compare.title')} · ${APP_NAME}`;
 }
 
+/**
+ * The app in the language of the settings. A change of language starts every screen over, so
+ * that nothing on it is left in the words of the language before.
+ */
 export function App() {
+  const locale = useSettingsStore((s) => s.locale);
+  return <Screens key={locale} />;
+}
+
+function Screens() {
   const route = useUiStore((s) => s.route);
   const stored = useSchemas();
   const now = useNow();

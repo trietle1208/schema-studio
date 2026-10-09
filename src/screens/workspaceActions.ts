@@ -3,8 +3,8 @@ import { countLines } from '../core/files';
 import { EXPORT_ENGINES, generatorFor, tableScript } from '../core/generate';
 import { convertTables } from '../core/generate/convert';
 import { assignGroup, newGroupName } from '../core/groups';
+import { t } from '../core/i18n';
 import type { Position } from '../core/model';
-import { plural } from '../core/plural';
 import { countInferred, qualifiedName, referenceProblem, referenceTargets, relatedTables, type ColumnRef } from '../core/relations';
 import { validateColumns } from '../core/validate';
 import { versionLabel } from '../core/versions';
@@ -25,23 +25,23 @@ export async function saveSchema(): Promise<void> {
     console.error(error);
     ui.showToast({
       tone: 'error',
-      title: 'Save failed',
-      description: 'The version could not be written to browser storage. Your changes are still open.',
+      title: t('toast.saveFailed.title'),
+      description: t('toast.saveFailed.description'),
     });
     return;
   }
   if (result.status === 'invalid') {
     ui.showToast({
       tone: 'error',
-      title: 'Fix validation errors before saving',
-      description: 'One or more columns are invalid. Errors are marked in the inspector.',
+      title: t('toast.invalid.title'),
+      description: t('toast.invalid.description'),
     });
   }
   // Saving an unchanged schema saves nothing, so there is nothing to announce.
   if (result.status === 'saved') {
     ui.showToast({
-      title: `Saved as ${versionLabel(result.version)}`,
-      description: `${schema.name} · ${plural(schema.tables.length, 'table')}`,
+      title: t('toast.saved.title', { version: versionLabel(result.version) }),
+      description: `${schema.name} · ${t('count.tables', { count: schema.tables.length })}`,
     });
   }
 }
@@ -74,9 +74,9 @@ export function deleteTable(name: string) {
   useSchemaStore.getState().deleteTable(name);
   const id = ui.showToast({
     tone: 'info',
-    title: `Deleted table ${name}`,
-    description: 'Not saved yet. Press ⌘Z to restore it.',
-    actions: [{ label: 'Undo', onClick: undo }],
+    title: t('toast.tableDeleted.title', { name }),
+    description: t('toast.tableDeleted.description'),
+    actions: [{ label: t('common.undo'), onClick: undo }],
   });
   // Undo reverts the latest edit, so the offer only holds until the schema changes again
   // (which undoing the delete does too).
@@ -100,8 +100,8 @@ export function requestAddForeignKey(name: string) {
   if (!referenceTargets(table, tables).length) {
     ui.showToast({
       tone: 'info',
-      title: 'No table to reference',
-      description: 'A foreign key references the primary key of another table, and no other table has one.',
+      title: t('toast.noReference.title'),
+      description: t('toast.noReference.description'),
     });
     return;
   }
@@ -123,10 +123,12 @@ export function drawForeignKey(from: ColumnRef, to: ColumnRef) {
   if (!schema.addForeignKey(from, to, had?.onDelete)) return;
   // An inferred foreign key was not in the database, so the one that is drawn replaces nothing.
   const replaced = had && !had.inferred ? qualifiedName(had) : null;
-  ui.showToast({
-    title: replaced ? 'Changed foreign key' : 'Added foreign key',
-    description: `${qualifiedName(from)} → ${qualifiedName(to)}${replaced ? `, in place of ${replaced}` : ''}. Press ⌘Z to undo.`,
-  });
+  const reference = `${qualifiedName(from)} → ${qualifiedName(to)}`;
+  ui.showToast(
+    replaced
+      ? { title: t('toast.fkChanged.title'), description: t('toast.fkChanged.description', { reference, replaced }) }
+      : { title: t('toast.fkAdded.title'), description: t('toast.fkAdded.description', { reference }) },
+  );
 }
 
 /**
@@ -149,12 +151,12 @@ export async function copyCreateTable(name: string): Promise<void> {
     const invalid = Object.keys(validateColumns(table)).length;
     ui.showToast({
       tone: invalid ? 'info' : 'success',
-      title: 'Copied CREATE TABLE',
-      description: `${name} · ${database} · ${plural(countLines(text), 'line')}${invalid ? ` · ${plural(invalid, 'column')} with validation errors` : ''}`,
+      title: t('toast.copiedCreate.title'),
+      description: `${name} · ${database} · ${t('count.lines', { count: countLines(text) })}${invalid ? ` · ${t('count.invalidColumns', { count: invalid })}` : ''}`,
     });
   } catch (error) {
     console.error(error);
-    ui.showToast({ tone: 'error', title: 'Could not copy', description: 'The browser did not allow access to the clipboard.' });
+    ui.showToast({ tone: 'error', title: t('toast.copyFailed.title'), description: t('toast.copyFailed.description') });
   }
 }
 
@@ -171,8 +173,8 @@ export function focusRelatedTables(name: string) {
   if (!related) {
     ui.showToast({
       tone: 'info',
-      title: 'No related tables',
-      description: `${name} has no relationship with another table.`,
+      title: t('toast.noRelated.title'),
+      description: t('toast.noRelated.description', { name }),
     });
     return;
   }
@@ -204,15 +206,15 @@ export function inferRelationships() {
   if (!added) {
     ui.showToast({
       tone: 'info',
-      title: 'No relationships to infer',
-      description: 'No column without a foreign key is named after the primary key of a table.',
+      title: t('toast.nothingToInfer.title'),
+      description: t('toast.nothingToInfer.description'),
     });
     return;
   }
   ui.showToast({
-    title: `Inferred ${plural(added, 'relationship')}`,
-    description: 'Drawn dashed and left out of exported SQL. Press ⌘Z to undo.',
-    actions: [{ label: 'Review', onClick: requestReviewInferred }],
+    title: t('toast.inferred.title', { count: added }),
+    description: t('toast.inferred.description'),
+    actions: [{ label: t('toast.inferred.review'), onClick: requestReviewInferred }],
   });
 }
 
@@ -238,18 +240,18 @@ export function arrangeTables() {
   const moved = schema.arrangeTables(only);
   if (!only) ui.setFitPending(true);
   if (!moved) {
-    ui.showToast({ tone: 'info', title: only ? 'Selected tables are already arranged' : 'Tables are already arranged' });
+    ui.showToast({ tone: 'info', title: only ? t('toast.arranged.alreadySelected') : t('toast.arranged.already') });
     return;
   }
   ui.showToast(
     only
       ? {
-          title: `Arranged ${plural(only.length, 'selected table')}`,
-          description: 'Only the selected tables moved. Press ⌘Z to undo.',
+          title: t('toast.arrangedSelected.title', { count: only.length }),
+          description: t('toast.arrangedSelected.description'),
         }
       : {
-          title: `Arranged ${plural(schema.tables.length, 'table')}`,
-          description: 'Related tables are next to each other. Press ⌘Z to undo.',
+          title: t('toast.arranged.title', { count: schema.tables.length }),
+          description: t('toast.arranged.description'),
         },
   );
 }
@@ -260,8 +262,8 @@ export function removeInferredRelationships() {
   if (!removed) return;
   useUiStore.getState().showToast({
     tone: 'info',
-    title: `Removed ${plural(removed, 'inferred relationship')}`,
-    description: 'Not saved yet. Press ⌘Z to restore them.',
+    title: t('toast.inferredRemoved.title', { count: removed }),
+    description: t('toast.inferredRemoved.description'),
   });
 }
 

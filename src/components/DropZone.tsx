@@ -1,7 +1,9 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { t } from '../core/i18n';
 import { Button } from './Button';
 import { cx } from './cx';
 import { Icon } from './Icon';
+import { rich } from './rich';
 import { IconButton } from './IconButton';
 
 const ACCEPT = '.sql,.ddl,.txt';
@@ -55,9 +57,9 @@ export function DropZone({ file, onFile, over: forcedOver, hint, style }: DropZo
           <div className="ss-file-meta">{file.meta}</div>
         </div>
         <Button variant="ghost" size="sm" onClick={browse}>
-          Replace
+          {t('dropzone.replace')}
         </Button>
-        <IconButton icon="x" size="sm" label="Remove file" onClick={() => onFile?.(null)} />
+        <IconButton icon="x" size="sm" label={t('dropzone.remove')} onClick={() => onFile?.(null)} />
         {input}
       </div>
     );
@@ -90,10 +92,8 @@ export function DropZone({ file, onFile, over: forcedOver, hint, style }: DropZo
       <span className="ss-drop-icon">
         <Icon name="upload" size={16} />
       </span>
-      <div className="ss-drop-title">
-        Drop SQL file here or <u>click to browse</u>
-      </div>
-      <div className="ss-drop-sub">{hint || '.sql or .ddl · up to 10 MB · pg_dump --schema-only output works'}</div>
+      <div className="ss-drop-title">{rich('dropzone.title', { browse: <u>{t('dropzone.browse')}</u> })}</div>
+      <div className="ss-drop-sub">{hint || t('dropzone.hint', { command: 'pg_dump --schema-only' })}</div>
       {input}
     </div>
   );

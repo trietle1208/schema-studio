@@ -1,6 +1,6 @@
 import { byteLength, countLines, formatBytes } from '../core/files';
 import { groupsOf } from '../core/groups';
-import { plural } from '../core/plural';
+import { t } from '../core/i18n';
 import type { SchemaRecord } from '../db/db';
 import { openSchema } from '../db/schemas';
 import { selectDirty, useSchemaStore } from '../store/schema';
@@ -34,7 +34,7 @@ export async function requestExportStored(schema: SchemaRecord): Promise<void> {
   try {
     const stored = await openSchema(schema.id);
     if (!stored) {
-      ui.showToast({ tone: 'error', title: 'Schema not found', description: `No schema is called "${schema.name}".` });
+      ui.showToast({ tone: 'error', title: t('toast.schemaNotFound.title'), description: t('toast.schemaNotFound.description', { name: schema.name }) });
       return;
     }
     ui.openDialog({
@@ -54,8 +54,8 @@ export async function requestExportStored(schema: SchemaRecord): Promise<void> {
     console.error(error);
     ui.showToast({
       tone: 'error',
-      title: 'Could not open schema',
-      description: 'It could not be read from browser storage.',
+      title: t('toast.openFailed.title'),
+      description: t('toast.openFailed.description'),
     });
   }
 }
@@ -88,8 +88,8 @@ export function exportFile(fileName: string, text: string) {
   download(fileName, new Blob([text], { type: FILE_TYPES[fileName.slice(fileName.lastIndexOf('.') + 1)] ?? 'text/plain' }));
   ui.closeDialog();
   ui.showToast({
-    title: `Exported ${fileName}`,
-    description: `${formatBytes(byteLength(text))} · ${plural(countLines(text), 'line')}`,
+    title: t('toast.exported.title', { file: fileName }),
+    description: `${formatBytes(byteLength(text))} · ${t('count.lines', { count: countLines(text) })}`,
   });
 }
 
@@ -111,10 +111,10 @@ export async function exportImage(fileName: string, image: Promise<DiagramImage>
     const { file, width, height } = await image;
     download(fileName, file);
     ui.closeDialog();
-    ui.showToast({ title: `Exported ${fileName}`, description: `${formatBytes(file.size)} · ${width} × ${height} px` });
+    ui.showToast({ title: t('toast.exported.title', { file: fileName }), description: `${formatBytes(file.size)} · ${width} × ${height} px` });
   } catch (error) {
     console.error(error);
-    ui.showToast({ tone: 'error', title: 'Could not export the diagram', description: 'The browser could not draw a picture of this size.' });
+    ui.showToast({ tone: 'error', title: t('toast.exportDiagramFailed.title'), description: t('toast.exportDiagramFailed.description') });
   }
 }
 
@@ -124,10 +124,10 @@ export async function copyImage(image: Promise<DiagramImage>): Promise<void> {
   try {
     const { file, width, height } = await image;
     await navigator.clipboard.write([new ClipboardItem({ [file.type]: file })]);
-    ui.showToast({ title: 'Copied to clipboard', description: `${width} × ${height} px` });
+    ui.showToast({ title: t('toast.copied.title'), description: `${width} × ${height} px` });
   } catch (error) {
     console.error(error);
-    ui.showToast({ tone: 'error', title: 'Could not copy', description: 'The browser did not allow access to the clipboard.' });
+    ui.showToast({ tone: 'error', title: t('toast.copyFailed.title'), description: t('toast.copyFailed.description') });
   }
 }
 
@@ -136,9 +136,9 @@ export async function copyExport(text: string): Promise<void> {
   const ui = useUiStore.getState();
   try {
     await navigator.clipboard.writeText(text);
-    ui.showToast({ title: 'Copied to clipboard', description: plural(countLines(text), 'line') });
+    ui.showToast({ title: t('toast.copied.title'), description: t('count.lines', { count: countLines(text) }) });
   } catch (error) {
     console.error(error);
-    ui.showToast({ tone: 'error', title: 'Could not copy', description: 'The browser did not allow access to the clipboard.' });
+    ui.showToast({ tone: 'error', title: t('toast.copyFailed.title'), description: t('toast.copyFailed.description') });
   }
 }

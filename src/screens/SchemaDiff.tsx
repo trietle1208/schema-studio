@@ -7,11 +7,11 @@ import { IconButton } from '../components/IconButton';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { Select } from '../components/Select';
 import { Alert } from '../components/Toast';
-import { countChanges, diffGroups, diffSchemas, totalChanges, type DiffStats } from '../core/diff';
+import { countChanges, DIFF_GROUPS, diffGroups, diffSchemas, totalChanges, type DiffGroupName, type DiffStats } from '../core/diff';
 import { compareDdl } from '../core/diff/ddl';
 import { EXPORT_ENGINES, generatorFor, migratorFor } from '../core/generate';
+import { t, type MessageKey } from '../core/i18n';
 import type { DiffItem } from '../core/model';
-import { plural } from '../core/plural';
 import { relativeTime } from '../core/time';
 import { versionLabel, type SavedVersion } from '../core/versions';
 import { useVersions } from '../db/useSchemas';
@@ -22,17 +22,24 @@ import { SchemaCrumbs } from './SchemaCrumbs';
 import { exportDiff, generateMigration } from './versionActions';
 
 const ALL = 'All';
-const GROUPS = [
-  { value: ALL, label: 'All' },
-  { value: 'Tables', label: 'Tables' },
-  { value: 'Columns', label: 'Cols' },
-  { value: 'Indexes', label: 'Idx' },
-  { value: 'Relationships', label: 'Rels' },
+const groupOptions = () => [
+  { value: ALL, label: t('common.all') },
+  { value: 'Tables', label: t('noun.tables') },
+  { value: 'Columns', label: t('compare.columns') },
+  { value: 'Indexes', label: t('compare.indexes') },
+  { value: 'Relationships', label: t('compare.relationships') },
 ];
-const MODES = [
-  { value: 'split', label: 'Side by side' },
-  { value: 'unified', label: 'Unified' },
+const modeOptions = () => [
+  { value: 'split', label: t('compare.split') },
+  { value: 'unified', label: t('compare.unified') },
 ];
+/** What the list says when the changes hold none of a group. */
+const NONE_OF = {
+  Tables: 'compare.noTables',
+  Columns: 'compare.noColumns',
+  Indexes: 'compare.noIndexes',
+  Relationships: 'compare.noRelationships',
+} as const satisfies Record<DiffGroupName, MessageKey>;
 /** How many destructive changes the warning spells out before it only counts the rest. */
 const SPELLED_OUT = 2;
 
@@ -49,7 +56,7 @@ function Stats({ stats }: { stats: DiffStats }) {
     <span
       className="ss-ver-stats"
       style={{ marginLeft: 6 }}
-      title={`${stats.added} added, ${stats.modified} changed, ${stats.removed} removed`}
+      title={t('compare.stats', { added: stats.added, modified: stats.modified, removed: stats.removed })}
     >
       <span className="a">{`+${stats.added}`}</span>
       <span className="m">{`~${stats.modified}`}</span>
@@ -65,7 +72,7 @@ export function SchemaDiff({ from, to, now }: SchemaDiffProps) {
   const engine = useSchemaStore((s) => s.engine);
   const stored = useVersions(id);
   const [mode, setMode] = useState('split');
-  const [group, setGroup] = useState(ALL);
+  const [group, setGroup] = useState<string>(ALL);
   const [selected, setSelected] = useState<string | null>(null);
   const pane = useRef<HTMLDivElement>(null);
 
@@ -124,7 +131,7 @@ export function SchemaDiff({ from, to, now }: SchemaDiffProps) {
 
   const current = Math.max(0, ...numbers);
   const meta = (version: SavedVersion) =>
-    `${version.version === current ? 'Current · ' : ''}${relativeTime(version.createdAt, now)}`;
+    version.version === current ? t('compare.current', { time: relativeTime(version.createdAt, now) }) : relativeTime(version.createdAt, now);
   const groups = compared?.groups.filter((g) => group === ALL || g.group === group) ?? [];
   const destructive = compared?.migration?.destructive ?? [];
   const missing = stored === undefined ? null : !base ? from : !target ? to : null;
@@ -132,64 +139,64 @@ export function SchemaDiff({ from, to, now }: SchemaDiffProps) {
   return (
     <>
       <SchemaCrumbs
-        title="Compare"
+        title={t('compare.title')}
         actions={
           <>
-            <SegmentedControl value={mode} onChange={setMode} options={MODES} />
+            <SegmentedControl value={mode} onChange={setMode} options={modeOptions()} />
             <IconButton
               icon="download"
-              label="Export diff"
+              label={t('compare.exportDiff')}
               disabled={!base || !target}
               onClick={() => base && target && exportDiff(base, target)}
             />
             <Button variant="primary" icon="migration" kbd={['⌘', '⏎']} disabled={!canMigrate} onClick={migrate}>
-              Generate Migration
+              {t('action.generateMigration')}
             </Button>
           </>
         }
       >
         <span className="ss-tb-sep" />
         <div style={{ width: 84 }}>
-          <Select size="sm" mono value={String(from)} onChange={(v) => compare(Number(v), to)} options={options(to, from)} label="Base" />
+          <Select size="sm" mono value={String(from)} onChange={(v) => compare(Number(v), to)} options={options(to, from)} label={t('compare.base')} />
         </div>
         <Icon name="arrow-right" size={14} style={{ color: 'var(--ink-3)' }} />
         <div style={{ width: 84 }}>
-          <Select size="sm" mono value={String(to)} onChange={(v) => compare(from, Number(v))} options={options(from, to)} label="Target" />
+          <Select size="sm" mono value={String(to)} onChange={(v) => compare(from, Number(v))} options={options(from, to)} label={t('compare.target')} />
         </div>
-        <IconButton icon="migration" label="Swap versions" size="sm" onClick={() => compare(to, from)} />
+        <IconButton icon="migration" label={t('compare.swap')} size="sm" onClick={() => compare(to, from)} />
         {compared && <Stats stats={compared.stats} />}
       </SchemaCrumbs>
       <div className="ss-work">
         <div style={{ width: 320, flex: 'none', borderRight: '1px solid var(--line-1)', background: 'var(--bg-2)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ padding: '12px 12px 6px' }}>
-            <SegmentedControl block value={group} onChange={setGroup} options={GROUPS} />
+            <SegmentedControl block value={group} onChange={setGroup} options={groupOptions()} />
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: '0 4px' }}>
             <DiffList groups={groups} selected={selected ?? undefined} onSelect={pick} />
             {compared && groups.length === 0 && (
               <div className="ss-faint" style={{ fontSize: 12, padding: '10px 12px' }}>
                 {totalChanges(compared.stats)
-                  ? `No ${group.toLowerCase()} changed.`
-                  : `No changes between ${versionLabel(from)} and ${versionLabel(to)}.`}
+                  ? t(NONE_OF[DIFF_GROUPS.find((g) => g === group) ?? 'Tables'])
+                  : t('compare.noChanges', { from: versionLabel(from), to: versionLabel(to) })}
               </div>
             )}
             {missing !== null && (
               <div className="ss-faint" style={{ fontSize: 12, padding: '10px 12px' }}>
-                {`Version ${versionLabel(missing)} does not exist.`}
+                {t('compare.missing', { version: versionLabel(missing) })}
               </div>
             )}
           </div>
           {destructive.length > 0 && (
             <div style={{ borderTop: '1px solid var(--line-1)', padding: 12 }}>
-              <Alert tone="warn" title={plural(destructive.length, 'destructive change')}>
+              <Alert tone="warn" title={t('count.destructiveChanges', { count: destructive.length })}>
                 {destructive
                   .slice(0, SPELLED_OUT)
                   .map((d) => d.message)
                   .join(' ')}
-                {destructive.length > SPELLED_OUT ? ` And ${destructive.length - SPELLED_OUT} more.` : ''}
+                {destructive.length > SPELLED_OUT ? ` ${t('common.andMore', { count: destructive.length - SPELLED_OUT })}` : ''}
                 {compared?.migration?.atomic
-                  ? ` The migration wraps ${destructive.length === 1 ? 'it' : 'them'} in a transaction.`
-                  : ` ${dialect} commits each statement as it runs, so the migration cannot be rolled back.`}
+                  ? ` ${t('compare.atomic', { count: destructive.length })}`
+                  : ` ${t('compare.notAtomic', { engine: dialect })}`}
               </Alert>
             </div>
           )}
@@ -199,9 +206,9 @@ export function SchemaDiff({ from, to, now }: SchemaDiffProps) {
             <DdlDiff
               rows={compared.ddl.rows}
               mode={mode === 'unified' ? 'unified' : 'split'}
-              leftTitle={`Version ${from}`}
+              leftTitle={t('compare.version', { number: from })}
               leftMeta={meta(base)}
-              rightTitle={`Version ${to}`}
+              rightTitle={t('compare.version', { number: to })}
               rightMeta={meta(target)}
             />
           )}

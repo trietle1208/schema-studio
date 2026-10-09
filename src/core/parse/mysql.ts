@@ -1,3 +1,4 @@
+import { anyOf, t } from '../i18n';
 import type { IndexType, OnDelete } from '../model';
 import {
   closing,
@@ -24,7 +25,6 @@ import type { ParseOutcome, SqlParser } from './index';
 /** MySQL has no schemas inside a database: the model's default one stands for the database in use. */
 const DEFAULT_SCHEMA = 'public';
 const DEFAULT_INDEX_METHOD = 'btree';
-const REST = 'Fix the statement or remove it to import the rest.';
 
 type Kind = 'create table' | 'create index' | 'alter table' | 'drop table';
 
@@ -153,7 +153,7 @@ class Reader {
   /** Reads a name. With ANSI_QUOTES a name may be in double quotes, which otherwise hold a string. */
   name(): string {
     const token = this.peek();
-    if (!token || !(isName(token) || (token.kind === 'string' && token.text[0] === '"'))) unexpected(this, 'a name');
+    if (!token || !(isName(token) || (token.kind === 'string' && token.text[0] === '"'))) unexpected(this, t('parse.token.name'));
     this.at++;
     return nameOf(token);
   }
@@ -182,7 +182,7 @@ function shown(token: Token): string {
 
 function near(ctx: Context, offset: number): { message: string; line: number } {
   const line = ctx.lineOf(offset);
-  return { message: `Unable to parse SQL near line ${line}.`, line };
+  return { message: t('parse.near', { line }), line };
 }
 
 /** Stops at the token that cannot be read, saying what was expected in its place when that is known. */
@@ -192,14 +192,14 @@ function unexpected(r: Reader, expected?: string): never {
   if (!token) {
     throw new Failure({
       ...near(ctx, tokens[tokens.length - 1].start),
-      detail: `The statement ends before it is complete. Check for a missing \`)\`. ${REST}`,
+      detail: `${t('parse.incomplete')} ${t('parse.rest')}`,
     });
   }
   const before = r.peek(-1);
   const detail = [
-    `Unexpected \`${shown(token)}\`.`,
-    isSymbol(token, ')') && isSymbol(before, ',') ? 'Remove the `,` before it.' : expected ? `Expected ${expected}.` : '',
-    REST,
+    t('parse.unexpected', { token: shown(token) }),
+    isSymbol(token, ')') && isSymbol(before, ',') ? t('parse.removeComma') : expected ? t('parse.expected', { expected }) : '',
+    t('parse.rest'),
   ];
   // A `)` that opens its line is unexpected because of what the line above ends with.
   const opensLine = !!before && ctx.lineOf(before.start) < ctx.lineOf(token.start);
@@ -251,7 +251,7 @@ function tableName(r: Reader): { name: string; schema?: string } {
 /** Reads a string and gives its text, without the quotes and the escapes. */
 function stringText(r: Reader): string {
   const token = r.peek();
-  if (token?.kind !== 'string') unexpected(r, 'a string');
+  if (token?.kind !== 'string') unexpected(r, t('parse.token.string'));
   r.at++;
   const quote = token.text[0];
   return token.text
@@ -265,14 +265,14 @@ function stringText(r: Reader): string {
 function settingValue(r: Reader) {
   r.symbol('=');
   const token = r.peek();
-  if (!token || token.kind === 'symbol') unexpected(r, 'a value');
+  if (!token || token.kind === 'symbol') unexpected(r, t('parse.token.value'));
   r.at++;
 }
 
 /** Reads a type and gives it as the model writes it: upper case, the arguments without spaces. */
 function dataType(r: Reader): string {
   const first = r.peek();
-  if (first?.kind !== 'word') unexpected(r, 'a data type');
+  if (first?.kind !== 'word') unexpected(r, t('parse.token.dataType'));
   r.at++;
   let name = first.upper;
   for (let last = name; TYPE_NEXT_WORD[last]?.includes(r.peek()?.upper ?? ''); r.at++) {
@@ -296,7 +296,7 @@ function valueText(r: Reader): string {
   else {
     if (isSymbol(first, '-') || isSymbol(first, '+')) r.at++;
     const token = r.peek();
-    if (!token || token.kind === 'symbol' || token.kind === 'quoted') unexpected(r, 'a value');
+    if (!token || token.kind === 'symbol' || token.kind === 'quoted') unexpected(r, t('parse.token.value'));
     r.at++;
     const next = r.peek();
     if (token.kind === 'word' && next?.kind === 'string' && next.start === token.end) r.at++;
@@ -340,7 +340,7 @@ function reference(r: Reader): Reference {
   const columns = isSymbol(r.peek(), '(') ? keyParts(r).columns : [PRIMARY_KEY];
   const action = () => {
     const words = REFERENCE_ACTIONS.find((a) => r.words(...a));
-    if (!words) unexpected(r, '`CASCADE`, `RESTRICT`, `SET NULL` or `NO ACTION`');
+    if (!words) unexpected(r, anyOf(['`CASCADE`', '`RESTRICT`', '`SET NULL`', '`NO ACTION`']));
     return words.join(' ');
   };
   let onDelete: string | undefined;
@@ -378,7 +378,7 @@ function findColumn(table: DraftTable, name: string): DraftColumn | undefined {
 
 function columnOf(ctx: Context, table: DraftTable, name: string, offset: number): DraftColumn {
   const column = findColumn(table, name);
-  if (!column) fail(ctx, `Column "${name}" does not exist in ${table.name}.`, offset);
+  if (!column) fail(ctx, t('validate.columnMissing', { name, table: table.name }), offset);
   return column;
 }
 
@@ -388,14 +388,14 @@ function addIndex(
   index: { type: IndexType; parts: KeyParts; name?: string; using?: string },
   offset: number,
 ) {
-  const label = `Index \`${index.name ?? '(unnamed)'}\` on \`${table.name}\``;
+  const named = { index: index.name ?? t('parse.warn.unnamedIndex'), table: table.name };
   // An index of the model lists columns.
   if (index.parts.expression) {
-    ctx.warnings.push(`${label} uses an expression and was skipped.`);
+    ctx.warnings.push(t('parse.warn.indexExpression', named));
     return;
   }
   const columns = index.parts.columns.map((name) => columnOf(ctx, table, name, offset));
-  if (index.parts.prefix) ctx.warnings.push(`${label} has a prefix length, which was not imported.`);
+  if (index.parts.prefix) ctx.warnings.push(t('parse.warn.indexPrefix', named));
 
   // Index names are the table's own, and MySQL compares them without regard to case.
   const taken = (name: string) => table.indexes.some((i) => i.name.toLowerCase() === name.toLowerCase());
@@ -405,7 +405,7 @@ function addIndex(
     name = columns[0].name;
     for (let n = 2; taken(name); n++) name = `${columns[0].name}_${n}`;
   } else if (taken(name)) {
-    fail(ctx, `Index "${name}" already exists in ${table.name}.`, offset);
+    fail(ctx, t('validate.indexExistsIn', { name, table: table.name }), offset);
   }
   table.indexes.push({ name, type: index.type, using: index.using ?? DEFAULT_INDEX_METHOD, columns: columns.map((c) => c.name) });
   // An index on the start of a column does not make the whole column unique.
@@ -413,7 +413,7 @@ function addIndex(
 }
 
 function setPrimaryKey(ctx: Context, table: DraftTable, names: string[], offset: number) {
-  if (table.indexes.some((i) => i.type === 'PRIMARY KEY')) fail(ctx, `Table "${table.name}" already has a primary key.`, offset);
+  if (table.indexes.some((i) => i.type === 'PRIMARY KEY')) fail(ctx, t('validate.primaryKeyExists', { name: table.name }), offset);
   const columns = names.map((name) => columnOf(ctx, table, name, offset));
   for (const column of columns) {
     column.pk = true;
@@ -426,15 +426,13 @@ function setPrimaryKey(ctx: Context, table: DraftTable, names: string[], offset:
 function setForeignKey(ctx: Context, table: DraftTable, columns: string[], target: Reference, offset: number) {
   if (columns.length !== 1 || target.columns.length !== 1) {
     // A column of the model references one column.
-    ctx.warnings.push(
-      `The composite foreign key on \`${table.name}\` (${columns.map((c) => `\`${c}\``).join(', ')}) was skipped.`,
-    );
+    ctx.warnings.push(t('parse.warn.compositeForeignKey', { table: table.name, columns: columns.map((c) => `\`${c}\``).join(', ') }));
     return;
   }
   const column = columnOf(ctx, table, columns[0], offset);
-  const path = `\`${table.name}.${column.name}\``;
-  if (column.fk) ctx.warnings.push(`${path} has more than one foreign key; the last one was kept.`);
-  if (target.onDelete === 'SET DEFAULT') ctx.warnings.push(`${path} uses ON DELETE SET DEFAULT, imported as NO ACTION.`);
+  const path = `${table.name}.${column.name}`;
+  if (column.fk) ctx.warnings.push(t('parse.warn.severalForeignKeys', { column: path }));
+  if (target.onDelete === 'SET DEFAULT') ctx.warnings.push(t('parse.warn.setDefault', { column: path }));
   // Without the clause MySQL takes no action.
   column.fk = { table: target.table, column: target.columns[0], onDelete: ON_DELETE[target.onDelete ?? ''] ?? 'NO ACTION' };
 }
@@ -498,7 +496,7 @@ function columnDefinition(r: Reader, table: DraftTable): ColumnDefinition {
     } else if (r.words('GENERATED', 'ALWAYS', 'AS') || r.words('AS')) {
       parenthesized(r);
       r.oneOf(['VIRTUAL', 'STORED', 'PERSISTENT']);
-      ctx.warnings.push(`\`${table.name}.${name}\` is a generated column; its expression was not imported.`);
+      ctx.warnings.push(t('parse.warn.generatedColumn', { column: `${table.name}.${name}` }));
     } else if (isWord(r.peek(), 'REFERENCES')) definition.reference = reference(r);
     else if (r.words('CONSTRAINT')) {
       // The name of the constraint that follows; it may be left out.
@@ -524,7 +522,7 @@ function inlineKeys(ctx: Context, table: DraftTable, name: string, definition: C
 
 function addColumn(ctx: Context, table: DraftTable, definition: ColumnDefinition) {
   const { column, offset } = definition;
-  if (findColumn(table, column.name)) fail(ctx, `Column "${column.name}" already exists in ${table.name}.`, offset);
+  if (findColumn(table, column.name)) fail(ctx, t('validate.columnExists', { name: column.name, table: table.name }), offset);
   table.columns.push(column);
   inlineKeys(ctx, table, column.name, definition);
 }
@@ -579,7 +577,7 @@ function constraint(r: Reader, table: DraftTable): () => void {
   const unique = r.words('UNIQUE');
   const kind = r.words('FULLTEXT') ? 'fulltext' : r.words('SPATIAL') ? 'spatial' : undefined;
   // After UNIQUE, FULLTEXT and SPATIAL the word INDEX or KEY may be left out.
-  if (!r.oneOf(['INDEX', 'KEY']) && !unique && !kind) unexpected(r, '`PRIMARY`, `UNIQUE`, `FOREIGN` or `CHECK`');
+  if (!r.oneOf(['INDEX', 'KEY']) && !unique && !kind) unexpected(r, anyOf(['`PRIMARY`', '`UNIQUE`', '`FOREIGN`', '`CHECK`']));
   if (!isSymbol(r.peek(), '(') && !isWord(r.peek(), 'USING')) name = r.name();
   const before = indexMethod(r);
   const parts = keyParts(r);
@@ -596,9 +594,9 @@ function endOfDefinition(r: Reader, definition: string): boolean {
   const before = r.peek(-1);
   // A definition that starts on a new line while the one above it has not ended: a comma is missing.
   if (token && before && isName(token) && ctx.lineOf(before.start) < ctx.lineOf(token.start)) {
-    throw new Failure({ ...near(ctx, before.start), detail: `Expected \`,\` or \`)\` after ${definition}. ${REST}` });
+    throw new Failure({ ...near(ctx, before.start), detail: `${t('parse.expectedAfter', { definition })} ${t('parse.rest')}` });
   }
-  unexpected(r, '`,` or `)`');
+  unexpected(r, anyOf(['`,`', '`)`']));
 }
 
 /** Reads what follows the column list. It says how the table is stored, and only the comment is kept. */
@@ -608,7 +606,7 @@ function tableOptions(r: Reader, table: DraftTable) {
       r.symbol('=');
       table.comment = stringText(r);
     } else if (r.words('PARTITION', 'BY')) {
-      r.ctx.warnings.push(`\`${table.name}\` uses an unsupported PARTITION BY clause and will import without it.`);
+      r.ctx.warnings.push(t('parse.warn.unsupportedClause', { table: table.name, clause: 'PARTITION BY' }));
       r.at = r.tokens.length;
     } else r.at++;
   }
@@ -623,13 +621,13 @@ function createTable(r: Reader, statement: Statement) {
   // A table made from another one has no columns of its own: LIKE, or the result of a SELECT.
   const inside = isSymbol(r.peek(), '(') ? r.peek(1) : r.peek();
   if (['LIKE', 'AS', 'SELECT'].some((word) => isWord(inside, word))) {
-    ctx.warnings.push(`Line ${ctx.lineOf(statement.start)}: this CREATE TABLE statement has no column list and was skipped.`);
+    ctx.warnings.push(t('parse.warn.noColumnList', { line: ctx.lineOf(statement.start) }));
     return;
   }
   r.expectSymbol('(');
   if (ctx.tables.has(name)) {
     if (ifNotExists) return;
-    fail(ctx, `Table "${name}" already exists.`, offset);
+    fail(ctx, t('validate.tableExists', { name }), offset);
   }
 
   const table: DraftTable = { name, schema: schema ?? DEFAULT_SCHEMA, comment: '', columns: [], indexes: [] };
@@ -637,11 +635,11 @@ function createTable(r: Reader, statement: Statement) {
   for (let last = false; !last; ) {
     if (startsConstraint(r.peek())) {
       constraints.push(constraint(r, table));
-      last = endOfDefinition(r, 'this constraint');
+      last = endOfDefinition(r, t('parse.thisConstraint'));
     } else {
       const definition = columnDefinition(r, table);
       addColumn(ctx, table, definition);
-      last = endOfDefinition(r, `column definition \`${definition.column.name}\``);
+      last = endOfDefinition(r, t('parse.columnDefinition', { name: definition.column.name }));
     }
   }
   for (const apply of constraints) apply();
@@ -654,7 +652,7 @@ function knownTable(r: Reader, statement: Statement, what: string, name: string)
   const { ctx } = r;
   const table = ctx.tables.get(name);
   if (!table) {
-    ctx.warnings.push(`Line ${ctx.lineOf(statement.start)}: ${what} names \`${name}\`, which is not defined, and was skipped.`);
+    ctx.warnings.push(t('parse.warn.unknownTable', { line: ctx.lineOf(statement.start), statement: what, table: name }));
   }
   return table;
 }
@@ -694,7 +692,9 @@ function alterTable(r: Reader, statement: Statement) {
       table.comment = stringText(r);
     } else if (!skipClause(r)) {
       // What sets how the table is stored (`AUTO_INCREMENT=42`) is passed over; anything else changes it in a way that is not read.
-      ctx.warnings.push(`Line ${ctx.lineOf(clause.start)}: \`ALTER TABLE ${table.name} ${shown(clause).toUpperCase()}\` was not imported.`);
+      ctx.warnings.push(
+        t('parse.warn.notImported', { line: ctx.lineOf(clause.start), statement: `ALTER TABLE ${table.name} ${shown(clause).toUpperCase()}` }),
+      );
     }
     // Where a column goes among the others.
     if (!r.words('FIRST') && r.words('AFTER')) r.name();
@@ -753,11 +753,6 @@ function matchReferencedColumns(ctx: Context) {
   }
 }
 
-/** `3 CHECK constraints were not imported.` */
-function leftOut(count: number, one: string, many: string): string {
-  return count === 1 ? `1 ${one} was not imported.` : `${count} ${many} were not imported.`;
-}
-
 function parse(sql: string): ParseOutcome {
   const lineOf = lineCounter(sql);
   const ctx: Context = { sql, lineOf, tables: new Map(), warnings: [], checks: 0, onUpdates: 0 };
@@ -773,13 +768,13 @@ function parse(sql: string): ParseOutcome {
   }
   if (script.error) {
     const line = lineOf(script.error.offset);
-    return { ok: false, error: { message: `Unable to parse SQL near line ${line}.`, line, detail: script.error.message } };
+    return { ok: false, error: { message: t('parse.near', { line }), line, detail: script.error.message } };
   }
 
   matchReferencedColumns(ctx);
   resolveForeignKeys(ctx.tables, ctx.warnings);
-  if (ctx.checks) ctx.warnings.push(leftOut(ctx.checks, 'CHECK constraint', 'CHECK constraints'));
-  if (ctx.onUpdates) ctx.warnings.push(leftOut(ctx.onUpdates, 'ON UPDATE clause', 'ON UPDATE clauses'));
+  if (ctx.checks) ctx.warnings.push(t('parse.warn.checks', { count: ctx.checks }));
+  if (ctx.onUpdates) ctx.warnings.push(t('parse.warn.onUpdates', { count: ctx.onUpdates }));
   return { ok: true, tables: finishTables(ctx.tables, ctx.warnings), warnings: ctx.warnings, skipped };
 }
 

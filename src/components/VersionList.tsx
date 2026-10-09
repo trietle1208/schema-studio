@@ -1,3 +1,4 @@
+import { t } from '../core/i18n';
 import type { Version } from '../core/model';
 import { Badge } from './Badge';
 import { cx } from './cx';
@@ -12,7 +13,7 @@ export interface VersionListProps {
 
 export function VersionList({ versions, selected, onSelect }: VersionListProps) {
   return (
-    <div className="ss-vlist" role="listbox" aria-label="Versions">
+    <div className="ss-vlist" role="listbox" aria-label={t('history.list')}>
       {versions.map((v) => (
         <button
           key={v.version}
@@ -30,7 +31,7 @@ export function VersionList({ versions, selected, onSelect }: VersionListProps) 
               <span className="ss-ver-num">{v.version}</span>
               {v.current && (
                 <Badge tone="accent" sans>
-                  Current
+                  {t('version.current')}
                 </Badge>
               )}
               <span className="ss-ver-time">{v.time}</span>

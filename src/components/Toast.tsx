@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { t } from '../core/i18n';
 import { cx } from './cx';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
@@ -35,7 +36,7 @@ export function Toast({ tone = 'success', title, description, actions, onClose }
           </div>
         )}
       </div>
-      {onClose !== false && <IconButton icon="x" size="sm" label="Dismiss" onClick={onClose} />}
+      {onClose !== false && <IconButton icon="x" size="sm" label={t('toast.dismiss')} onClick={onClose} />}
     </div>
   );
 }

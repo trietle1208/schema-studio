@@ -1,6 +1,7 @@
 import { primaryKey, uniqueColumns, writtenIndexes, writtenRelations, type PrimaryKey } from '../constraints';
 import { widensMysqlType } from '../datatypes';
 import { diffSchemas, schemaOf, type ColumnChange } from '../diff';
+import { getLocale, translate, type Locale } from '../i18n';
 import type { Table } from '../model';
 import { qualifiedName, type ColumnRef, type Relation } from '../relations';
 import {
@@ -61,10 +62,13 @@ function migrate(givenBefore: readonly Table[], givenAfter: readonly Table[], op
   /** Groups of lines; a blank line goes between two groups. */
   const blocks: string[][] = [];
   const destructive: DestructiveChange[] = [];
-  /** Records a change that deletes data and gives the line that says so above its statement. */
-  const flag = (path: string, message: string) => {
-    destructive.push({ path, message });
-    return note(`Destructive: ${message}`);
+  /**
+   * Records a change that deletes data and gives the line that says so above its statement. The
+   * line is of the script, which reads the same whatever language the app is in.
+   */
+  const flag = (path: string, message: (locale: Locale) => string) => {
+    destructive.push({ path, message: message(getLocale()) });
+    return note(`Destructive: ${message('en')}`);
   };
 
   const columnsOf = new Map<string, ColumnChange[]>();
@@ -113,7 +117,7 @@ function migrate(givenBefore: readonly Table[], givenAfter: readonly Table[], op
   const gone = changes.tables.flatMap((change) => (change.op === 'del' ? [change.before] : []));
   if (gone.length) {
     blocks.push([
-      ...gone.map((table) => flag(table.name, `Dropping ${table.name} deletes its data.`)),
+      ...gone.map((table) => flag(table.name, (locale) => translate(locale, 'migration.dropData', { path: table.name }))),
       `DROP TABLE ${gone.map(tableName).join(', ')};`,
     ]);
   }
@@ -146,7 +150,7 @@ function migrate(givenBefore: readonly Table[], givenAfter: readonly Table[], op
     for (const change of columns) {
       if (change.op !== 'del') continue;
       const path = `${table.name}.${change.before.name}`;
-      notes.push(flag(path, `Dropping ${path} deletes its data.`));
+      notes.push(flag(path, (locale) => translate(locale, 'migration.dropData', { path })));
       actions.push(`DROP COLUMN ${quoteName(change.before.name)}`);
     }
     for (const change of columns) {
@@ -160,7 +164,7 @@ function migrate(givenBefore: readonly Table[], givenAfter: readonly Table[], op
       if (columnDefinition(from) === columnDefinition(to)) continue;
       const path = `${table.name}.${to.name}`;
       if (from.type !== to.type && !widensMysqlType(from.type, to.type)) {
-        notes.push(flag(path, `Changing ${path} from ${from.type} to ${to.type} can fail or lose data.`));
+        notes.push(flag(path, (locale) => translate(locale, 'migration.changeType', { path, from: from.type, to: to.type })));
       }
       actions.push(`MODIFY COLUMN ${quoteName(to.name)} ${columnDefinition(to)}`);
     }

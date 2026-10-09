@@ -1,5 +1,5 @@
 import type { DdlBlock } from '../generate/options';
-import { plural } from '../plural';
+import { t } from '../i18n';
 
 // Lines up the DDL of two versions for the side-by-side view. The scripts are compared block by
 // block (see `DdlBlock`), so a table is only ever compared with itself, and line by line within a
@@ -145,7 +145,9 @@ export function compareDdl(before: readonly DdlBlock[], after: readonly DdlBlock
     const lines = run.rows.length;
     if (fold && lines >= MIN_FOLD) {
       for (const [key] of run.starts) anchors[key] = rows.length;
-      const label = run.tables ? `${plural(run.tables, 'unchanged table')} · ${plural(lines, 'line')}` : plural(lines, 'unchanged line');
+      const label = run.tables
+        ? t('ddl.fold', { tables: t('count.unchangedTables', { count: run.tables }), lines: t('count.lines', { count: lines }) })
+        : t('count.unchangedLines', { count: lines });
       rows.push([`⋯ ${label}`, undefined, 'fold', lines]);
     } else {
       for (const [key, at] of run.starts) anchors[key] = rows.length + at;

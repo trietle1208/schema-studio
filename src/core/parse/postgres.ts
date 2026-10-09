@@ -12,6 +12,7 @@ import {
   type TableConstraint,
   type TableReference,
 } from 'pgsql-ast-parser';
+import { anyOf, t, type MessageKey } from '../i18n';
 import type { IndexType, OnDelete } from '../model';
 import {
   closing,
@@ -97,11 +98,15 @@ const TOKEN_NAMES: Record<string, string> = {
   rparen: '`)`',
   semicolon: '`;`',
   dot: '`.`',
-  word: 'a name',
-  quoted_word: 'a name',
-  int: 'a number',
-  float: 'a number',
-  string: 'a string',
+};
+
+/** The tokens that are named by what they are, each with the message that says so. */
+const TOKEN_KINDS: Record<string, MessageKey & `parse.token.${string}`> = {
+  word: 'parse.token.name',
+  quoted_word: 'parse.token.name',
+  int: 'parse.token.number',
+  float: 'parse.token.number',
+  string: 'parse.token.string',
 };
 
 /** What is known of the script so far. */
@@ -187,18 +192,14 @@ function prepare(ctx: Context, statement: Statement, kind: Kind): Source | null 
     // A table made from another one has no column list. Any other statement without one is left to the grammar to refuse.
     const derived = tokens.some((t, i) => isWord(t, 'AS') || (isWord(t, 'PARTITION') && isWord(tokens[i + 1], 'OF')));
     if (open < 0 && derived) {
-      ctx.warnings.push(
-        `Line ${ctx.lineOf(statement.start)}: this CREATE TABLE statement has no column list and was skipped.`,
-      );
+      ctx.warnings.push(t('parse.warn.noColumnList', { line: ctx.lineOf(statement.start) }));
       return null;
     }
     const close = open < 0 ? -1 : closing(tokens, open);
     if (close >= 0 && close < tokens.length - 1) {
       // Storage and partitioning say how the table is kept, not what is in it.
       const clause = isWord(tokens[close + 1], 'PARTITION') ? 'PARTITION BY' : tokens[close + 1].upper;
-      ctx.warnings.push(
-        `\`${tokens[open - 1]?.text ?? '?'}\` uses an unsupported ${clause} clause and will import without it.`,
-      );
+      ctx.warnings.push(t('parse.warn.unsupportedClause', { table: tokens[open - 1]?.text ?? '?', clause }));
       for (let i = close + 1; i < tokens.length; i++) blank.add(i);
     }
   }
@@ -266,16 +267,12 @@ function prepare(ctx: Context, statement: Statement, kind: Kind): Source | null 
   };
 }
 
-/** `` `,` or `)` ``: the alternatives of an error message. */
-function oneOf(names: string[]): string {
-  return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names[0];
-}
-
 /** What the grammar would have accepted, when its message lists few enough tokens to be worth saying. */
 function expectedTokens(message: string): string[] {
   const names = new Set<string>();
   for (const [, token] of message.matchAll(/- A "([a-z_]+)" token/g)) {
-    names.add(token.startsWith('kw_') ? `\`${token.slice(3).toUpperCase().replace(/_/g, ' ')}\`` : (TOKEN_NAMES[token] ?? ''));
+    if (token.startsWith('kw_')) names.add(`\`${token.slice(3).toUpperCase().replace(/_/g, ' ')}\``);
+    else names.add(TOKEN_KINDS[token] ? t(TOKEN_KINDS[token]) : (TOKEN_NAMES[token] ?? ''));
   }
   names.delete('');
   return names.size <= 3 ? [...names] : [];
@@ -306,8 +303,8 @@ function stoppedAt(thrown: unknown, text: string): number | undefined {
 /** Turns what the grammar threw into an error that names a line and, where it can, the fix. */
 function syntaxError(ctx: Context, source: Source, kind: Kind, thrown: unknown): ParseError {
   const { tokens } = source.statement;
-  const near = (offset: number) => `Unable to parse SQL near line ${ctx.lineOf(offset)}.`;
-  const rest = 'Fix the statement or remove it to import the rest.';
+  const near = (offset: number) => t('parse.near', { line: ctx.lineOf(offset) });
+  const rest = t('parse.rest');
   const found = stoppedAt(thrown, source.text);
 
   if (found === undefined) {
@@ -315,7 +312,7 @@ function syntaxError(ctx: Context, source: Source, kind: Kind, thrown: unknown):
     return {
       message: near(last.start),
       line: ctx.lineOf(last.start),
-      detail: `The statement ends before it is complete. Check for a missing \`)\`. ${rest}`,
+      detail: `${t('parse.incomplete')} ${rest}`,
     };
   }
 
@@ -339,11 +336,11 @@ function syntaxError(ctx: Context, source: Source, kind: Kind, thrown: unknown):
         start--;
       }
       const definition = tokens[start];
-      const after = CONSTRAINT_START.has(definition.upper) ? 'this constraint' : `column definition \`${definition.text}\``;
+      const after = CONSTRAINT_START.has(definition.upper) ? t('parse.thisConstraint') : t('parse.columnDefinition', { name: definition.text });
       return {
         message: near(before.start),
         line: ctx.lineOf(before.start),
-        detail: `Expected \`,\` or \`)\` after ${after}. ${rest}`,
+        detail: `${t('parse.expectedAfter', { definition: after })} ${rest}`,
       };
     }
   }
@@ -353,17 +350,17 @@ function syntaxError(ctx: Context, source: Source, kind: Kind, thrown: unknown):
     return {
       message: near(token.start),
       line,
-      detail: 'Backticks quote names in MySQL, not in PostgreSQL. Import the script as MySQL, or quote the names with `"`.',
+      detail: t('parse.backticks'),
     };
   }
 
   const expected = expectedTokens(thrown instanceof Error ? thrown.message : '');
   const detail = [
-    `Unexpected \`${token.text}\`.`,
+    t('parse.unexpected', { token: token.text }),
     isSymbol(token, ')') && isSymbol(tokens[index - 1], ',')
-      ? 'Remove the `,` before it.'
+      ? t('parse.removeComma')
       : expected.length
-        ? `Expected ${oneOf(expected)}.`
+        ? t('parse.expected', { expected: anyOf(expected) })
         : '',
     rest,
   ];
@@ -408,7 +405,7 @@ function defaultText(ctx: Context, tokens: Token[], from: number): string | unde
 
 function columnOf(ctx: Context, table: DraftTable, name: string, offset: number): DraftColumn {
   const column = table.columns.find((c) => c.name === name);
-  if (!column) fail(ctx, `Column "${name}" does not exist in ${table.name}.`, offset);
+  if (!column) fail(ctx, t('validate.columnMissing', { name, table: table.name }), offset);
   return column;
 }
 
@@ -441,7 +438,7 @@ function addIndex(
     name = index.fallback;
     for (let n = 1; ctx.indexNames.has(name); n++) name = `${index.fallback}${n}`;
   } else if (ctx.indexNames.has(name)) {
-    fail(ctx, `Index "${name}" already exists.`, offset);
+    fail(ctx, t('validate.indexExists', { name }), offset);
   }
   ctx.indexNames.add(name);
   table.indexes.push({ name, type: index.type, using: index.using ?? DEFAULT_INDEX_METHOD, columns: index.columns });
@@ -450,7 +447,7 @@ function addIndex(
 }
 
 function setPrimaryKey(ctx: Context, table: DraftTable, columns: string[], name: string | undefined, offset: number) {
-  if (table.indexes.some((i) => i.type === 'PRIMARY KEY')) fail(ctx, `Table "${table.name}" already has a primary key.`, offset);
+  if (table.indexes.some((i) => i.type === 'PRIMARY KEY')) fail(ctx, t('validate.primaryKeyExists', { name: table.name }), offset);
   for (const column of columns.map((c) => columnOf(ctx, table, c, offset))) {
     column.pk = true;
     column.nullable = false;
@@ -461,15 +458,13 @@ function setPrimaryKey(ctx: Context, table: DraftTable, columns: string[], name:
 function setForeignKey(ctx: Context, table: DraftTable, columns: string[], reference: TableReference, offset: number) {
   if (columns.length !== 1 || reference.foreignColumns.length !== 1) {
     // A column of the model references one column.
-    ctx.warnings.push(
-      `The composite foreign key on \`${table.name}\` (${columns.map((c) => `\`${c}\``).join(', ')}) was skipped.`,
-    );
+    ctx.warnings.push(t('parse.warn.compositeForeignKey', { table: table.name, columns: columns.map((c) => `\`${c}\``).join(', ') }));
     return;
   }
   const column = columnOf(ctx, table, columns[0], offset);
-  const path = `\`${table.name}.${column.name}\``;
-  if (column.fk) ctx.warnings.push(`${path} has more than one foreign key; the last one was kept.`);
-  if (reference.onDelete === 'set default') ctx.warnings.push(`${path} uses ON DELETE SET DEFAULT, imported as NO ACTION.`);
+  const path = `${table.name}.${column.name}`;
+  if (column.fk) ctx.warnings.push(t('parse.warn.severalForeignKeys', { column: path }));
+  if (reference.onDelete === 'set default') ctx.warnings.push(t('parse.warn.setDefault', { column: path }));
   column.fk = {
     table: reference.foreignTable.name,
     column: reference.foreignColumns[0].name,
@@ -481,7 +476,7 @@ function setForeignKey(ctx: Context, table: DraftTable, columns: string[], refer
 function addColumn(ctx: Context, source: Source, table: DraftTable, def: CreateColumnDef) {
   const name = def.name.name;
   if (table.columns.some((c) => c.name === name)) {
-    fail(ctx, `Column "${name}" already exists in ${table.name}.`, source.at(def.name));
+    fail(ctx, t('validate.columnExists', { name, table: table.name }), source.at(def.name));
   }
   const type = typeName(def.dataType);
   // SERIAL is NOT NULL without saying so.
@@ -519,7 +514,7 @@ function addColumn(ctx: Context, source: Source, table: DraftTable, def: CreateC
         break;
       case 'add generated':
         if (constraint.expression) {
-          ctx.warnings.push(`\`${table.name}.${name}\` is a generated column; its expression was not imported.`);
+          ctx.warnings.push(t('parse.warn.generatedColumn', { column: `${table.name}.${name}` }));
         } else if (makeSerial(column)) {
           // An identity column is NOT NULL as well.
           column.nullable = false;
@@ -570,12 +565,12 @@ function createTable(ctx: Context, source: Source, ast: CreateTableStatement) {
   const name = ast.name.name;
   if (ctx.tables.has(name)) {
     if (ast.ifNotExists) return;
-    fail(ctx, `Table "${name}" already exists.`, source.at(ast.name));
+    fail(ctx, t('validate.tableExists', { name }), source.at(ast.name));
   }
   const table: DraftTable = { name, schema: ast.name.schema ?? DEFAULT_SCHEMA, comment: '', columns: [], indexes: [] };
   for (const def of ast.columns) {
     if (def.kind === 'column') addColumn(ctx, source, table, def);
-    else ctx.warnings.push(`\`${name}\` copies columns from \`${def.like.name}\` with LIKE; they were not imported.`);
+    else ctx.warnings.push(t('parse.warn.likeColumns', { table: name, source: def.like.name }));
   }
   for (const constraint of ast.constraints ?? []) addConstraint(ctx, source, table, constraint);
   ctx.tables.set(name, table);
@@ -585,9 +580,7 @@ function createTable(ctx: Context, source: Source, ast: CreateTableStatement) {
 function knownTable(ctx: Context, source: Source, statement: string, name: string): DraftTable | undefined {
   const table = ctx.tables.get(name);
   if (!table) {
-    ctx.warnings.push(
-      `Line ${ctx.lineOf(source.statement.start)}: ${statement} names \`${name}\`, which is not defined, and was skipped.`,
-    );
+    ctx.warnings.push(t('parse.warn.unknownTable', { line: ctx.lineOf(source.statement.start), statement, table: name }));
   }
   return table;
 }
@@ -619,7 +612,7 @@ function alterTable(ctx: Context, source: Source, ast: AlterTableStatement) {
         break;
       default:
         ctx.warnings.push(
-          `Line ${ctx.lineOf(source.at(change))}: \`ALTER TABLE ${table.name} ${change.type.toUpperCase()}\` was not imported.`,
+          t('parse.warn.notImported', { line: ctx.lineOf(source.at(change)), statement: `ALTER TABLE ${table.name} ${change.type.toUpperCase()}` }),
         );
     }
   }
@@ -630,18 +623,18 @@ function createIndex(ctx: Context, source: Source, ast: CreateIndexStatement) {
   if (!table) return;
   const name = ast.indexName?.name;
   if (ast.ifNotExists && name !== undefined && ctx.indexNames.has(name)) return;
-  const label = `Index \`${name ?? '(unnamed)'}\` on \`${table.name}\``;
+  const named = { index: name ?? t('parse.warn.unnamedIndex'), table: table.name };
 
   const columns: string[] = [];
   for (const { expression } of ast.expressions) {
     // An index of the model lists columns.
     if (expression.type !== 'ref' || expression.table) {
-      ctx.warnings.push(`${label} uses an expression and was skipped.`);
+      ctx.warnings.push(t('parse.warn.indexExpression', named));
       return;
     }
     columns.push(expression.name);
   }
-  if (ast.where) ctx.warnings.push(`${label} has a WHERE clause, which was not imported.`);
+  if (ast.where) ctx.warnings.push(t('parse.warn.indexWhere', named));
   addIndex(
     ctx,
     table,
@@ -691,9 +684,7 @@ function read(ctx: Context, statement: Statement): boolean {
     const defines =
       kind === 'create table' || kind === 'create index' || (kind === 'alter table' && statement.tokens.some((t) => isWord(t, 'ADD')));
     if (defines) throw new Failure(syntaxError(ctx, source, kind, thrown));
-    ctx.warnings.push(
-      `Line ${ctx.lineOf(statement.start)}: this ${kind.toUpperCase()} statement is not supported and was skipped.`,
-    );
+    ctx.warnings.push(t('parse.warn.unsupportedStatement', { line: ctx.lineOf(statement.start), statement: kind.toUpperCase() }));
     return true;
   }
 
@@ -720,15 +711,11 @@ function parse(sql: string): ParseOutcome {
   }
   if (script.error) {
     const line = lineOf(script.error.offset);
-    return { ok: false, error: { message: `Unable to parse SQL near line ${line}.`, line, detail: script.error.message } };
+    return { ok: false, error: { message: t('parse.near', { line }), line, detail: script.error.message } };
   }
 
   resolveForeignKeys(ctx.tables, ctx.warnings);
-  if (ctx.checks) {
-    ctx.warnings.push(
-      ctx.checks === 1 ? '1 CHECK constraint was not imported.' : `${ctx.checks} CHECK constraints were not imported.`,
-    );
-  }
+  if (ctx.checks) ctx.warnings.push(t('parse.warn.checks', { count: ctx.checks }));
   return { ok: true, tables: finishTables(ctx.tables, ctx.warnings), warnings: ctx.warnings, skipped };
 }
 

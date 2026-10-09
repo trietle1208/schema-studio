@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { t } from '../core/i18n';
 import { Button } from './Button';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
@@ -99,7 +100,7 @@ export function Modal({
             {subtitle && <div className="ss-modal-sub">{subtitle}</div>}
           </div>
           {headerAside}
-          {onClose && <IconButton icon="x" size="sm" label="Close (Esc)" onClick={onClose} />}
+          {onClose && <IconButton icon="x" size="sm" label={t('modal.close')} onClick={onClose} />}
         </div>
         <div className="ss-modal-body" style={bodyStyle}>
           {children}
@@ -131,8 +132,8 @@ export interface ConfirmDialogProps {
 export function ConfirmDialog({
   title,
   danger,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel = t('modal.confirm'),
+  cancelLabel = t('common.cancel'),
   onConfirm,
   onCancel,
   width = 440,

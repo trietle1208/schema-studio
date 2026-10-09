@@ -1,3 +1,4 @@
+import { t } from '../core/i18n';
 import { parseRoute, routePath, routeSchema, sameRoute, SCHEMAS_ROUTE, type Route } from '../core/routes';
 import { openLatestSchema, openSchemaNamed, type StoredSchema } from '../db/schemas';
 import { hashAddress, type Address } from '../store/address';
@@ -54,14 +55,14 @@ async function enter(route: Route, replace = false): Promise<boolean> {
       console.error(error);
       ui.showToast({
         tone: 'error',
-        title: 'Could not open schema',
-        description: 'It could not be read from browser storage.',
+        title: t('toast.openFailed.title'),
+        description: t('toast.openFailed.description'),
       });
       return false;
     }
     if (turn !== turns) return false;
     if (!stored) {
-      ui.showToast({ tone: 'error', title: 'Schema not found', description: `No schema is called "${name}".` });
+      ui.showToast({ tone: 'error', title: t('toast.schemaNotFound.title'), description: t('toast.schemaNotFound.description', { name }) });
       return false;
     }
     openStored(stored);
@@ -124,8 +125,8 @@ export async function startRouting(to: Address = hashAddress): Promise<void> {
       console.error(error);
       ui.showToast({
         tone: 'error',
-        title: 'Could not open saved schemas',
-        description: 'Browser storage is unavailable, so nothing can be opened or saved.',
+        title: t('toast.storageUnavailable.title'),
+        description: t('toast.storageUnavailable.description'),
       });
     }
     turns++;

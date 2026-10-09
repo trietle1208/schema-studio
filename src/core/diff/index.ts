@@ -1,7 +1,7 @@
 import { writtenIndexes, writtenRelations } from '../constraints';
 import { foreignKeyBlock, indexBlock, tableBlock } from '../generate/options';
+import { t } from '../i18n';
 import type { Column, DiffGroup, DiffItem, DiffOp, Index, Table } from '../model';
-import { plural } from '../plural';
 import { outgoingRelations, qualifiedName, type Relation } from '../relations';
 
 // Compares two versions of a schema. Tables, columns and indexes are matched by name and a foreign
@@ -36,6 +36,20 @@ export interface DiffStats {
 
 export const DIFF_GROUPS = ['Tables', 'Columns', 'Indexes', 'Relationships'] as const;
 export type DiffGroupName = (typeof DIFF_GROUPS)[number];
+
+const isGroup = (group: string): group is DiffGroupName => (DIFF_GROUPS as readonly string[]).includes(group);
+
+/** A group as the lists head it, in the language of the app: `Columns`. A name that is no group's stays as it is. */
+export function diffGroupLabel(group: string): string {
+  if (!isGroup(group)) return group;
+  return { Tables: t('noun.tables'), Columns: t('diff.noun.columns'), Indexes: t('noun.indexes'), Relationships: t('noun.relationships') }[group];
+}
+
+/** What an item of a group is, as a list without headings says it beside each one: `column`. */
+export function diffKindLabel(group: string): string {
+  if (!isGroup(group)) return group;
+  return { Tables: t('diff.kind.table'), Columns: t('diff.kind.column'), Indexes: t('diff.kind.index'), Relationships: t('diff.kind.relationship') }[group];
+}
 
 const DEFAULT_SCHEMA = 'public';
 const DEFAULT_INDEX_METHOD = 'btree';
@@ -153,22 +167,22 @@ export function describeRelation(relation: Relation): string {
 }
 
 function describeTable(table: Table): string {
-  const parts = [plural(table.columns.length, 'column')];
+  const parts = [t('count.columns', { count: table.columns.length })];
   const indexes = table.indexes?.length ?? 0;
   const keys = outgoingRelations(table).filter((r) => !r.inferred).length;
-  if (indexes) parts.push(plural(indexes, 'index', 'indexes'));
-  if (keys) parts.push(plural(keys, 'foreign key'));
+  if (indexes) parts.push(t('count.indexes', { count: indexes }));
+  if (keys) parts.push(t('count.foreignKeys', { count: keys }));
   return parts.join(' · ');
 }
 
 const flag = (was: boolean | undefined, is: boolean | undefined, name: string) =>
-  !was === !is ? [] : [`${is ? 'added' : 'removed'} ${name}`];
+  !was === !is ? [] : [is ? t('diff.added', { name }) : t('diff.removed', { name })];
 
 /** What changed about a value that may be blank: `DEFAULT 0 → 1`, `added DEFAULT 1`, `removed DEFAULT`. */
 function valueChange(was: string, is: string, name: string): string[] {
   if (was === is) return [];
-  if (!was) return [`added ${name} ${is}`];
-  return [is ? `${name} ${was} → ${is}` : `removed ${name}`];
+  if (!was) return [t('diff.addedValue', { name, value: is })];
+  return [is ? `${name} ${was} → ${is}` : t('diff.removed', { name })];
 }
 
 function columnChanges(before: Column, after: Column): string {
@@ -179,14 +193,14 @@ function columnChanges(before: Column, after: Column): string {
     ...(!before.nullable === !after.nullable || after.pk ? [] : [after.nullable ? 'NOT NULL → NULL' : 'NULL → NOT NULL']),
     ...flag(before.unique, after.unique, 'UNIQUE'),
     ...valueChange(text(before.default), text(after.default), 'DEFAULT'),
-    ...(text(before.comment) === text(after.comment) ? [] : ['comment changed']),
+    ...(text(before.comment) === text(after.comment) ? [] : [t('diff.commentChanged')]),
   ].join(' · ');
 }
 
 function tableChanges(before: Table, after: Table): string {
   return [
-    ...(schemaOf(before) === schemaOf(after) ? [] : [`schema ${schemaOf(before)} → ${schemaOf(after)}`]),
-    ...(text(before.comment) === text(after.comment) ? [] : ['comment changed']),
+    ...(schemaOf(before) === schemaOf(after) ? [] : [t('diff.schemaChanged', { from: schemaOf(before), to: schemaOf(after) })]),
+    ...(text(before.comment) === text(after.comment) ? [] : [t('diff.commentChanged')]),
   ].join(' · ');
 }
 

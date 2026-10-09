@@ -6,6 +6,7 @@ import { Kbd } from '../components/Kbd';
 import { Modal } from '../components/Modal';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { Select } from '../components/Select';
+import { t } from '../core/i18n';
 import { ENGINES } from '../core/schemaList';
 import { validateSchemaName } from '../core/validate';
 import { useSchemas } from '../db/useSchemas';
@@ -62,28 +63,28 @@ export function NewSchemaDialog() {
 
   return (
     <Modal
-      title="New Schema"
-      subtitle="Stored in this browser as v1. Every save after that adds a version."
+      title={t('action.newSchema')}
+      subtitle={t('new.subtitle')}
       width={520}
       onClose={closeDialog}
       footerStart={
         <span className="ss-modal-foot-hint">
           <Kbd keys={['⌘', '⏎']} />
-          to create
+          {t('new.toCreate')}
         </span>
       }
       footer={
         <>
-          <Button onClick={closeDialog}>Cancel</Button>
+          <Button onClick={closeDialog}>{t('common.cancel')}</Button>
           <Button variant="primary" icon="plus" disabled={creating || (touched && !!problem)} onClick={() => void create()}>
-            Create Schema
+            {t('new.create')}
           </Button>
         </>
       }
     >
       <form onSubmit={onSubmit} style={{ display: 'contents' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px', gap: 12 }}>
-          <Field label="Schema name" error={touched ? problem : null}>
+          <Field label={t('field.schemaName')} error={touched ? problem : null}>
             <Input
               mono
               value={name}
@@ -98,35 +99,35 @@ export function NewSchemaDialog() {
               data-autofocus
             />
           </Field>
-          <Field label="Database">
+          <Field label={t('field.database')}>
             <Select
               value={sample ? ecommerceSample.engine : engine}
               onChange={setEngine}
               options={[...ENGINES]}
               disabled={sample}
-              label="Database"
+              label={t('field.database')}
             />
           </Field>
         </div>
-        <Field label="Description" aside="Optional">
+        <Field label={t('new.description')} aside={t('new.optional')}>
           <Input
             value={description}
-            placeholder="What the schema holds"
+            placeholder={t('new.descriptionPlaceholder')}
             onChange={(e) => setDescription(e.target.value)}
             autoComplete="off"
           />
         </Field>
         <Field
-          label="Start with"
-          hint={sample ? 'Five tables: users, orders, order_items, products and payments.' : 'No tables.'}
+          label={t('new.startWith')}
+          hint={sample ? t('new.sampleHint') : t('new.blankHint')}
         >
           <SegmentedControl
             block
             value={start}
             onChange={(v) => setStart(v as Start)}
             options={[
-              { value: 'blank', label: 'Blank schema', icon: 'plus' },
-              { value: 'sample', label: 'Ecommerce sample', icon: 'database' },
+              { value: 'blank', label: t('new.blank'), icon: 'plus' },
+              { value: 'sample', label: t('new.sample'), icon: 'database' },
             ]}
           />
         </Field>

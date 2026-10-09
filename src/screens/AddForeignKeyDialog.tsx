@@ -7,6 +7,7 @@ import { Modal } from '../components/Modal';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { Select } from '../components/Select';
 import { referencingType } from '../core/datatypes';
+import { t } from '../core/i18n';
 import { suggestForeignKey } from '../core/infer';
 import {
   DEFAULT_ON_DELETE,
@@ -86,49 +87,49 @@ export function AddForeignKeyDialog({ table: name }: AddForeignKeyDialogProps) {
 
   return (
     <Modal
-      title="Add foreign key"
-      subtitle={`From a column of ${table.schema || 'public'}.${table.name} to the primary key of another table.`}
+      title={t('action.addForeignKey')}
+      subtitle={t('fk.subtitle', { table: `${table.schema || 'public'}.${table.name}` })}
       icon="link"
       width={520}
       onClose={closeDialog}
       footerStart={
         <span className="ss-modal-foot-hint">
           <Kbd keys={['⌘', '⏎']} />
-          to add
+          {t('fk.toAdd')}
         </span>
       }
       footer={
         <>
-          <Button onClick={closeDialog}>Cancel</Button>
+          <Button onClick={closeDialog}>{t('common.cancel')}</Button>
           {/* Focus starts on the name of a new column; without one it starts here, where Enter adds. */}
           <Button variant="primary" icon="link" disabled={!!problem} onClick={add} data-autofocus>
-            Add foreign key
+            {t('action.addForeignKey')}
           </Button>
         </>
       }
     >
       <form onSubmit={onSubmit} style={{ display: 'contents' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Column">
+          <Field label={t('fk.column')}>
             <Select
               mono
               value={column}
               onChange={setColumn}
-              label="Column"
+              label={t('fk.column')}
               options={[
                 ...freeColumns(table)
                   .filter((c) => c.name.trim())
                   .map((c) => c.name),
-                { value: NEW_COLUMN, label: 'New column' },
+                { value: NEW_COLUMN, label: t('fk.newColumn') },
               ]}
             />
           </Field>
-          <Field label="References">
-            <Select mono value={qualifiedName(to)} onChange={setReference} label="References" options={targets.map(qualifiedName)} />
+          <Field label={t('column.references')}>
+            <Select mono value={qualifiedName(to)} onChange={setReference} label={t('column.references')} options={targets.map(qualifiedName)} />
           </Field>
         </div>
         {adds && (
-          <Field label="Column name" error={problem} hint={`Added as ${type}, the type that references ${qualifiedName(to)}.`}>
+          <Field label={t('field.columnName')} error={problem} hint={t('fk.addedAs', { type, target: qualifiedName(to) })}>
             <Input
               mono
               value={newName}
@@ -137,12 +138,12 @@ export function AddForeignKeyDialog({ table: name }: AddForeignKeyDialogProps) {
               onChange={(e) => setTyped(e.target.value)}
               spellCheck={false}
               autoComplete="off"
-              aria-label="Column name"
+              aria-label={t('field.columnName')}
               data-autofocus
             />
           </Field>
         )}
-        <Field label="On delete">
+        <Field label={t('column.onDelete')}>
           <SegmentedControl
             block
             value={onDelete}

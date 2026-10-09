@@ -85,6 +85,8 @@ export interface SchemaSummary {
   relationships?: number;
   version: string;
   updated: string;
+  /** `updated` for a narrow column: `2h`. */
+  updatedShort?: string;
   favorite?: boolean;
 }
 

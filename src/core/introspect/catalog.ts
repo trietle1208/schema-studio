@@ -77,6 +77,8 @@ export type Catalog = PostgresCatalog | MysqlCatalog;
 export interface BridgeError {
   /** What happened, in the wording of the design system: "Could not connect to the database." */
   message: string;
+  /** Which failure of the bridge it is, by which the app says it in its own language: the database was not reached, or not read. */
+  code?: 'connect' | 'read';
   /** What the database or the network said about it. */
   detail?: string;
 }

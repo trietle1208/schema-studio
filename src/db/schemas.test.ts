@@ -294,6 +294,7 @@ describe('schemaSummary', () => {
       relationships: 3,
       version: 'v2',
       updated: '2 hours ago',
+      updatedShort: '2h',
     });
   });
 });

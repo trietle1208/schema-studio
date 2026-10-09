@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { t } from '../core/i18n';
 import { Button } from './Button';
 import { Icon } from './Icon';
 import { Kbd } from './Kbd';
@@ -53,27 +54,27 @@ export function EmptyState({ title, description, onImport, onCreate, hints }: Em
   return (
     <div className="ss-empty">
       <EmptyArt />
-      <div className="ss-empty-title">{title || 'Your database schemas will appear here.'}</div>
+      <div className="ss-empty-title">{title || t('empty.title')}</div>
       <div className="ss-empty-sub">
-        {description || 'Import DDL from an existing database, or start a blank schema and draw tables on the canvas.'}
+        {description || t('empty.description')}
       </div>
       <div className="ss-empty-actions">
         <Button variant="primary" icon="upload" onClick={onImport} disabled={!onImport} kbd={['⌘', 'I']}>
-          Import Schema
+          {t('action.importSchema')}
         </Button>
         <Button icon="plus" onClick={onCreate} disabled={!onCreate} kbd={['⌘', 'N']}>
-          Create New Schema
+          {t('action.createNewSchema')}
         </Button>
       </div>
       {hints !== false && (
         <div className="ss-empty-keys">
           <span>
             <Icon name="file-code" size={14} />
-            Accepts pg_dump, mysqldump and plain DDL
+            {t('empty.accepts')}
           </span>
           <span>
             <Kbd keys={['⌘', '/']} />
-            All shortcuts
+            {t('empty.shortcuts')}
           </span>
         </div>
       )}

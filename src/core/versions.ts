@@ -1,6 +1,6 @@
 import { countChanges, diffGroups, diffSchemas, type DiffStats, type SchemaChanges } from './diff';
 import type { DiffGroup, DiffOp, SchemaSnapshot, Version } from './model';
-import { plural } from './plural';
+import { t, type MessageKey } from './i18n';
 import { countRelations } from './relations';
 import { countIndexes } from './summary';
 import { dateTime, relativeTime } from './time';
@@ -39,18 +39,18 @@ export function versionEntries(versions: readonly SavedVersion[]): VersionEntry[
   });
 }
 
-const VERB: Record<DiffOp, string> = { add: 'Add', mod: 'Change', del: 'Drop' };
+const VERB = { add: 'version.change.add', mod: 'version.change.mod', del: 'version.change.del' } as const satisfies Record<DiffOp, MessageKey>;
 
 /**
  * What a version did, in a line, for a version that was saved without a message: `Add order_items
  * and 10 more changes`.
  */
 export function changeMessage(entry: Pick<VersionEntry, 'previous' | 'groups'>): string {
-  if (entry.previous === null) return 'Initial version';
+  if (entry.previous === null) return t('version.initial');
   const items = entry.groups.flatMap((group) => group.items);
-  if (!items.length) return 'No changes to the schema';
-  const first = `${VERB[items[0].op]} ${items[0].path}`;
-  return items.length === 1 ? first : `${first} and ${plural(items.length - 1, 'more change')}`;
+  if (!items.length) return t('version.noChanges');
+  const first = t(VERB[items[0].op], { path: items[0].path });
+  return items.length === 1 ? first : t('version.changeAndMore', { first, count: items.length - 1 });
 }
 
 /** The message a version is listed with: its own, or what it changed. */

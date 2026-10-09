@@ -1,5 +1,7 @@
 import { ConfirmDialog } from '../components/Modal';
+import { rich } from '../components/rich';
 import { Alert } from '../components/Toast';
+import { t } from '../core/i18n';
 import { versionLabel } from '../core/versions';
 import { selectDirty, useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
@@ -18,20 +20,26 @@ export function RestoreVersionDialog({ version }: RestoreVersionDialogProps) {
 
   return (
     <ConfirmDialog
-      title={`Restore ${versionLabel(version)}?`}
-      confirmLabel="Restore"
+      title={t('restore.title', { version: versionLabel(version) })}
+      confirmLabel={t('action.restore')}
       onCancel={closeDialog}
       onConfirm={() => void restoreVersion(version)}
     >
       <div style={{ color: 'var(--ink-2)' }}>
-        <code className="ss-mono" style={{ color: 'var(--ink-1)' }}>
-          {name}
-        </code>
-        {` goes back to ${versionLabel(version)}, saved as ${versionLabel(current + 1)}. Every version up to ${versionLabel(current)} stays in the history.`}
+        {rich('restore.body', {
+          schema: (
+            <code className="ss-mono" style={{ color: 'var(--ink-1)' }}>
+              {name}
+            </code>
+          ),
+          version: versionLabel(version),
+          next: versionLabel(current + 1),
+          current: versionLabel(current),
+        })}
       </div>
       {unsaved && (
-        <Alert tone="warn" title="Unsaved changes will be lost">
-          The diagram has changes that are not saved as a version.
+        <Alert tone="warn" title={t('dialog.unsavedLost')}>
+          {t('restore.unsaved')}
         </Alert>
       )}
     </ConfirmDialog>

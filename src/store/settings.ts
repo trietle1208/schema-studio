@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, parseLocale, setLocale, type Locale } from '../core/i18n';
 import {
   clampPanelWidth,
   formatPanelWidths,
@@ -17,6 +18,9 @@ export interface SettingsState {
   theme: Theme;
   /** Paints the app in `theme` at once and keeps the choice for the next visit. */
   setTheme: (theme: Theme) => void;
+  locale: Locale;
+  /** Makes the app speak `locale` at once and keeps the choice for the next visit. */
+  setLocale: (locale: Locale) => void;
   /** How wide the sidebar and the inspector are. */
   panels: PanelWidths;
   /**
@@ -39,6 +43,21 @@ function storedTheme(): Theme {
 function applyTheme(theme: Theme) {
   if (theme === DEFAULT_THEME) delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = theme;
+}
+
+/** The language chosen on an earlier visit. */
+function storedLocale(): Locale {
+  try {
+    return parseLocale(localStorage.getItem(LOCALE_STORAGE_KEY));
+  } catch {
+    return DEFAULT_LOCALE;
+  }
+}
+
+/** Messages are written in the language from here on (see core/i18n), and the page says which it is in. */
+function applyLocale(locale: Locale) {
+  setLocale(locale);
+  document.documentElement.lang = locale;
 }
 
 /** The widths the panels were given on an earlier visit. */
@@ -70,6 +89,16 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
     set({ theme });
   },
+  locale: storedLocale(),
+  setLocale: (locale) => {
+    applyLocale(locale);
+    try {
+      localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch {
+      // The language still holds until the page is closed.
+    }
+    set({ locale });
+  },
   panels: storedPanels(),
   setPanelWidth: (panel, width) => {
     const { panels } = get();
@@ -89,4 +118,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
 // index.html has applied the stored theme before the first paint; this keeps the page and the store in step.
 applyTheme(useSettingsStore.getState().theme);
+// Before anything is rendered, so that the first screen is in the chosen language.
+applyLocale(useSettingsStore.getState().locale);
 applyPanels(useSettingsStore.getState().panels);

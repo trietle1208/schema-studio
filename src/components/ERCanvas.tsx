@@ -25,12 +25,14 @@ import {
   type Size,
 } from '../core/layout';
 import { groupOf } from '../core/groups';
+import { t } from '../core/i18n';
 import type { Position, Positions, Table, TableGroup } from '../core/model';
 import { positionOf } from '../core/positions';
 import { qualifiedName, referenceProblem, type ColumnRef } from '../core/relations';
 import { ContextMenu, type MenuItem } from './ContextMenu';
 import { cx } from './cx';
 import { Icon } from './Icon';
+import { rich } from './rich';
 import { TableNode } from './TableNode';
 
 const MINIMAP_SIZE: Size = { w: 168, h: 108 };
@@ -230,7 +232,7 @@ function Minimap({ tables, positions, groups, selected, zoom, offset, view, onPa
   return (
     <div
       className={cx('ss-minimap', hold && 'is-dragging')}
-      aria-label="Minimap"
+      aria-label={t('canvas.minimap')}
       onPointerDown={onDown}
       onPointerMove={(e) => {
         if (hold) panTo(hold, pointAt(e));
@@ -668,8 +670,9 @@ export function ERCanvas({
       </span>
     );
     if (linkProblem) linkHint = linkProblem;
-    else if (linkTo) linkHint = <span>Add foreign key {mono(`${qualifiedName(linkFrom)} → ${qualifiedName(linkTo)}`)}</span>;
-    else linkHint = <span>Drop {mono(qualifiedName(linkFrom))} on the column it references</span>;
+    else if (linkTo) {
+      linkHint = <span>{rich('canvas.linkAdd', { reference: mono(`${qualifiedName(linkFrom)} → ${qualifiedName(linkTo)}`) })}</span>;
+    } else linkHint = <span>{rich('canvas.linkDrop', { column: mono(qualifiedName(linkFrom)) })}</span>;
   }
 
   const framed = frame && rectBetween(frame.from, frame.to);
@@ -683,32 +686,32 @@ export function ERCanvas({
   let items: (MenuItem | '-')[] | null = null;
   if (menu && menuTable === null) {
     const at = { x: snap((menu.x - offset.x) / zoom), y: snap((menu.y - offset.y) / zoom) };
-    items = [{ icon: 'table', label: 'New table', onSelect: () => onNewTable?.(at) }];
+    items = [{ icon: 'table', label: t('action.newTable'), onSelect: () => onNewTable?.(at) }];
     if (onArrange) {
-      items.push({ icon: 'sparkle', label: chosen.length > 1 ? 'Arrange selected tables' : 'Arrange tables', shortcut: '⇧A', onSelect: onArrange });
+      items.push({ icon: 'sparkle', label: chosen.length > 1 ? t('action.arrangeSelected') : t('action.arrange'), shortcut: '⇧A', onSelect: onArrange });
     }
-    if (focused != null && onShowAll) items.push({ icon: 'eye', label: 'Show all tables', onSelect: onShowAll });
-    if (onGroups) items.push({ icon: 'folder', label: 'Table groups…', onSelect: onGroups });
+    if (focused != null && onShowAll) items.push({ icon: 'eye', label: t('action.showAllTables'), onSelect: onShowAll });
+    if (onGroups) items.push({ icon: 'folder', label: t('canvas.menu.groups'), onSelect: onGroups });
     if (onInferRelations || onReviewInferred || onRemoveInferred) items.push('-');
-    if (onInferRelations) items.push({ icon: 'link', label: 'Infer relationships', onSelect: onInferRelations });
-    if (onReviewInferred) items.push({ icon: 'check', label: 'Review inferred relationships…', onSelect: onReviewInferred });
-    if (onRemoveInferred) items.push({ icon: 'x', label: 'Remove inferred relationships', onSelect: onRemoveInferred });
+    if (onInferRelations) items.push({ icon: 'link', label: t('action.inferRelationships'), onSelect: onInferRelations });
+    if (onReviewInferred) items.push({ icon: 'check', label: t('canvas.menu.reviewInferred'), onSelect: onReviewInferred });
+    if (onRemoveInferred) items.push({ icon: 'x', label: t('canvas.menu.removeInferred'), onSelect: onRemoveInferred });
   } else if (menuTable !== null) {
     const table = menuTable;
     items = menuItems
       ? menuItems(table, closeMenu)
       : [
-          { icon: 'pencil', label: 'Rename table', shortcut: 'F2', onSelect: () => onRenameTable?.(table) },
-          { icon: 'plus', label: 'Add column', shortcut: '⌘⏎', onSelect: () => onAddColumn?.(table) },
-          { icon: 'link', label: 'Add foreign key…', onSelect: () => onAddForeignKey?.(table) },
-          { icon: 'copy', label: 'Duplicate', shortcut: '⌘D', onSelect: () => onDuplicateTable?.(table) },
+          { icon: 'pencil', label: t('canvas.menu.rename'), shortcut: 'F2', onSelect: () => onRenameTable?.(table) },
+          { icon: 'plus', label: t('action.addColumn'), shortcut: '⌘⏎', onSelect: () => onAddColumn?.(table) },
+          { icon: 'link', label: t('canvas.menu.addForeignKey'), onSelect: () => onAddForeignKey?.(table) },
+          { icon: 'copy', label: t('canvas.menu.duplicate'), shortcut: '⌘D', onSelect: () => onDuplicateTable?.(table) },
           '-',
-          { icon: 'code', label: 'Copy CREATE TABLE', shortcut: '⇧⌘C', onSelect: () => onCopyCreateTable?.(table) },
+          { icon: 'code', label: t('canvas.menu.copyCreate'), shortcut: '⇧⌘C', onSelect: () => onCopyCreateTable?.(table) },
           focused === table && onShowAll
-            ? { icon: 'eye', label: 'Show all tables', onSelect: onShowAll }
-            : { icon: 'eye', label: 'Focus related tables', onSelect: () => onFocusRelated?.(table) },
+            ? { icon: 'eye', label: t('action.showAllTables'), onSelect: onShowAll }
+            : { icon: 'eye', label: t('canvas.menu.focus'), onSelect: () => onFocusRelated?.(table) },
           '-',
-          { icon: 'trash', label: 'Delete table', shortcut: '⌫', danger: true, onSelect: () => onDeleteTable?.(table) },
+          { icon: 'trash', label: t('action.deleteTable'), shortcut: '⌫', danger: true, onSelect: () => onDeleteTable?.(table) },
         ];
   }
 
@@ -732,7 +735,7 @@ export function ERCanvas({
       }}
       onContextMenu={onBgMenu}
       role="application"
-      aria-label="ER diagram canvas"
+      aria-label={t('canvas.label')}
     >
       <div className="ss-canvas-layer" style={{ transform: `translate(${offset.x}px,${offset.y}px) scale(${zoom})` }}>
         <svg className="ss-edges" width={1} height={1}>
@@ -807,39 +810,39 @@ export function ERCanvas({
         <div className="ss-legend">
           <span>
             <Icon name="key" size={12} style={{ color: 'var(--pk)' }} />
-            primary key
+            {t('legend.primaryKey')}
           </span>
           <span>
             <Icon name="link" size={12} style={{ color: 'var(--fk)' }} />
-            foreign key
+            {t('legend.foreignKey')}
           </span>
           {edges.some((e) => e.inferred) && (
             <span>
               <svg className="ss-legend-edge" width={16} height={8} aria-hidden="true">
                 <path className="ss-edge" d="M0 4 H16" />
               </svg>
-              inferred
+              {t('relation.inferred')}
             </span>
           )}
           <span>
             <b style={{ color: 'var(--ink-2)', fontWeight: 500 }}>?</b>
-            nullable
+            {t('legend.nullable')}
           </span>
           <span>
             <b style={{ color: 'var(--ink-2)', fontWeight: 600, fontSize: 9.5 }}>UQ</b>
-            unique
+            {t('legend.unique')}
           </span>
         </div>
       )}
       {showLegend !== false && shownGroups.length > 0 && (
         // The canvas takes a press on it as the start of a pan, and a click as one on the empty canvas.
-        <div className="ss-legend-groups" aria-label="Table groups" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="ss-legend-groups" aria-label={t('action.tableGroups')} onPointerDown={(e) => e.stopPropagation()}>
           {shownGroups.map(({ group, shown }) => (
             <button
               key={group.name}
               type="button"
               className={cx('ss-legend-group', `ss-group--${group.color}`, shown.length === chosen.length && shown.every((n) => isChosen.has(n)) && 'is-selected')}
-              title={`Select the ${shown.length === 1 ? 'table' : `${shown.length} tables`} of ${group.name}`}
+              title={t('canvas.selectGroup', { count: shown.length, name: group.name })}
               onClick={() => (onSelectTables ? onSelectTables(shown) : onSelect?.(shown[0]))}
             >
               <span className="ss-group-swatch" />

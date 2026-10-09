@@ -1,7 +1,7 @@
 import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
 import { arrangeTables } from '../core/arrange';
+import { t } from '../core/i18n';
 import type { SchemaSnapshot, Table } from '../core/model';
-import { plural } from '../core/plural';
 import { SCHEMAS_ROUTE } from '../core/routes';
 import { summarize } from '../core/summary';
 import type { SchemaRecord } from '../db/db';
@@ -53,7 +53,7 @@ export function createNewSchema({ sample, ...schema }: NewSchemaInput): Promise<
   const snapshot: SchemaSnapshot = sample
     ? { tables: ecommerceTables, positions: ecommercePositions }
     : { tables: [], positions: {} };
-  return createAndOpen(schema, snapshot, sample ? 'Ecommerce sample' : 'New schema', 'Could not create schema');
+  return createAndOpen(schema, snapshot, sample ? t('version.message.sample') : t('version.message.new'), t('toast.createFailed.title'));
 }
 
 /** ⌘I and the Import buttons: asks for the SQL of a schema to import. */
@@ -78,10 +78,14 @@ export interface ImportInput extends NewSchema {
 export async function importSchema({ tables, file, database, ...schema }: ImportInput): Promise<boolean> {
   const ui = useUiStore.getState();
   const snapshot: SchemaSnapshot = { tables, positions: arrangeTables(tables) };
-  const message = file ? `Imported from ${file}` : database ? `Imported from database ${database}` : 'Imported from pasted SQL';
-  if (!(await createAndOpen(schema, snapshot, message, 'Could not import schema'))) return false;
+  const message = file
+    ? t('version.message.importedFile', { file })
+    : database
+      ? t('version.message.importedDatabase', { database })
+      : t('version.message.importedPasted');
+  if (!(await createAndOpen(schema, snapshot, message, t('toast.importFailed.title')))) return false;
   ui.setFitPending(true);
-  ui.showToast({ title: `Imported ${schema.name}`, description: summarize(tables) });
+  ui.showToast({ title: t('toast.imported.title', { name: schema.name }), description: summarize(tables) });
   return true;
 }
 
@@ -102,8 +106,8 @@ export async function deleteSchema(id: number): Promise<void> {
     console.error(error);
     ui.showToast({
       tone: 'error',
-      title: 'Could not delete schema',
-      description: 'It could not be removed from browser storage.',
+      title: t('toast.deleteSchemaFailed.title'),
+      description: t('toast.deleteSchemaFailed.description'),
     });
     return;
   }
@@ -114,7 +118,7 @@ export async function deleteSchema(id: number): Promise<void> {
   }
   ui.showToast({
     tone: 'info',
-    title: dialog ? `Deleted schema ${dialog.name}` : 'Deleted schema',
-    description: dialog ? `${plural(dialog.versions, 'version')} removed from this browser.` : undefined,
+    title: dialog ? t('toast.schemaDeleted.title', { name: dialog.name }) : t('toast.schemaDeleted.titleUnnamed'),
+    description: dialog ? t('toast.schemaDeleted.description', { count: dialog.versions }) : undefined,
   });
 }

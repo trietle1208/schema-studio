@@ -17,8 +17,8 @@ import {
   renameGroup,
   suggestGroups,
 } from '../core/groups';
+import { t } from '../core/i18n';
 import type { GroupColor, Table, TableGroup } from '../core/model';
-import { plural } from '../core/plural';
 import { useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
 
@@ -51,8 +51,8 @@ function TablePicker({ group, groups, tables, onPick }: TablePickerProps) {
             size="sm"
             mono
             icon="search"
-            placeholder="Filter tables…"
-            aria-label={`Filter the tables to choose for ${group.name}`}
+            placeholder={t('groups.filter')}
+            aria-label={t('groups.filterLabel', { name: group.name })}
             spellCheck={false}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -61,18 +61,18 @@ function TablePicker({ group, groups, tables, onPick }: TablePickerProps) {
         <Button
           size="sm"
           disabled={!free.length && !own.length}
-          title={free.length || !own.length ? 'Add the tables shown that are in no group' : 'Remove the tables shown from the group'}
+          title={free.length || !own.length ? t('groups.addShownTitle') : t('groups.removeShownTitle')}
           onClick={() => (free.length ? onPick(free, true) : onPick(own, false))}
         >
-          {free.length || !own.length ? `Add ${plural(free.length, 'table')}` : `Remove ${plural(own.length, 'table')}`}
+          {free.length || !own.length ? t('groups.addShown', { count: free.length }) : t('groups.removeShown', { count: own.length })}
         </Button>
       </div>
       {choices.length === 0 ? (
         <div className="ss-insp-empty" style={{ padding: '6px 0 0' }}>
-          {tables.length ? 'No tables match the filter.' : 'The schema has no tables.'}
+          {tables.length ? t('groups.noMatch') : t('groups.noTables')}
         </div>
       ) : (
-        <div className="ss-groups-pick-list" role="group" aria-label={`Tables of ${group.name}`}>
+        <div className="ss-groups-pick-list" role="group" aria-label={t('groups.tablesOf', { name: group.name })}>
           {choices.map((c) => (
             <Checkbox
               key={c.table}
@@ -83,7 +83,7 @@ function TablePicker({ group, groups, tables, onPick }: TablePickerProps) {
                 <>
                   <span className="ss-groups-pick-name">{c.table}</span>
                   {c.from && (
-                    <span className={cx('ss-groups-pick-from', `ss-group--${c.from.color}`)} title={`In the group ${c.from.name}`}>
+                    <span className={cx('ss-groups-pick-from', `ss-group--${c.from.color}`)} title={t('groups.inGroup', { name: c.from.name })}>
                       <span className="ss-group-swatch" />
                       {c.from.name}
                     </span>
@@ -137,7 +137,7 @@ function GroupRow({ group, groups, tables, picking, autoFocus, onPicking, onPick
           style={{ flex: 1, minWidth: 0 }}
           value={draft}
           spellCheck={false}
-          aria-label="Group name"
+          aria-label={t('groups.name')}
           aria-invalid={!!problem}
           autoFocus={autoFocus}
           onFocus={(e) => e.target.select()}
@@ -151,17 +151,17 @@ function GroupRow({ group, groups, tables, picking, autoFocus, onPicking, onPick
       </span>
       <span className="ss-row">
         <Button size="sm" icon="table" active={picking} aria-expanded={picking} onClick={() => onPicking(!picking)}>
-          Choose tables
+          {t('groups.choose')}
         </Button>
-        <span className="ss-groups-colors" role="radiogroup" aria-label={`Colour of ${group.name}`}>
+        <span className="ss-groups-colors" role="radiogroup" aria-label={t('groups.colourOf', { name: group.name })}>
           {GROUP_COLORS.map((color) => (
             <button
               key={color}
               type="button"
               role="radio"
               aria-checked={color === group.color}
-              aria-label={color}
-              title={color}
+              aria-label={t(`color.${color}`)}
+              title={t(`color.${color}`)}
               className={cx('ss-groups-color', `ss-group--${color}`)}
               onClick={() => onRecolor(color)}
             >
@@ -169,7 +169,7 @@ function GroupRow({ group, groups, tables, picking, autoFocus, onPicking, onPick
             </button>
           ))}
         </span>
-        <IconButton icon="trash" size="sm" label={`Remove group ${group.name}`} onClick={onRemove} />
+        <IconButton icon="trash" size="sm" label={t('groups.remove', { name: group.name })} onClick={onRemove} />
       </span>
       {problem && (
         <div className="ss-field-error" role="alert">
@@ -179,8 +179,8 @@ function GroupRow({ group, groups, tables, picking, autoFocus, onPicking, onPick
       )}
       <span className="ss-groups-tables" title={group.tables.join(', ')}>
         {group.tables.length
-          ? `${plural(group.tables.length, 'table')} · ${group.tables.join(', ')}`
-          : 'No tables yet.'}
+          ? `${t('count.tables', { count: group.tables.length })} · ${group.tables.join(', ')}`
+          : t('groups.empty')}
       </span>
       {picking && <TablePicker group={group} groups={groups} tables={tables} onPick={onPick} />}
     </div>
@@ -207,11 +207,15 @@ export function TableGroupsDialog() {
 
   return (
     <Modal
-      title="Table groups"
+      title={t('action.tableGroups')}
       subtitle={
         groups.length
-          ? `${plural(groups.length, 'group')} · ${grouped} of ${plural(tables.length, 'table')} grouped. A group is of the diagram: exported SQL leaves it out.`
-          : 'A group gives the tables of one module a colour and a label on the canvas. Exported SQL leaves it out.'
+          ? t('groups.subtitle', {
+              groups: t('count.groups', { count: groups.length }),
+              grouped,
+              tables: t('count.tables', { count: tables.length }),
+            })
+          : t('groups.subtitleNone')
       }
       icon="folder"
       width={600}
@@ -228,7 +232,7 @@ export function TableGroupsDialog() {
             setPicking(name);
           }}
         >
-          New group
+          {t('groups.new')}
         </Button>
       }
       footer={
@@ -238,16 +242,16 @@ export function TableGroupsDialog() {
             disabled={!suggestions.length}
             onClick={() => editGroups((g) => suggestions.reduce((all, s) => assignGroup(all, s.tables, s.name), g))}
           >
-            Add all suggested
+            {t('groups.addAll')}
           </Button>
           <Button variant="primary" onClick={closeDialog} kbd="Esc" data-autofocus>
-            Done
+            {t('common.done')}
           </Button>
         </>
       }
     >
       {groups.length > 0 && (
-        <div role="list" aria-label="Groups">
+        <div role="list" aria-label={t('groups.list')}>
           {groups.map((group, i) => (
             <GroupRow
               key={i}
@@ -267,26 +271,26 @@ export function TableGroupsDialog() {
           ))}
         </div>
       )}
-      <div className="ss-groups-head ss-caption">Suggested from the names of the tables</div>
+      <div className="ss-groups-head ss-caption">{t('groups.suggestedHead')}</div>
       {suggestions.length === 0 && (
         <div className="ss-insp-empty" style={{ padding: '8px 16px 16px' }}>
           {groups.length
-            ? 'Nothing more to suggest: no two tables that are in no group begin with the same words.'
-            : 'Nothing to suggest: no two tables begin with the same words.'}
+            ? t('groups.nothingMore')
+            : t('groups.nothing')}
         </div>
       )}
       {suggestions.length > 0 && (
-        <div role="list" aria-label="Suggested groups">
+        <div role="list" aria-label={t('groups.suggested')}>
           {suggestions.map((s) => {
             const adds = groups.some((g) => g.name === s.name);
             return (
               <div key={s.name} className="ss-groups-row" role="listitem">
                 <span className="ss-groups-name">{s.name}</span>
                 <Button size="sm" icon="plus" onClick={() => editGroups((g) => assignGroup(g, s.tables, s.name))}>
-                  {adds ? 'Add to group' : 'Add group'}
+                  {adds ? t('groups.addTo') : t('groups.add')}
                 </Button>
                 <span className="ss-groups-tables" title={s.tables.join(', ')}>
-                  {`${plural(s.tables.length, 'table')} · ${s.tables.join(', ')}`}
+                  {`${t('count.tables', { count: s.tables.length })} · ${s.tables.join(', ')}`}
                 </span>
               </div>
             );

@@ -1,7 +1,15 @@
+import { getLocale, isMessageKey, messageText } from './i18n';
+
 /** A data type offered by the type picker, with the family shown beside it. */
 export interface DataType {
   name: string;
   family: string;
+}
+
+/** The family of a data type as the type picker says it, in the language of the app. */
+export function familyLabel(family: string): string {
+  const key = `type.family.${family}`;
+  return isMessageKey(key) ? messageText(getLocale(), key) : family;
 }
 
 export const POSTGRES_TYPES: readonly DataType[] = [

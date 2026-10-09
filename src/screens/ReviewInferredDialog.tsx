@@ -3,7 +3,7 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { cx } from '../components/cx';
 import { Modal } from '../components/Modal';
-import { plural } from '../core/plural';
+import { t } from '../core/i18n';
 import { inferredRelations, qualifiedName, type Relation } from '../core/relations';
 import { useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
@@ -34,11 +34,11 @@ export function ReviewInferredDialog() {
 
   return (
     <Modal
-      title="Review inferred relationships"
+      title={t('review.title')}
       subtitle={
         pending
-          ? `${pending} of ${plural(rows.length, 'relationship')} to review. Accepted ones become foreign keys and are exported.`
-          : `All ${plural(rows.length, 'relationship')} reviewed. Nothing is lost until you save.`
+          ? t('review.pending', { pending, relationships: t('count.relationships', { count: rows.length }) })
+          : t('review.done', { count: rows.length })
       }
       icon="link"
       width={560}
@@ -46,16 +46,16 @@ export function ReviewInferredDialog() {
       bodyStyle={{ padding: 0 }}
       footerStart={
         <Button variant="danger-ghost" icon="x" disabled={!pending} onClick={() => removeInferred()}>
-          Remove all
+          {t('review.removeAll')}
         </Button>
       }
       footer={
         <>
           <Button icon="check" disabled={!pending} onClick={() => acceptInferred()}>
-            Accept all
+            {t('review.acceptAll')}
           </Button>
           <Button variant="primary" onClick={closeDialog} kbd="Esc" data-autofocus>
-            Done
+            {t('common.done')}
           </Button>
         </>
       }
@@ -71,15 +71,15 @@ export function ReviewInferredDialog() {
             {decision === 'pending' && (
               <>
                 <Button size="sm" icon="check" onClick={() => acceptInferred(relation.from)}>
-                  Accept
+                  {t('review.accept')}
                 </Button>
                 <Button size="sm" variant="ghost" icon="x" onClick={() => removeInferred(relation.from)}>
-                  Remove
+                  {t('review.remove')}
                 </Button>
               </>
             )}
-            {decision === 'accepted' && <Badge tone="added">foreign key</Badge>}
-            {decision === 'removed' && <Badge tone="removed">removed</Badge>}
+            {decision === 'accepted' && <Badge tone="added">{t('review.accepted')}</Badge>}
+            {decision === 'removed' && <Badge tone="removed">{t('review.removed')}</Badge>}
           </div>
         ))}
       </div>

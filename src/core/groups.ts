@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import type { GroupColor, SchemaSnapshot, Table, TableGroup } from './model';
 
 // Every edit returns a new list and leaves the input untouched. Groups that an edit does not
@@ -35,8 +36,8 @@ export function newGroupName(groups: readonly TableGroup[]): string {
 /** Why a group cannot be called `name`, in the words of the design system; null when it can. `self` is the group being renamed. */
 export function groupNameProblem(groups: readonly TableGroup[], name: string, self?: string): string | null {
   const trimmed = name.trim();
-  if (!trimmed) return 'Group name cannot be empty.';
-  if (trimmed !== self && groups.some((g) => g.name === trimmed)) return `Group "${trimmed}" already exists.`;
+  if (!trimmed) return t('validate.groupNameEmpty');
+  if (trimmed !== self && groups.some((g) => g.name === trimmed)) return t('validate.groupExists', { name: trimmed });
   return null;
 }
 

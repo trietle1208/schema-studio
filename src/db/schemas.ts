@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import { t } from '../core/i18n';
 import type { SchemaSnapshot, SchemaSummary } from '../core/model';
 import { countRelations } from '../core/relations';
 import { relativeTime } from '../core/time';
@@ -24,7 +25,7 @@ export function createSchema(
   message = '',
 ): Promise<SchemaRecord> {
   return db.transaction('rw', db.schemas, db.versions, async () => {
-    if (await db.schemas.where('name').equals(name).count()) throw new Error(`Schema "${name}" already exists.`);
+    if (await db.schemas.where('name').equals(name).count()) throw new Error(t('validate.schemaExists', { name }));
     const now = Date.now();
     const schema = {
       name,
@@ -50,7 +51,7 @@ export function createSchema(
 export function saveVersion(schemaId: number, snapshot: SchemaSnapshot, message = ''): Promise<SchemaRecord> {
   return db.transaction('rw', db.schemas, db.versions, async () => {
     const schema = await db.schemas.get(schemaId);
-    if (!schema) throw new Error('Schema no longer exists.');
+    if (!schema) throw new Error(t('db.schemaGone'));
     const now = Date.now();
     const next: SchemaRecord = {
       ...schema,
@@ -72,8 +73,8 @@ export function saveVersion(schemaId: number, snapshot: SchemaSnapshot, message 
 export function restoreVersion(schemaId: number, version: number): Promise<StoredSchema> {
   return db.transaction('rw', db.schemas, db.versions, async () => {
     const earlier = await getVersion(schemaId, version);
-    if (!earlier) throw new Error(`Version ${versionLabel(version)} no longer exists.`);
-    const schema = await saveVersion(schemaId, earlier.snapshot, `Restored from ${versionLabel(version)}`);
+    if (!earlier) throw new Error(t('db.versionGone', { version: versionLabel(version) }));
+    const schema = await saveVersion(schemaId, earlier.snapshot, t('version.message.restored', { version: versionLabel(version) }));
     return { schema, snapshot: earlier.snapshot };
   });
 }
@@ -141,5 +142,6 @@ export function schemaSummary(schema: SchemaRecord, now: number): SchemaSummary 
     relationships: schema.relationships,
     version: versionLabel(schema.version),
     updated: relativeTime(schema.updatedAt, now),
+    updatedShort: relativeTime(schema.updatedAt, now, true),
   };
 }

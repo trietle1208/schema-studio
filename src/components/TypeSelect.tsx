@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { matchTypes, normalizeType, typeEngine, typesFor } from '../core/datatypes';
+import { familyLabel, matchTypes, normalizeType, typeEngine, typesFor } from '../core/datatypes';
+import { t } from '../core/i18n';
 import { cx } from './cx';
 import { Icon } from './Icon';
 import { Input } from './Input';
@@ -77,7 +78,7 @@ export function TypeSelect({ value, onChange, engine = 'PostgreSQL', size, error
       <Input
         mono
         value={query ?? value}
-        placeholder="Type"
+        placeholder={t('type.placeholder')}
         spellCheck={false}
         data-local-edit
         error={error}
@@ -104,7 +105,7 @@ export function TypeSelect({ value, onChange, engine = 'PostgreSQL', size, error
           else if (query != null) commit(needle);
           else close();
         }}
-        aria-label="Data type"
+        aria-label={t('type.label')}
         suffix={<Icon name="chevrons-ud" size={13} style={{ color: 'var(--ink-3)' }} />}
       />
       {list && matches.length > 0 && (
@@ -113,32 +114,32 @@ export function TypeSelect({ value, onChange, engine = 'PostgreSQL', size, error
           style={list.maxHeight === undefined ? undefined : { maxHeight: list.maxHeight }}
           role="listbox"
         >
-          <div className="ss-pop-group ss-caption">{needle ? 'Matches' : `${typeEngine(engine)} types`}</div>
-          {matches.map((t, i) => {
-            const at = needle ? t.name.indexOf(needle) : -1;
+          <div className="ss-pop-group ss-caption">{needle ? t('type.matches') : t('type.engineTypes', { engine: typeEngine(engine) })}</div>
+          {matches.map((type, i) => {
+            const at = needle ? type.name.indexOf(needle) : -1;
             const label: ReactNode =
               at >= 0 ? (
                 <>
-                  {t.name.slice(0, at)}
-                  <mark>{t.name.slice(at, at + needle.length)}</mark>
-                  {t.name.slice(at + needle.length)}
+                  {type.name.slice(0, at)}
+                  <mark>{type.name.slice(at, at + needle.length)}</mark>
+                  {type.name.slice(at + needle.length)}
                 </>
               ) : (
-                t.name
+                type.name
               );
             return (
               <div
-                key={t.name}
+                key={type.name}
                 role="option"
-                aria-selected={t.name === value}
-                className={cx('ss-pop-item', (t.name === value || (!!needle && i === 0)) && 'is-active')}
+                aria-selected={type.name === value}
+                className={cx('ss-pop-item', (type.name === value || (!!needle && i === 0)) && 'is-active')}
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  commit(t.name);
+                  commit(type.name);
                 }}
               >
                 <span>{label}</span>
-                <small>{t.family}</small>
+                <small>{familyLabel(type.family)}</small>
               </div>
             );
           })}

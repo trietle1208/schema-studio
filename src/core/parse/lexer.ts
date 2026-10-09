@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 // Splits a SQL script into statements and their tokens, by the lexical rules of PostgreSQL or of
 // MySQL. It knows nothing of the grammar: a parser asks it where statements begin and what words
 // they are made of.
@@ -135,7 +137,7 @@ export function splitStatements(sql: string, lexicon: Lexicon = 'postgres'): Scr
     else if (sql.startsWith('--', i) || (mysql && c === '#')) i = lineEnd(sql, i);
     else if (sql.startsWith('/*', i)) {
       const end = commentEnd(sql, i, !mysql);
-      if (end < 0) return unfinished('The comment that starts here is never closed.');
+      if (end < 0) return unfinished(t('parse.unclosedComment'));
       i = end;
     } else if (sql.startsWith(delimiter, i)) {
       const copy = !mysql && tokens.length > 0 && copiesFromStdin(tokens);
@@ -150,7 +152,7 @@ export function splitStatements(sql: string, lexicon: Lexicon = 'postgres'): Scr
       const name = c === (mysql ? '`' : '"');
       const end = quoteEnd(sql, prefixed ? i + 1 : i, prefixed || (mysql && !name));
       if (end < 0) {
-        return unfinished(name ? 'The quoted name that starts here is never closed.' : 'The string that starts here is never closed.');
+        return unfinished(name ? t('parse.unclosedName') : t('parse.unclosedString'));
       }
       push(name ? 'quoted' : 'string', end);
     } else if (c === '$' && !mysql) {
@@ -159,7 +161,7 @@ export function splitStatements(sql: string, lexicon: Lexicon = 'postgres'): Scr
       if (!tag) push('symbol', i + 1);
       else {
         const close = sql.indexOf(tag, i + tag.length);
-        if (close < 0) return unfinished('The string that starts here is never closed.');
+        if (close < 0) return unfinished(t('parse.unclosedString'));
         push('string', close + tag.length);
       }
     } else if (WORD_START.test(c)) {

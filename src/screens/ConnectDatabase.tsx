@@ -5,7 +5,9 @@ import { Checkbox } from '../components/Checkbox';
 import { Field } from '../components/Field';
 import { Icon } from '../components/Icon';
 import { Input } from '../components/Input';
+import { rich } from '../components/rich';
 import { Alert } from '../components/Toast';
+import { t } from '../core/i18n';
 import {
   catalogDdl,
   connectionLabel,
@@ -17,7 +19,6 @@ import {
   type ConnectionForm,
 } from '../core/introspect';
 import type { BridgeError } from '../core/introspect/catalog';
-import { plural } from '../core/plural';
 import { Marked } from './Marked';
 
 /** The tables of a database, read. */
@@ -86,8 +87,12 @@ export function ConnectDatabase({ engine, form, onForm, read, onRead }: ConnectD
     setRunning(true);
     const tables = countTables(answer.catalog);
     if (!tables) {
-      const where = connection.schema ? ` in schema \`${connection.schema}\`` : '';
-      setError({ message: 'No tables found.', detail: `\`${connection.database}\` has no tables${where}.` });
+      setError({
+        message: t('connect.noTables'),
+        detail: connection.schema
+          ? t('connect.noTablesInSchema', { database: connection.database, schema: connection.schema })
+          : t('connect.noTablesDetail', { database: connection.database }),
+      });
       return;
     }
     onRead({ label: connectionLabel(connection), database: connection.database, sql: catalogDdl(answer.catalog), tables });
@@ -101,10 +106,10 @@ export function ConnectDatabase({ engine, form, onForm, read, onRead }: ConnectD
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="ss-file-name">{read.label}</div>
-          <div className="ss-file-meta">{`${engine} · ${plural(read.tables, 'table')} read · nothing was written`}</div>
+          <div className="ss-file-meta">{t('connect.read', { engine, count: read.tables })}</div>
         </div>
         <Button variant="ghost" size="sm" onClick={() => onRead(null)}>
-          Change connection
+          {t('connect.change')}
         </Button>
       </div>
     );
@@ -131,52 +136,52 @@ export function ConnectDatabase({ engine, form, onForm, read, onRead }: ConnectD
       {running === false && (
         <Alert
           tone="warn"
-          title="The connection bridge is not running"
+          title={t('connect.bridgeDown')}
           action={
             <Button size="sm" onClick={check}>
-              Check again
+              {t('connect.checkAgain')}
             </Button>
           }
         >
-          A browser cannot connect to a database by itself. Start the bridge with <code>{BRIDGE_COMMAND}</code> in the project folder.
+          {rich('connect.bridgeDownBody', { command: <code>{BRIDGE_COMMAND}</code> })}
         </Alert>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
-        <Field label="Host" error={shown.host}>
+        <Field label={t('connect.host')} error={shown.host}>
           <Input {...field('host')} />
         </Field>
-        <Field label="Port" error={shown.port}>
+        <Field label={t('connect.port')} error={shown.port}>
           <Input {...field('port', String(DEFAULT_PORTS[engine] ?? ''))} inputMode="numeric" />
         </Field>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: engine === 'PostgreSQL' ? '1fr 1fr' : '1fr', gap: 12 }}>
-        <Field label="Database" error={shown.database}>
+        <Field label={t('field.database')} error={shown.database}>
           <Input {...field('database')} />
         </Field>
         {engine === 'PostgreSQL' && (
-          <Field label="Schema">
+          <Field label={t('field.schema')}>
             <Input {...field('schema', DEFAULT_POSTGRES_SCHEMA)} />
           </Field>
         )}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="User" error={shown.user}>
+        <Field label={t('connect.user')} error={shown.user}>
           <Input {...field('user')} />
         </Field>
-        <Field label="Password" aside="not stored">
+        <Field label={t('connect.password')} aside={t('connect.notStored')}>
           {/* Not a password field to the browser, which would offer to save what is typed here for this page. */}
           <Input className="ss-secret" value={form.password} spellCheck={false} autoComplete="off" onChange={(e) => set({ password: e.target.value })} />
         </Field>
       </div>
       <div className="ss-row" style={{ gap: 12 }}>
-        <Checkbox label="Require SSL" checked={form.ssl} onChange={(ssl) => set({ ssl })} />
+        <Checkbox label={t('connect.ssl')} checked={form.ssl} onChange={(ssl) => set({ ssl })} />
         <span className="ss-spacer" />
         <span className="ss-modal-foot-hint">
           <Icon name="lock" size={14} />
-          Read-only: the catalog is read, nothing is written
+          {t('connect.readOnly')}
         </span>
         <Button type="submit" icon="plug" disabled={reading}>
-          {reading ? 'Reading…' : 'Read tables'}
+          {reading ? t('connect.reading') : t('connect.readTables')}
         </Button>
       </div>
       {error && (

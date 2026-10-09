@@ -1,6 +1,7 @@
 import { ConfirmDialog } from '../components/Modal';
+import { rich } from '../components/rich';
 import { Alert } from '../components/Toast';
-import { plural } from '../core/plural';
+import { t } from '../core/i18n';
 import { droppedRelations } from '../core/relations';
 import { useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
@@ -22,26 +23,30 @@ export function DeleteTableDialog({ table: name }: DeleteTableDialogProps) {
 
   return (
     <ConfirmDialog
-      title={`Delete table "${name}"?`}
+      title={t('deleteTable.title', { name })}
       danger
-      confirmLabel="Delete table"
+      confirmLabel={t('action.deleteTable')}
       onCancel={closeDialog}
       onConfirm={() => deleteTable(name)}
     >
       <div style={{ color: 'var(--ink-2)' }}>
-        This removes{' '}
-        <code className="ss-mono" style={{ color: 'var(--ink-1)' }}>
-          {`${table.schema || 'public'}.${name}`}
-        </code>
-        {` with its ${plural(table.columns.length, 'column')} and ${plural(table.indexes?.length ?? 0, 'index', 'indexes')} from the working copy.`}
+        {rich('deleteTable.body', {
+          table: (
+            <code className="ss-mono" style={{ color: 'var(--ink-1)' }}>
+              {`${table.schema || 'public'}.${name}`}
+            </code>
+          ),
+          columns: t('count.columns', { count: table.columns.length }),
+          indexes: t('count.indexes', { count: table.indexes?.length ?? 0 }),
+        })}
       </div>
       {dropped.length > 0 && (
-        <Alert tone="warn" title={`${plural(dropped.length, 'foreign key')} will be dropped`}>
-          {`${referencing.join(', ')} ${referencing.length === 1 ? 'references' : 'reference'} this table.`}
+        <Alert tone="warn" title={t('deleteTable.dropped', { count: dropped.length })}>
+          {t('deleteTable.referencing', { count: referencing.length, tables: referencing.join(', ') })}
         </Alert>
       )}
       <div className="ss-faint" style={{ fontSize: 12 }}>
-        Nothing is lost until you save.
+        {t('dialog.nothingLost')}
       </div>
     </ConfirmDialog>
   );

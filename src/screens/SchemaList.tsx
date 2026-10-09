@@ -8,8 +8,10 @@ import { Icon } from '../components/Icon';
 import { IconButton } from '../components/IconButton';
 import { Input } from '../components/Input';
 import { Kbd } from '../components/Kbd';
+import { rich } from '../components/rich';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { Select } from '../components/Select';
+import { t } from '../core/i18n';
 import {
   DEFAULT_SCHEMA_SORT,
   ENGINES,
@@ -40,13 +42,13 @@ interface RowMenu {
   top: number;
 }
 
-const ENGINE_OPTIONS = [{ value: ALL_ENGINES, label: 'All' }, ...ENGINES.map((e) => ({ value: e, label: e }))];
+const engineOptions = () => [{ value: ALL_ENGINES, label: t('common.all') }, ...ENGINES.map((e) => ({ value: e, label: e }))];
 
-const SORT_OPTIONS: { value: SchemaSortKey; label: string }[] = [
-  { value: 'updatedAt', label: 'Last updated' },
-  { value: 'name', label: 'Name' },
-  { value: 'tables', label: 'Table count' },
-  { value: 'version', label: 'Version' },
+const sortOptions = (): { value: SchemaSortKey; label: string }[] => [
+  { value: 'updatedAt', label: t('schemas.sort.updated') },
+  { value: 'name', label: t('field.name') },
+  { value: 'tables', label: t('schemas.sort.tables') },
+  { value: 'version', label: t('schemas.version') },
 ];
 
 type ColumnKey = SchemaSortKey | 'actions';
@@ -135,7 +137,7 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
       <>
         <header className="ss-toolbar">
           <div className="ss-tb-crumb">
-            <span style={{ color: 'var(--ink-1)' }}>Schemas</span>
+            <span style={{ color: 'var(--ink-1)' }}>{t('common.schemas')}</span>
           </div>
           <span className="ss-page-count">0</span>
         </header>
@@ -150,7 +152,7 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
   const columns: DataTableColumn<SchemaRecord, ColumnKey>[] = [
     {
       key: 'name',
-      label: 'Name',
+      label: t('field.name'),
       render: (r) => (
         <div className="ss-row" style={{ gap: 10 }}>
           <span className="ss-drop-icon" style={{ width: 28, height: 28, margin: 0, background: 'var(--bg-4)' }}>
@@ -171,30 +173,30 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
         </div>
       ),
     },
-    { key: 'engine', label: 'Database', width: 150, render: (r) => <Badge dot>{r.engine}</Badge> },
+    { key: 'engine', label: t('field.database'), width: 150, render: (r) => <Badge dot>{r.engine}</Badge> },
     {
       key: 'tables',
-      label: 'Tables',
+      label: t('noun.tables'),
       width: 110,
       numeric: true,
       align: 'right',
       render: (r) => (
         <span>
           {r.tables}
-          <span className="ss-faint">{r.tables === 1 ? ' table' : ' tables'}</span>
+          <span className="ss-faint">{` ${t('unit.tables', { count: r.tables })}`}</span>
         </span>
       ),
     },
-    { key: 'relationships', label: 'Relations', width: 110, numeric: true, align: 'right' },
+    { key: 'relationships', label: t('schemas.relations'), width: 110, numeric: true, align: 'right' },
     {
       key: 'version',
-      label: 'Version',
+      label: t('schemas.version'),
       width: 100,
       render: (r) => <Badge tone={r.id === selectedId ? 'accent' : 'neutral'}>{versionLabel(r.version)}</Badge>,
     },
     {
       key: 'updatedAt',
-      label: 'Updated',
+      label: t('schemas.updated'),
       width: 140,
       render: (r) => <span className="ss-muted">{relativeTime(r.updatedAt, now)}</span>,
     },
@@ -208,14 +210,14 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
         <div className="ss-table-actions" onDoubleClick={(e) => e.stopPropagation()}>
           <IconButton
             icon="history"
-            label="Version history"
+            label={t('schemas.history')}
             size="sm"
             onClick={() => go({ screen: 'history', schema: r.name })}
           />
-          <IconButton icon="download" label="Export" size="sm" onClick={() => void requestExportStored(r)} />
+          <IconButton icon="download" label={t('common.export')} size="sm" onClick={() => void requestExportStored(r)} />
           <IconButton
             icon="more"
-            label="More"
+            label={t('schemas.more')}
             size="sm"
             active={menu?.id === r.id}
             // The press that opens the menu must not count as a press outside it.
@@ -231,24 +233,26 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
     },
   ];
 
+  const sorts = sortOptions();
+
   return (
     <div className="ss-page" ref={page}>
       <div className="ss-page-head">
-        <div className="ss-page-title">Schemas</div>
-        <span className="ss-page-count">{`${rows.length} of ${schemas.length}`}</span>
+        <div className="ss-page-title">{t('common.schemas')}</div>
+        <span className="ss-page-count">{t('schemas.count', { shown: rows.length, total: schemas.length })}</span>
         <span className="ss-spacer" />
         <Button icon="upload" kbd={['⌘', 'I']} onClick={requestImport}>
-          Import
+          {t('schemas.import')}
         </Button>
         <Button variant="primary" icon="plus" kbd={['⌘', 'N']} onClick={requestNewSchema}>
-          New Schema
+          {t('action.newSchema')}
         </Button>
       </div>
       <div className="ss-page-tools">
         <div style={{ width: 320 }}>
           <Input
             icon="search"
-            placeholder="Search schemas…"
+            placeholder={t('schemas.search')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -260,25 +264,25 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
             suffix={<Kbd>/</Kbd>}
             inputRef={searchRef}
             spellCheck={false}
-            aria-label="Search schemas"
+            aria-label={t('schemas.searchLabel')}
           />
         </div>
-        <SegmentedControl value={engine} onChange={setEngine} options={ENGINE_OPTIONS} />
+        <SegmentedControl value={engine} onChange={setEngine} options={engineOptions()} />
         <span className="ss-spacer" />
         <span className="ss-faint" style={{ fontSize: 12 }}>
-          Sort
+          {t('schemas.sort')}
         </span>
         <div style={{ width: 150 }}>
           <Select
             size="sm"
-            label="Sort"
+            label={t('schemas.sort')}
             value={sort.key}
             onChange={(key) => setSort({ key: key as SchemaSortKey, dir: initialSortDirection(key as SchemaSortKey) })}
             options={
               // A header can sort by a column the menu does not list.
-              SORT_OPTIONS.some((o) => o.value === sort.key)
-                ? SORT_OPTIONS
-                : [...SORT_OPTIONS, { value: sort.key, label: sort.key === 'engine' ? 'Database' : 'Relations' }]
+              sorts.some((o) => o.value === sort.key)
+                ? sorts
+                : [...sorts, { value: sort.key, label: sort.key === 'engine' ? t('field.database') : t('schemas.relations') }]
             }
           />
         </div>
@@ -300,18 +304,22 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
         />
         {rows.length === 0 && (
           <div className="ss-faint" style={{ fontSize: 13, padding: '18px 12px' }}>
-            No schemas match the search and filter.
+            {t('schemas.noMatch')}
           </div>
         )}
         <div className="ss-row ss-faint" style={{ fontSize: 12, padding: '14px 12px' }}>
           <Icon name="folder" size={14} />
-          Stored locally in this browser
+          {t('schemas.storedLocally')}
           <span className="ss-spacer" />
-          <Kbd>↑</Kbd>
-          <Kbd>↓</Kbd>
-          {' to move · '}
-          <Kbd>⏎</Kbd>
-          {' to open'}
+          {rich('schemas.keys', {
+            move: (
+              <>
+                <Kbd>↑</Kbd>
+                <Kbd>↓</Kbd>
+              </>
+            ),
+            open: <Kbd>⏎</Kbd>,
+          })}
         </div>
       </div>
       {menuFor && menu && (
@@ -320,11 +328,11 @@ export function SchemaList({ schemas, now }: SchemaListProps) {
             label={menuFor.name}
             onClose={() => setMenu(null)}
             items={[
-              { icon: 'external', label: 'Open', shortcut: '⏎', onSelect: () => go({ screen: 'workspace', schema: menuFor.name }) },
+              { icon: 'external', label: t('schemas.open'), shortcut: '⏎', onSelect: () => go({ screen: 'workspace', schema: menuFor.name }) },
               '-',
               {
                 icon: 'trash',
-                label: 'Delete schema',
+                label: t('action.deleteSchema'),
                 shortcut: '⌫',
                 danger: true,
                 onSelect: () => requestDeleteSchema(menuFor),

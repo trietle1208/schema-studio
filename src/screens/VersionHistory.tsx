@@ -7,8 +7,8 @@ import { Input } from '../components/Input';
 import { VersionList } from '../components/VersionList';
 import { blockTable } from '../core/generate/options';
 import { groupsOf } from '../core/groups';
+import { t } from '../core/i18n';
 import type { DiffItem } from '../core/model';
-import { plural } from '../core/plural';
 import { filterVersions, versionEntries, versionLabel, versionSummary, type VersionEntry } from '../core/versions';
 import { useVersions } from '../db/useSchemas';
 import { useSchemaStore } from '../store/schema';
@@ -47,20 +47,20 @@ export function VersionHistory({ now }: VersionHistoryProps) {
 
   return (
     <>
-      <SchemaCrumbs title="Version history" />
+      <SchemaCrumbs title={t('history.title')} />
       <div className="ss-work">
         <div style={{ width: 340, flex: 'none', borderRight: '1px solid var(--line-1)', background: 'var(--bg-2)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '14px 16px 10px' }}>
             <div className="ss-row">
-              <div className="ss-modal-title">Version history</div>
-              <span className="ss-page-count">{plural(entries.length, 'version')}</span>
+              <div className="ss-modal-title">{t('history.title')}</div>
+              <span className="ss-page-count">{t('count.versions', { count: entries.length })}</span>
             </div>
             <div style={{ marginTop: 10 }}>
               <Input
                 icon="search"
                 size="sm"
-                placeholder="Filter by message or table"
-                aria-label="Filter versions"
+                placeholder={t('history.filter')}
+                aria-label={t('history.filterLabel')}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -74,7 +74,7 @@ export function VersionHistory({ now }: VersionHistoryProps) {
             />
             {stored !== undefined && shown.length === 0 && (
               <div className="ss-faint" style={{ fontSize: 12, padding: '8px 24px' }}>
-                {entries.length ? `No version matches "${query.trim()}".` : 'No saved versions yet.'}
+                {entries.length ? t('history.noMatch', { query: query.trim() }) : t('history.none')}
               </div>
             )}
           </div>
@@ -126,7 +126,7 @@ function VersionDetail({ entry, current, now }: VersionDetailProps) {
           </span>
           {summary.current && (
             <Badge tone="accent" sans>
-              Current
+              {t('version.current')}
             </Badge>
           )}
           <span className="ss-spacer" />
@@ -136,30 +136,32 @@ function VersionDetail({ entry, current, now }: VersionDetailProps) {
             onClick={() => {
               if (entry.previous !== null) go({ screen: 'diff', schema: name, from: entry.previous, to: entry.version });
             }}
-          >{`Compare with ${entry.previous === null ? '—' : versionLabel(entry.previous)}`}</Button>
+          >
+            {t('history.compare', { version: entry.previous === null ? '—' : versionLabel(entry.previous) })}
+          </Button>
           <Button icon="restore" disabled={summary.current} onClick={() => requestRestore(entry.version)}>
-            Restore
+            {t('action.restore')}
           </Button>
           <Button variant="primary" icon="download" onClick={() => exportVersion(entry)}>
-            Export
+            {t('common.export')}
           </Button>
         </div>
         <div style={{ marginTop: 4, color: 'var(--ink-2)' }}>{summary.message}</div>
         <div className="ss-stats" style={{ marginTop: 16 }}>
           <div className="ss-stat">
-            <span className="ss-stat-k">Tables</span>
+            <span className="ss-stat-k">{t('noun.tables')}</span>
             <span className="ss-stat-v">{summary.tables}</span>
           </div>
           <div className="ss-stat">
-            <span className="ss-stat-k">Relationships</span>
+            <span className="ss-stat-k">{t('noun.relationships')}</span>
             <span className="ss-stat-v">{summary.relationships}</span>
           </div>
           <div className="ss-stat">
-            <span className="ss-stat-k">Indexes</span>
+            <span className="ss-stat-k">{t('noun.indexes')}</span>
             <span className="ss-stat-v">{summary.indexes}</span>
           </div>
           <div className="ss-stat">
-            <span className="ss-stat-k">Saved</span>
+            <span className="ss-stat-k">{t('history.saved')}</span>
             <span className="ss-stat-v" style={{ fontSize: 13 }} title={summary.time}>
               {summary.timestamp}
             </span>
@@ -169,9 +171,9 @@ function VersionDetail({ entry, current, now }: VersionDetailProps) {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.1fr)', gap: 16, padding: 16, alignItems: 'start' }}>
         <div style={PANEL}>
           <div className="ss-row" style={PANEL_HEAD}>
-            <span style={{ fontWeight: 600 }}>Change summary</span>
+            <span style={{ fontWeight: 600 }}>{t('history.changes')}</span>
             <span className="ss-faint" style={{ fontSize: 12 }}>
-              {entry.previous === null ? 'initial version' : `vs ${versionLabel(entry.previous)}`}
+              {entry.previous === null ? t('history.initial') : t('history.versus', { version: versionLabel(entry.previous) })}
             </span>
             <span className="ss-spacer" />
             <span className="ss-ver-stats">
@@ -186,16 +188,16 @@ function VersionDetail({ entry, current, now }: VersionDetailProps) {
             ) : (
               <div className="ss-faint" style={{ fontSize: 12, padding: '10px 12px 4px' }}>
                 {entry.previous === null
-                  ? 'The schema started without tables.'
-                  : 'No changes to tables, columns, indexes or relationships.'}
+                  ? t('history.startedEmpty')
+                  : t('history.noChanges')}
               </div>
             )}
           </div>
         </div>
         <div style={{ ...PANEL, display: 'flex', flexDirection: 'column', height: 540 }}>
           <div className="ss-row" style={PANEL_HEAD}>
-            <span style={{ fontWeight: 600 }}>Snapshot</span>
-            <span className="ss-faint" style={{ fontSize: 12 }}>{`read-only · ${plural(tables.length, 'table')}`}</span>
+            <span style={{ fontWeight: 600 }}>{t('history.snapshot')}</span>
+            <span className="ss-faint" style={{ fontSize: 12 }}>{t('history.readOnly', { tables: t('count.tables', { count: tables.length }) })}</span>
           </div>
           <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
             <ERCanvas
@@ -210,7 +212,7 @@ function VersionDetail({ entry, current, now }: VersionDetailProps) {
               readOnly
               showLegend={false}
               showMinimap={false}
-              hint={tables.length === 0 ? 'This version has no tables.' : undefined}
+              hint={tables.length === 0 ? t('history.versionEmpty') : undefined}
               actionsRef={canvas}
             />
           </div>

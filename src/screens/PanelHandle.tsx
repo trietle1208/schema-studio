@@ -1,8 +1,7 @@
 import { ResizeHandle } from '../components/ResizeHandle';
+import { t } from '../core/i18n';
 import { PANELS, type Panel } from '../core/panels';
 import { useSettingsStore } from '../store/settings';
-
-const LABELS: Record<Panel, string> = { sidebar: 'sidebar', inspector: 'inspector' };
 
 /**
  * The handle of the sidebar or of the inspector: place it right after the sidebar, or right before
@@ -14,7 +13,7 @@ export function PanelHandle({ panel }: { panel: Panel }) {
   const { initial, min, max } = PANELS[panel];
   return (
     <ResizeHandle
-      label={LABELS[panel]}
+      label={panel === 'sidebar' ? t('panel.sidebar') : t('panel.inspector')}
       edge={panel === 'sidebar' ? 'right' : 'left'}
       width={width}
       min={min}

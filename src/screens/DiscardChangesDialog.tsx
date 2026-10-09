@@ -1,4 +1,6 @@
 import { ConfirmDialog } from '../components/Modal';
+import { rich } from '../components/rich';
+import { t } from '../core/i18n';
 import { useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
 
@@ -13,10 +15,10 @@ export function DiscardChangesDialog({ onDiscard }: DiscardChangesDialogProps) {
 
   return (
     <ConfirmDialog
-      title="Discard unsaved changes?"
+      title={t('discard.title')}
       danger
-      confirmLabel="Discard changes"
-      cancelLabel="Keep editing"
+      confirmLabel={t('discard.confirm')}
+      cancelLabel={t('discard.cancel')}
       onCancel={closeDialog}
       onConfirm={() => {
         closeDialog();
@@ -24,13 +26,16 @@ export function DiscardChangesDialog({ onDiscard }: DiscardChangesDialogProps) {
       }}
     >
       <div style={{ color: 'var(--ink-2)' }}>
-        <code className="ss-mono" style={{ color: 'var(--ink-1)' }}>
-          {name}
-        </code>
-        {' has changes that are not saved as a version. Opening another schema drops them.'}
+        {rich('discard.body', {
+          schema: (
+            <code className="ss-mono" style={{ color: 'var(--ink-1)' }}>
+              {name}
+            </code>
+          ),
+        })}
       </div>
       <div className="ss-faint" style={{ fontSize: 12 }}>
-        Saved versions are not affected.
+        {t('discard.note')}
       </div>
     </ConfirmDialog>
   );

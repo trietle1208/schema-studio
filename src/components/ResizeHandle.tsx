@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
+import { t } from '../core/i18n';
 import { cx } from './cx';
 
 /** How far an arrow key moves the handle. */
 const KEY_STEP = 16;
 
 export interface ResizeHandleProps {
-  /** What the handle makes wider or narrower, as assistive technology calls it: "Sidebar". */
+  /** What the handle does, as assistive technology calls it: "Resize sidebar". */
   label: string;
   /**
    * The side of its panel the handle is at. A panel at the left of the screen has it at its right
@@ -69,12 +70,12 @@ export function ResizeHandle({ label, edge, width, min, max, onResize, onReset }
       className={cx('ss-resize', `ss-resize--${edge}`, dragging && 'is-dragging')}
       role="separator"
       aria-orientation="vertical"
-      aria-label={`Resize ${label}`}
+      aria-label={label}
       aria-valuenow={width}
       aria-valuemin={min}
       aria-valuemax={max}
       tabIndex={0}
-      title={onReset ? 'Drag to resize. Double-click to reset.' : 'Drag to resize.'}
+      title={onReset ? t('resize.hintReset') : t('resize.hint')}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={end}

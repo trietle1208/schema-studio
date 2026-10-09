@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { Column, ForeignKey, Index, Table } from '../model';
 import type { Token } from './lexer';
 import type { ParseError } from './index';
@@ -65,19 +66,19 @@ export function resolveForeignKeys(tables: ReadonlyMap<string, DraftTable>, warn
     for (const column of table.columns) {
       const fk = column.fk;
       if (!fk) continue;
-      const path = `Foreign key \`${table.name}.${column.name}\``;
+      const path = `${table.name}.${column.name}`;
       const target = tables.get(fk.table);
       const keys = target?.columns.filter((c) => c.pk) ?? [];
       if (!target) {
-        warnings.push(`${path} references \`${fk.table}\`, which is not defined, and was skipped.`);
+        warnings.push(t('parse.warn.fkUndefined', { column: path, target: fk.table }));
         delete column.fk;
       } else if (fk.column === PRIMARY_KEY && keys.length !== 1) {
-        warnings.push(`${path} references \`${fk.table}\`, which has no single-column primary key, and was skipped.`);
+        warnings.push(t('parse.warn.fkNoSingleKey', { column: path, target: fk.table }));
         delete column.fk;
       } else if (fk.column === PRIMARY_KEY) {
         fk.column = keys[0].name;
       } else if (!target.columns.some((c) => c.name === fk.column)) {
-        warnings.push(`${path} references \`${fk.table}.${fk.column}\`, which is not defined, and was skipped.`);
+        warnings.push(t('parse.warn.fkUndefined', { column: path, target: `${fk.table}.${fk.column}` }));
         delete column.fk;
       }
     }
@@ -100,8 +101,8 @@ function finishColumn(draft: DraftColumn): Column {
 
 /** The tables as the model keeps them, in the order they were created. A table without a primary key gets a warning. */
 export function finishTables(tables: ReadonlyMap<string, DraftTable>, warnings: string[]): Table[] {
-  return [...tables.values()].map((t) => {
-    if (!t.columns.some((c) => c.pk)) warnings.push(`\`${t.name}\` has no primary key.`);
-    return { name: t.name, schema: t.schema, comment: t.comment, columns: t.columns.map(finishColumn), indexes: t.indexes };
+  return [...tables.values()].map((table) => {
+    if (!table.columns.some((c) => c.pk)) warnings.push(t('parse.warn.noPrimaryKey', { table: table.name }));
+    return { name: table.name, schema: table.schema, comment: table.comment, columns: table.columns.map(finishColumn), indexes: table.indexes };
   });
 }

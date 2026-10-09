@@ -10,6 +10,7 @@ Schema Studio is a desktop-first database schema designer for software engineers
 - **Errors say what happened and where, then end with a period:** "Column name cannot be empty.", "Unable to parse SQL near line 42.". Offer the fix next to the message ("Go to line").
 - **Confirmations name the object as a question:** Delete table "orders"? Then state the consequence: "2 foreign keys will be dropped."
 - **No emoji, no exclamation marks, no marketing voice.** Second person only in empty states and hints ("Import DDL from an existing database…").
+- **English is the wording; other languages follow it.** Every message has a name and its English text in `src/core/i18n/en.ts`, and a text in each other language (`vi.ts`), picked in Settings. A translation keeps what is literal: identifiers, SQL words (`NOT NULL`, `ON DELETE`, `CREATE TABLE`), engine names, shortcuts, and the terms developers leave untranslated (schema, index, migration, diff). What is written into a file (SQL, JSON, a migration and the comments in them) is not translated: a script reads the same whatever language the app is in.
 
 ## Visual foundations
 

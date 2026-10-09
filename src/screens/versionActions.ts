@@ -2,7 +2,7 @@ import { compareDdl, unifiedDiff } from '../core/diff/ddl';
 import { diffFileName, exportFileName } from '../core/files';
 import { EXPORT_ENGINES, generatorFor } from '../core/generate';
 import { groupsOf } from '../core/groups';
-import { plural } from '../core/plural';
+import { t } from '../core/i18n';
 import { versionLabel, type SavedVersion } from '../core/versions';
 import { restoreVersion as restoreStored } from '../db/schemas';
 import { useSchemaStore } from '../store/schema';
@@ -87,15 +87,15 @@ export async function restoreVersion(version: number): Promise<void> {
     // Another schema may have been opened while the version was being written.
     if (useSchemaStore.getState().id === id) openStored(restored);
     ui.showToast({
-      title: `Restored ${versionLabel(version)} as ${versionLabel(restored.schema.version)}`,
-      description: `${restored.schema.name} · ${plural(restored.schema.tables, 'table')}`,
+      title: t('toast.restored.title', { from: versionLabel(version), to: versionLabel(restored.schema.version) }),
+      description: `${restored.schema.name} · ${t('count.tables', { count: restored.schema.tables })}`,
     });
   } catch (error) {
     console.error(error);
     ui.showToast({
       tone: 'error',
-      title: 'Could not restore version',
-      description: 'It could not be written to browser storage. Nothing was changed.',
+      title: t('toast.restoreFailed.title'),
+      description: t('toast.restoreFailed.description'),
     });
   }
 }

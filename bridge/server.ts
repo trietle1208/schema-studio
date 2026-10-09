@@ -68,8 +68,9 @@ async function introspect(connection: Connection): Promise<BridgeAnswer> {
   } catch (thrown) {
     const detail = messageOf(thrown);
     console.log(`${where}: ${detail}`);
-    const message = thrown instanceof CatalogError ? 'Could not read the tables of the database.' : 'Could not connect to the database.';
-    return { ok: false, error: { message, detail } };
+    const read = thrown instanceof CatalogError;
+    const message = read ? 'Could not read the tables of the database.' : 'Could not connect to the database.';
+    return { ok: false, error: { message, code: read ? 'read' : 'connect', detail } };
   }
 }
 

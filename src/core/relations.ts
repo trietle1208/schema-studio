@@ -1,4 +1,5 @@
 import { referencingType } from './datatypes';
+import { t } from './i18n';
 import type { Column, OnDelete, Table } from './model';
 
 export const ON_DELETE_ACTIONS: readonly OnDelete[] = ['RESTRICT', 'CASCADE', 'SET NULL', 'NO ACTION'];
@@ -139,15 +140,15 @@ export function addForeignKey(tables: Table[], from: ColumnRef, to: ColumnRef, o
  */
 export function referenceProblem(tables: readonly Table[], from: ColumnRef, to: ColumnRef): string | null {
   const find = (ref: ColumnRef) => tables.find((t) => t.name === ref.table)?.columns.find((c) => c.name === ref.column);
-  if (!from.column.trim()) return 'Column name cannot be empty.';
+  if (!from.column.trim()) return t('validate.columnNameEmpty');
   const column = find(from);
-  if (!column) return `Column "${from.column}" does not exist in ${from.table}.`;
-  if (from.table === to.table) return 'A foreign key references a column of another table.';
+  if (!column) return t('validate.columnMissing', { name: from.column, table: from.table });
+  if (from.table === to.table) return t('reference.sameTable');
   const target = find(to);
-  if (!target) return `Column "${to.column}" does not exist in ${to.table}.`;
-  if (!target.pk && !target.unique) return `${qualifiedName(to)} is not a primary key or a unique column.`;
+  if (!target) return t('validate.columnMissing', { name: to.column, table: to.table });
+  if (!target.pk && !target.unique) return t('reference.notKey', { column: qualifiedName(to) });
   if (column.fk && !column.fk.inferred && column.fk.table === to.table && column.fk.column === to.column) {
-    return `${qualifiedName(from)} already references ${qualifiedName(to)}.`;
+    return t('reference.exists', { from: qualifiedName(from), to: qualifiedName(to) });
   }
   return null;
 }

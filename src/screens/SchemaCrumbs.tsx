@@ -3,6 +3,7 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Icon } from '../components/Icon';
 import { Crumb } from '../components/Toolbar';
+import { t } from '../core/i18n';
 import { SCHEMAS_ROUTE } from '../core/routes';
 import { useSchemaStore } from '../store/schema';
 import { go } from './navigation';
@@ -25,7 +26,7 @@ export function SchemaCrumbs({ title, children, actions }: SchemaCrumbsProps) {
   return (
     <header className="ss-toolbar">
       <div className="ss-tb-crumb">
-        <Crumb onClick={() => go(SCHEMAS_ROUTE)}>Schemas</Crumb>
+        <Crumb onClick={() => go(SCHEMAS_ROUTE)}>{t('common.schemas')}</Crumb>
         <Icon name="chevron-right" size={12} />
         <Crumb className="ss-tb-name" onClick={back}>
           {name}
@@ -37,7 +38,7 @@ export function SchemaCrumbs({ title, children, actions }: SchemaCrumbsProps) {
       <span className="ss-spacer" />
       {actions ?? (
         <Button icon="arrow-right" variant="ghost" onClick={back}>
-          Back to diagram
+          {t('crumbs.back')}
         </Button>
       )}
     </header>
