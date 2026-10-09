@@ -3,12 +3,15 @@ import { deleteTable, moveTable, updateTable } from './edit';
 import { ecommerceSnapshot, inferredTables, tableNamed } from './fixtures/testing';
 import {
   centreOn,
+  clampNodeWidth,
   clampZoom,
   computeEdges,
+  draggedWidth,
   drawnEnds,
   edgeEnds,
   edgePath,
   fitView,
+  fittingWidth,
   gridColumns,
   gridLayout,
   minimapLayout,
@@ -16,13 +19,16 @@ import {
   newTablePosition,
   nodeHeight,
   nodeRects,
+  nodeWidth,
   rectBetween,
   snap,
   stepZoom,
   tablesInRect,
   viewRect,
+  widened,
   zoomAt,
 } from './layout';
+import type { Positions, Table } from './model';
 
 describe('nodeHeight', () => {
   it('is the header plus one row per column', () => {
@@ -330,6 +336,104 @@ describe('nodeRects', () => {
       { name: 'users', x: 24, y: 48, w: 228, h: 159 },
       { name: 'products', x: positions.products.x, y: positions.products.y, w: 228, h: 135 },
     ]);
+  });
+});
+
+describe('the width of a table', () => {
+  it('is what tables have by themselves until a table is given another', () => {
+    const { positions } = ecommerceSnapshot();
+    expect(nodeWidth(positions.users)).toBe(228);
+    expect(nodeWidth({ ...positions.users, w: 300 })).toBe(300);
+    expect(nodeWidth(undefined)).toBe(228);
+  });
+
+  it('is a whole step of 4, no narrower than 160 and no wider than 640', () => {
+    expect(clampNodeWidth(300)).toBe(300);
+    expect(clampNodeWidth(301)).toBe(300);
+    expect(clampNodeWidth(302)).toBe(304);
+    expect(clampNodeWidth(228)).toBe(228);
+    expect(clampNodeWidth(50)).toBe(160);
+    expect(clampNodeWidth(2000)).toBe(640);
+  });
+
+  it('follows the right side as it is dragged', () => {
+    const { users } = ecommerceSnapshot().positions;
+    expect(draggedWidth(users, 1, 72)).toBe(300);
+    expect(draggedWidth(users, 1, 73.4)).toBe(300);
+    expect(draggedWidth(users, 1, -500)).toBe(160);
+    expect(draggedWidth({ ...users, w: 300 }, 1, -72)).toBe(228);
+  });
+
+  it('follows the left side as it is dragged, which lands on the grid', () => {
+    const { users } = ecommerceSnapshot().positions;
+    // users is at 24 and ends at 252. Its left side goes to -56, and to 64.
+    expect(draggedWidth(users, -1, -80)).toBe(308);
+    expect(draggedWidth(users, -1, -83)).toBe(308);
+    expect(draggedWidth(users, -1, 40)).toBe(188);
+    expect(draggedWidth(users, -1, 500)).toBe(160);
+  });
+
+  it('keeps the side that was not dragged where it is', () => {
+    const { users } = ecommerceSnapshot().positions;
+    expect(widened(users, 300)).toEqual({ x: 24, y: 48, w: 300 });
+    expect(widened(users, 308, -1)).toEqual({ x: -56, y: 48, w: 308 });
+    expect(widened({ x: 24, y: 48, w: 300 }, 160, -1)).toEqual({ x: 164, y: 48, w: 160 });
+    expect(widened(users, 5000)).toEqual({ x: 24, y: 48, w: 640 });
+  });
+
+  it('does not keep the width tables have by themselves', () => {
+    expect(widened({ x: 24, y: 48, w: 300 }, 228)).toEqual({ x: 24, y: 48 });
+    expect(widened({ x: 24, y: 48, w: 300 }, 228, -1)).toEqual({ x: 96, y: 48 });
+  });
+
+  it('fits the name of the table and the name and type of its widest column', () => {
+    const sample = ecommerceSnapshot();
+    // `created_at TIMESTAMP`, 19 characters of 7.2px, and 72px around them: 208.8, on the next step.
+    expect(fittingWidth(tableNamed(sample, 'users'))).toBe(212);
+    // `product_id BIGINT`, 16 characters, is not the widest: `price DECIMAL(12,2)` has 18.
+    expect(fittingWidth(tableNamed(sample, 'order_items'))).toBe(204);
+    const wide: Table = {
+      name: 'da_chung_tu_phe_duyet',
+      columns: [{ name: 'nguoi_phe_duyet_cuoi_cung_id', type: 'BIGINT UNSIGNED', nullable: true, fk: null }],
+    };
+    // 28 + 15 characters and the `?` of a nullable column.
+    expect(fittingWidth(wide)).toBe(392);
+    // The name of the table when no column is as wide: its 32 characters, 63px around them and the count of the columns (6.6px).
+    expect(fittingWidth({ name: 'bang_ke_chi_tiet_hoa_don_dau_vao', columns: [{ name: 'id', type: 'INT', nullable: false }] })).toBe(300);
+    expect(fittingWidth({ name: 'bang_ke_chi_tiet_hoa_don_dau_vao_', columns: [{ name: 'id', type: 'INT', nullable: false }] })).toBe(308);
+    expect(fittingWidth({ name: 't', columns: [] })).toBe(160);
+    expect(fittingWidth({ name: 'x'.repeat(200), columns: [] })).toBe(640);
+  });
+
+  it('is the width of the rectangle of the table, which the view is fitted to', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const wide = { ...positions, order_items: { ...positions.order_items, w: 400 } };
+    expect(nodeRects(tables, wide).find((r) => r.name === 'order_items')).toMatchObject({ x: 584, w: 400 });
+    // The diagram is 172 wider, so it is shown smaller in a canvas it filled.
+    expect(fitView(tables, wide, { w: 884, h: 800 }).zoom).toBeLessThan(fitView(tables, positions, { w: 884, h: 800 }).zoom);
+    // The part of order_items that is past where it ended is touched by a frame there.
+    expect(tablesInRect(tables, positions, { x: 900, y: 200, w: 40, h: 40 })).toEqual([]);
+    expect(tablesInRect(tables, wide, { x: 900, y: 200, w: 40, h: 40 })).toEqual(['order_items']);
+  });
+
+  it('is where the lines of a table leave its right side', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    // payments, at 24, references orders, at 304: the line ends at the right side of payments.
+    const narrow = { ...positions, payments: { ...positions.payments, w: 160 } };
+    expect(computeEdges(tables, narrow).find((e) => e.id === 'payments:1')?.b).toMatchObject({ x: 184, side: 1 });
+    // users made so wide that it reaches under orders: the line leaves the right side of both.
+    const wide = { ...positions, users: { ...positions.users, w: 300 } };
+    const edge = computeEdges(tables, wide).find((e) => e.id === 'orders:1');
+    expect(edge?.a).toMatchObject({ x: 324, side: 1 });
+    expect(edge?.b).toMatchObject({ x: 532, side: 1 });
+    expect(drawnEnds(wide.users, 1, { x: 900, y: 100 }).b).toMatchObject({ x: 324, side: 1 });
+  });
+
+  it('is the width of the columns of a grid of wider tables', () => {
+    const { tables } = ecommerceSnapshot();
+    const xs = (positions: Positions) => [...new Set(Object.values(positions).map((p) => p.x))];
+    expect(xs(gridLayout(tables, 3))).toEqual([24, 304, 584]);
+    expect(xs(gridLayout(tables, 3, 400))).toEqual([24, 480, 928]);
   });
 });
 

@@ -5,6 +5,7 @@ import {
   assignGroup,
   copyMember,
   GROUP_COLORS,
+  groupChoices,
   groupNameProblem,
   groupOf,
   groupsOf,
@@ -161,6 +162,31 @@ describe('editing groups', () => {
       { name: 'people', color: 'orange', tables: [] },
     ]);
     expect(assignGroup(groups, ['payments'], null)).toBe(groups);
+  });
+
+  it('lists the tables a group is chosen from, with the ones that are in it or in another', () => {
+    const { tables } = ecommerceSnapshot();
+    const choices = groupChoices(tables, groups, 'sales');
+    expect(choices.map((c) => c.table)).toEqual(tables.map((t) => t.name));
+    expect(choices.filter((c) => c.member).map((c) => c.table)).toEqual(['orders', 'order_items']);
+    expect(choices.filter((c) => c.from).map((c) => `${c.table} of ${c.from?.name}`)).toEqual(['users of people']);
+    expect(choices.find((c) => c.table === 'payments')).toEqual({ table: 'payments', member: false });
+    // A group that is not there yet has no table.
+    expect(groupChoices(tables, groups, 'catalog').some((c) => c.member)).toBe(false);
+  });
+
+  it('filters the tables a group is chosen from by the words of their names', () => {
+    const { tables } = ecommerceSnapshot();
+    const shown = (filter: string) => groupChoices(tables, groups, 'sales', filter).map((c) => c.table);
+    expect(shown('order')).toEqual(['orders', 'order_items']);
+    expect(shown('  ITEMS order ')).toEqual(['order_items']);
+    expect(shown('   ')).toEqual(tables.map((t) => t.name));
+    expect(shown('nothing')).toEqual([]);
+    const shop = dumped(shopVietnameseDump);
+    expect(groupChoices(shop, [], 'group_1', 'don hang').map((c) => c.table)).toEqual(
+      shop.map((t) => t.name).filter((n) => n.includes('don') && n.includes('hang')),
+    );
+    expect(groupChoices(shop, [], 'group_1', 'don hang').length).toBeGreaterThan(1);
   });
 
   it('removes, renames and recolours a group', () => {

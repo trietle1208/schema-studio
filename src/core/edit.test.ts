@@ -9,6 +9,7 @@ import {
   newTable,
   newTableName,
   renameTable,
+  resizeTables,
   updateTable,
 } from './edit';
 import { validateColumns, validateTableName } from './validate';
@@ -207,6 +208,53 @@ describe('moveTables', () => {
     const snapshot = { tables: [...before.tables, { name: '__proto__', columns: [] }], positions: before.positions };
     const after = moveTables(snapshot, Object.fromEntries([['__proto__', { x: 8, y: 16 }]]));
     expect(Object.keys(after.positions)).toEqual([...Object.keys(before.positions), '__proto__']);
+  });
+});
+
+describe('resizeTables', () => {
+  it('makes the tables it names as wide as it says, where it says', () => {
+    const before = ecommerceSnapshot();
+    const after = resizeTables(before, { users: { x: 24, y: 48, w: 300 }, orders: { x: 232, y: 24, w: 300 } });
+    expect(after.positions).toEqual({ ...before.positions, users: { x: 24, y: 48, w: 300 }, orders: { x: 232, y: 24, w: 300 } });
+    expect(after.positions.products).toBe(before.positions.products);
+    expect(after.tables).toBe(before.tables);
+  });
+
+  it('keeps no width for a table that is as wide as tables are by themselves', () => {
+    const wide = resizeTables(ecommerceSnapshot(), { users: { x: 24, y: 48, w: 300 } });
+    expect(resizeTables(wide, { users: { x: 24, y: 48, w: 228 } }).positions.users).toEqual({ x: 24, y: 48 });
+    expect(resizeTables(wide, { users: { x: 24, y: 48 } }).positions.users).toEqual({ x: 24, y: 48 });
+  });
+
+  it('brings a width a table cannot have within its limits', () => {
+    const before = ecommerceSnapshot();
+    expect(resizeTables(before, { users: { x: 24, y: 48, w: 9000 } }).positions.users).toEqual({ x: 24, y: 48, w: 640 });
+    expect(resizeTables(before, { users: { x: 24, y: 48, w: 2 } }).positions.users).toEqual({ x: 24, y: 48, w: 160 });
+  });
+
+  it('returns the same snapshot when no table it knows changes', () => {
+    const before = ecommerceSnapshot();
+    expect(resizeTables(before, { users: { x: 24, y: 48 }, invoices: { x: 0, y: 0, w: 400 } })).toBe(before);
+    expect(resizeTables(before, { users: { x: 24, y: 48, w: 228 } })).toBe(before);
+    expect(resizeTables(before, {})).toBe(before);
+    const wide = resizeTables(before, { users: { x: 24, y: 48, w: 300 } });
+    expect(resizeTables(wide, { users: { x: 24, y: 48, w: 300 } })).toBe(wide);
+    // A table that is not on the canvas has no width there.
+    const unplaced = { tables: before.tables, positions: { orders: before.positions.orders } };
+    expect(resizeTables(unplaced, { users: { x: 24, y: 48, w: 300 } })).toBe(unplaced);
+  });
+
+  it('gives a table a width that a move, a rename and a copy keep', () => {
+    const wide = resizeTables(ecommerceSnapshot(), { users: { x: 24, y: 48, w: 300 } });
+    expect(moveTable(wide, 'users', { x: 40, y: 64 }).positions.users).toEqual({ x: 40, y: 64, w: 300 });
+    expect(moveTables(wide, { users: { x: 40, y: 64 }, orders: { x: 320, y: 40 } }).positions).toMatchObject({
+      users: { x: 40, y: 64, w: 300 },
+      orders: { x: 320, y: 40 },
+    });
+    expect(renameTable(wide, 'users', 'accounts').positions.accounts).toEqual({ x: 24, y: 48, w: 300 });
+    expect(duplicateTable(wide, 'users').positions.users_copy).toEqual({ x: 56, y: 80, w: 300 });
+    expect(duplicateTable(wide, 'orders').positions.orders_copy).toEqual({ x: 336, y: 56 });
+    expect(Object.keys(deleteTable(wide, 'users').positions)).not.toContain('users');
   });
 });
 

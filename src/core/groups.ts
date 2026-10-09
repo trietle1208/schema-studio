@@ -110,6 +110,29 @@ export function sameGroups(a: readonly TableGroup[], b: readonly TableGroup[]): 
   );
 }
 
+/** A table as the tables of a group are chosen. */
+export interface GroupChoice {
+  table: string;
+  /** Whether the table is in the group. */
+  member: boolean;
+  /** The other group the table is in: choosing the table moves it out of that one. */
+  from?: TableGroup;
+}
+
+/**
+ * The tables the group called `name` is chosen from, in the order of the tables: all of them, or
+ * with a `filter` the ones whose names hold every word of it, in any case.
+ */
+export function groupChoices(tables: readonly Table[], groups: readonly TableGroup[], name: string, filter = ''): GroupChoice[] {
+  const words = filter.toLowerCase().split(/\s+/).filter(Boolean);
+  return tables
+    .filter((t) => words.every((w) => t.name.toLowerCase().includes(w)))
+    .map((t) => {
+      const own = groupOf(groups, t.name);
+      return own && own.name !== name ? { table: t.name, member: false, from: own } : { table: t.name, member: !!own };
+    });
+}
+
 /** A group that the names of the tables point to. */
 export interface GroupSuggestion {
   /** The name of the table the others are called after, or what their names begin with: `da_chung_tu`. */

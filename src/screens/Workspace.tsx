@@ -27,6 +27,7 @@ import { useUiStore } from '../store/ui';
 import { requestExport } from './exportActions';
 import { useWorkspaceShortcuts } from './useWorkspaceShortcuts';
 import { go } from './navigation';
+import { PanelHandle } from './PanelHandle';
 import {
   arrangeTables,
   copyCreateTable,
@@ -66,6 +67,7 @@ export function Workspace() {
   const selectTables = useSchemaStore((s) => s.selectTables);
   const selectColumn = useSchemaStore((s) => s.selectColumn);
   const moveTables = useSchemaStore((s) => s.moveTables);
+  const resizeTables = useSchemaStore((s) => s.resizeTables);
   const endMove = useSchemaStore((s) => s.endMove);
   const updateTable = useSchemaStore((s) => s.updateTable);
   const renameTable = useSchemaStore((s) => s.renameTable);
@@ -145,6 +147,7 @@ export function Workspace() {
           tables={visible}
           positions={positions}
           onMoveTables={moveTables}
+          onResizeTables={resizeTables}
           onMoveEnd={endMove}
           selected={selectedInView}
           onSelect={select}
@@ -195,6 +198,7 @@ export function Workspace() {
           }
           actionsRef={canvas}
         />
+        <PanelHandle panel="inspector" />
         <Inspector
           table={table}
           tables={tables}

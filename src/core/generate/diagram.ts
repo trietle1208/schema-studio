@@ -1,5 +1,5 @@
 import { groupOf } from '../groups';
-import { computeEdges, edgeEndPaths, edgePath, NODE_HEAD_HEIGHT, NODE_ROW_HEIGHT, NODE_WIDTH, nodeRects, type Rect } from '../layout';
+import { computeEdges, edgeEndPaths, edgePath, NODE_HEAD_HEIGHT, NODE_ROW_HEIGHT, nodeRects, type Rect } from '../layout';
 import type { Column, GroupColor, SchemaSnapshot, Table } from '../model';
 import { positionOf } from '../positions';
 
@@ -54,10 +54,11 @@ const RADIUS = 8;
 // name, the type and the flag (18px), 6px between them. The type keeps room for six characters.
 const SIDE = 11;
 const NAME_X = SIDE + 14 + 6;
-const FLAG_RIGHT = NODE_WIDTH - SIDE;
-const TYPE_RIGHT = FLAG_RIGHT - 18 - 6;
-/** How many characters the name and the type of a column have between them, and how many of them the type keeps. */
-const ROW_CHARS = (TYPE_RIGHT - NAME_X - 6) / CH;
+/** Where the flag and the type of a row end in a table `w` wide, from its left side. */
+const flagRight = (w: number) => w - SIDE;
+const typeRight = (w: number) => flagRight(w) - 18 - 6;
+/** How many characters the name and the type of a column have between them in a table `w` wide, and how many of them the type keeps. */
+const rowChars = (w: number) => (typeRight(w) - NAME_X - 6) / CH;
 const TYPE_CHARS = 6;
 
 // The glyphs of the 24px icon set (see components/icons) that a table shows.
@@ -86,26 +87,27 @@ function glyph(paths: string, x: number, y: number, size: number, color: string,
   return `<g transform="translate(${n(x)} ${n(y)}) scale(${(size / 24).toFixed(4)})" fill="none" stroke="${color}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"${opacity === undefined ? '' : ` opacity="${opacity}"`}>${paths}</g>`;
 }
 
-function row(column: Column, x: number, y: number, colors: DiagramColors): string {
+function row(column: Column, x: number, y: number, w: number, colors: DiagramColors): string {
+  const chars = rowChars(w);
   const parts: string[] = [];
   if (column.pk) parts.push(glyph(KEY_GLYPH, x + SIDE, y - 6.5, 13, colors.pk));
   else if (column.fk) parts.push(glyph(LINK_GLYPH, x + SIDE, y - 6.5, 13, colors.fk, column.fk.inferred ? 0.55 : undefined));
 
   // The name is shown whole as long as the type keeps its six characters, and the type takes what is left.
   const named = column.name || 'unnamed';
-  const name = fitText(named, ROW_CHARS - TYPE_CHARS);
+  const name = fitText(named, chars - TYPE_CHARS);
   parts.push(
     `<text x="${n(x + NAME_X)}" y="${baseline(y, FONT_SIZE)}" fill="${column.name ? colors.ink1 : colors.invalid}"${column.name ? '' : ' font-style="italic"'}>${escape(name)}</text>`,
   );
-  const typeRight = x + TYPE_RIGHT - (column.nullable ? CH : 0);
-  const type = fitText(column.type || '—', Math.floor(ROW_CHARS - name.length) - (column.nullable ? 1 : 0));
-  parts.push(`<text x="${n(typeRight)}" y="${baseline(y, FONT_SIZE)}" text-anchor="end" fill="${colors.ink2}">${escape(type)}</text>`);
+  const typeEnd = x + typeRight(w) - (column.nullable ? CH : 0);
+  const type = fitText(column.type || '—', Math.floor(chars - name.length) - (column.nullable ? 1 : 0));
+  parts.push(`<text x="${n(typeEnd)}" y="${baseline(y, FONT_SIZE)}" text-anchor="end" fill="${colors.ink2}">${escape(type)}</text>`);
   if (column.nullable) {
-    parts.push(`<text x="${n(x + TYPE_RIGHT)}" y="${baseline(y, FONT_SIZE)}" text-anchor="end" fill="${colors.ink3}">?</text>`);
+    parts.push(`<text x="${n(x + typeRight(w))}" y="${baseline(y, FONT_SIZE)}" text-anchor="end" fill="${colors.ink3}">?</text>`);
   }
   if (column.unique) {
     parts.push(
-      `<text x="${n(x + FLAG_RIGHT)}" y="${baseline(y, FLAG_SIZE)}" text-anchor="end" font-size="${FLAG_SIZE}" font-weight="600" fill="${colors.ink3}">UQ</text>`,
+      `<text x="${n(x + flagRight(w))}" y="${baseline(y, FLAG_SIZE)}" text-anchor="end" font-size="${FLAG_SIZE}" font-weight="600" fill="${colors.ink3}">UQ</text>`,
     );
   }
   return parts.join('');
@@ -128,17 +130,17 @@ function node(table: Table, rect: Rect, index: number, group: GroupColor | undef
   const count = String(table.columns.length);
   const schema = table.schema && table.schema !== 'public' ? `${table.schema}.` : '';
   const nameX = x + SIDE + 14 + 7;
-  const nameRoom = (x + FLAG_RIGHT - count.length * COUNT_SIZE * ADVANCE - 7 - nameX) / CH;
+  const nameRoom = (x + flagRight(w) - count.length * COUNT_SIZE * ADVANCE - 7 - nameX) / CH;
   const name = fitText(schema + (table.name || 'unnamed'), nameRoom);
   const prefix = name.slice(0, Math.min(schema.length, name.length));
   parts.push(
     `<path d="M${n(x + 1)} ${n(y + NODE_HEAD_HEIGHT + 0.5)} H${n(x + w - 1)}" stroke="${colors.rule}"/>`,
     glyph(TABLE_GLYPH, x + SIDE, middle - 7, 14, colors.ink3),
     `<text x="${n(nameX)}" y="${baseline(middle, FONT_SIZE)}" font-weight="600" fill="${colors.ink1}">${prefix ? `<tspan fill="${colors.ink3}">${escape(prefix)}</tspan>` : ''}${escape(name.slice(prefix.length))}</text>`,
-    `<text x="${n(x + FLAG_RIGHT)}" y="${baseline(middle, COUNT_SIZE)}" text-anchor="end" font-size="${COUNT_SIZE}" fill="${colors.ink3}">${count}</text>`,
+    `<text x="${n(x + flagRight(w))}" y="${baseline(middle, COUNT_SIZE)}" text-anchor="end" font-size="${COUNT_SIZE}" fill="${colors.ink3}">${count}</text>`,
   );
   table.columns.forEach((column, i) => {
-    parts.push(row(column, x, y + NODE_HEAD_HEIGHT + i * NODE_ROW_HEIGHT + NODE_ROW_HEIGHT / 2 + 1, colors));
+    parts.push(row(column, x, y + NODE_HEAD_HEIGHT + i * NODE_ROW_HEIGHT + NODE_ROW_HEIGHT / 2 + 1, w, colors));
   });
   return `<g>${parts.join('')}</g>`;
 }

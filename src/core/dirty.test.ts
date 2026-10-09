@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dirtyTables, isDirty } from './dirty';
-import { deleteTable, duplicateTable, moveTable, renameTable, updateTable } from './edit';
+import { deleteTable, duplicateTable, moveTable, renameTable, resizeTables, updateTable } from './edit';
 import { ecommerceSnapshot, tableNamed } from './fixtures/testing';
 import { assignGroup, groupsOf, recolorGroup } from './groups';
 
@@ -17,6 +17,18 @@ describe('isDirty and dirtyTables', () => {
     const current = updateTable(saved, 'orders', { ...orders, comment: 'One row per checkout.' });
     expect(isDirty(current, saved)).toBe(true);
     expect(dirtyTables(current, saved)).toEqual(['orders']);
+  });
+
+  it('marks a table that was made wider, and clears it when the table is as wide as it was', () => {
+    const saved = ecommerceSnapshot();
+    const wide = resizeTables(saved, { payments: { ...saved.positions.payments, w: 320 } });
+    expect(isDirty(wide, saved)).toBe(true);
+    expect(dirtyTables(wide, saved)).toEqual(['payments']);
+
+    const back = resizeTables(wide, { payments: { ...saved.positions.payments, w: 228 } });
+    expect(back.positions).not.toBe(saved.positions);
+    expect(isDirty(back, saved)).toBe(false);
+    expect(dirtyTables(back, saved)).toEqual([]);
   });
 
   it('marks a moved table, and clears it when the table is put back', () => {

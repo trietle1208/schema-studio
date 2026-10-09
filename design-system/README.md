@@ -35,7 +35,7 @@ Schema Studio is a desktop-first database schema designer for software engineers
 ### Space, shape, depth
 
 - 4px base. Dense rows: 24px canvas rows (`h-row`), 28–30px control rows (`h-control`), 44px toolbar (`h-toolbar`).
-- Fixed shell: `w-sidebar` 248px, `w-inspector` 352px, `w-node` 228px. Optimised for 1440px+; the canvas absorbs the remaining width.
+- The shell: `w-sidebar` 248px, `w-inspector` 352px, `w-node` 228px. Optimised for 1440px+; the canvas absorbs the remaining width. These are the widths things start with: the sidebar and the inspector are dragged wider or narrower by the line between them and the canvas, and a table by either of its sides. A handle is the hairline itself, which turns `accent` (2px) when it is pointed at and while it is dragged; a double click gives a panel its width back and fits a table to its text.
 - Radii stay small: `radius-sm` 4px (badges, toggles), `radius-md` 6px (buttons, inputs, menus), `radius-lg` 8px (nodes, modals). Nothing rounder.
 - Shadows only for things that float: `shadow-node` for table nodes, `shadow-pop` for menus, popovers, toasts and a dragged node, `shadow-modal` for dialogs.
 
@@ -44,7 +44,7 @@ Schema Studio is a desktop-first database schema designer for software engineers
 - The ER diagram is the visual focus. It sits on `bg-1` with a 16px `canvas-dot` grid. Only the legend, minimap, context menu and transient hints may overlay it.
 - Relationship curves run from the referenced key (bar = one) to the foreign-key column (crow's foot = many) in `relation`. Selecting a table turns its lines `relation-active` and dims unrelated tables.
 - Column rows read left to right: key glyph, name, type in `ink-2`, then `?` for nullable and `UQ` for unique. The legend restates this.
-- Nodes drag by their header and snap to 8px; empty canvas pans.
+- Nodes drag by their header and snap to 8px; their sides drag to resize them, in steps of 4px; empty canvas pans.
 
 ### States
 

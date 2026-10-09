@@ -1,5 +1,5 @@
-import { GRID, GRID_GAP_X, GRID_GAP_Y, GRID_ORIGIN, NODE_WIDTH, gridColumns, gridLayout, nodeHeight, snap } from './layout';
-import type { Position, Positions, Table } from './model';
+import { GRID, GRID_GAP_X, GRID_GAP_Y, GRID_ORIGIN, NODE_WIDTH, gridColumns, gridLayout, nodeHeight, nodeWidth, snap } from './layout';
+import type { Placement, Position, Positions, Table } from './model';
 import { positionOf } from './positions';
 
 // Related tables stand further apart than the tables of a grid: their relationship lines curve in the gap.
@@ -16,6 +16,7 @@ const LINE_ROOM = 16;
 
 interface Node {
   table: Table;
+  w: number;
   h: number;
   /** The tables this one references and the tables that reference it, as indexes. */
   parents: number[];
@@ -33,10 +34,16 @@ function up(value: number): number {
   return Math.ceil(value / GRID) * GRID;
 }
 
-/** The foreign keys between `tables`, inferred ones included. One that references its own table links nothing. */
-function graph(tables: readonly Table[]): Node[] {
+/** The foreign keys between `tables`, inferred ones included. One that references its own table links nothing. `widths` has the tables that were made wider or narrower. */
+function graph(tables: readonly Table[], widths: Positions): Node[] {
   const index = new Map(tables.map((t, i) => [t.name, i]));
-  const nodes: Node[] = tables.map((table) => ({ table, h: nodeHeight(table), parents: [], children: [] }));
+  const nodes: Node[] = tables.map((table) => ({
+    table,
+    w: nodeWidth(positionOf(widths, table.name)),
+    h: nodeHeight(table),
+    parents: [],
+    children: [],
+  }));
   nodes.forEach((node, i) => {
     for (const column of node.table.columns) {
       const j = column.fk ? index.get(column.fk.table) : undefined;
@@ -263,20 +270,26 @@ function block(nodes: readonly Node[], group: readonly number[]): Block {
   const minY = Math.min(...group.map((i) => top.get(i) ?? 0));
   const at = new Map<string, Position>();
   let h = 0;
+  // A column is as wide as the widest of its tables, and a column of lines only as tables are by themselves.
+  let x = 0;
+  let w = 0;
   columns.forEach((column, c) => {
-    for (const i of column) {
-      if (i >= nodes.length) continue;
+    const tables = column.filter((i) => i < nodes.length);
+    const width = tables.length ? Math.max(...tables.map((i) => nodes[i].w)) : NODE_WIDTH;
+    if (c > 0) x = snap(x + w + LAYER_GAP_X);
+    w = width;
+    for (const i of tables) {
       const y = (top.get(i) ?? 0) - minY;
-      at.set(nodes[i].table.name, { x: snap(c * (NODE_WIDTH + LAYER_GAP_X)), y });
+      at.set(nodes[i].table.name, { x, y });
       h = Math.max(h, y + nodes[i].h);
     }
   });
-  return { at, w: snap((columns.length - 1) * (NODE_WIDTH + LAYER_GAP_X)) + NODE_WIDTH, h };
+  return { at, w: x + w, h };
 }
 
-/** The tables that have no relationship, as a grid of `columns`. */
-function gridBlock(tables: readonly Table[], columns: number): Block {
-  const grid = gridLayout(tables, columns);
+/** The tables that have no relationship, as a grid of `columns`, each `width` wide. */
+function gridBlock(tables: readonly Table[], columns: number, width: number): Block {
+  const grid = gridLayout(tables, columns, width);
   const at = new Map<string, Position>();
   let w = 0;
   let h = 0;
@@ -284,7 +297,7 @@ function gridBlock(tables: readonly Table[], columns: number): Block {
     const p = positionOf(grid, table.name);
     if (!p) continue;
     at.set(table.name, { x: p.x - GRID_ORIGIN, y: p.y - GRID_ORIGIN });
-    w = Math.max(w, p.x - GRID_ORIGIN + NODE_WIDTH);
+    w = Math.max(w, p.x - GRID_ORIGIN + width);
     h = Math.max(h, p.y - GRID_ORIGIN + nodeHeight(table));
   }
   return { at, w, h };
@@ -292,9 +305,10 @@ function gridBlock(tables: readonly Table[], columns: number): Block {
 
 /**
  * Puts the groups side by side in rows no wider than `limit`, like words on a page, and the grid
- * of the `loose` tables after them. A grid that gets a row to itself is as wide as the rows above.
+ * of the `loose` tables after them, in columns `width` wide. A grid that gets a row to itself is
+ * as wide as the rows above.
  */
-function pack(related: readonly Block[], loose: readonly Table[], limit: number): Block {
+function pack(related: readonly Block[], loose: readonly Table[], width: number, limit: number): Block {
   const at = new Map<string, Position>();
   let x = 0;
   let y = 0;
@@ -315,9 +329,9 @@ function pack(related: readonly Block[], loose: readonly Table[], limit: number)
   related.forEach(put);
   if (loose.length) {
     const columns = gridColumns(loose.length);
-    const grid = gridBlock(loose, columns);
-    const across = Math.floor((w + GRID_GAP_X) / (NODE_WIDTH + GRID_GAP_X));
-    put(fits(grid) ? grid : gridBlock(loose, Math.max(columns, across)));
+    const grid = gridBlock(loose, columns, width);
+    const across = Math.floor((w + GRID_GAP_X) / (width + GRID_GAP_X));
+    put(fits(grid) ? grid : gridBlock(loose, Math.max(columns, across), width));
   }
   return { at, w, h: y + row };
 }
@@ -327,9 +341,13 @@ function pack(related: readonly Block[], loose: readonly Table[], limit: number)
  * from left to right, from the tables that are referenced to the tables that reference them, the
  * largest group first. Tables without any relationship follow in a grid. The positions the tables
  * had play no part, so arranging twice changes nothing. Snapped to the grid.
+ *
+ * A table that `placed` says was made wider or narrower stays so: its column, or the grid it is
+ * in, is as wide as the widest table there.
  */
-export function arrangeTables(tables: readonly Table[]): Positions {
-  const nodes = graph(tables);
+export function arrangeTables(tables: readonly Table[], placed: Positions = {}): Positions {
+  const nodes = graph(tables, placed);
+  const widthOf = (table: Table) => nodeWidth(positionOf(placed, table.name));
   const related: Block[] = [];
   const loose: Table[] = [];
   for (const group of groups(nodes)) {
@@ -342,9 +360,10 @@ export function arrangeTables(tables: readonly Table[]): Positions {
   let whole: Block | null = null;
   let best = Infinity;
   let limit = 0;
-  for (const b of [...related, ...(loose.length ? [gridBlock(loose, gridColumns(loose.length))] : [])]) {
+  const looseWidth = Math.max(NODE_WIDTH, ...loose.map(widthOf));
+  for (const b of [...related, ...(loose.length ? [gridBlock(loose, gridColumns(loose.length), looseWidth)] : [])]) {
     limit = up(limit + b.w + GROUP_GAP);
-    const packed = pack(related, loose, limit);
+    const packed = pack(related, loose, looseWidth, limit);
     const off = Math.abs(Math.log(packed.w / packed.h / ASPECT));
     if (off < best) {
       best = off;
@@ -355,7 +374,9 @@ export function arrangeTables(tables: readonly Table[]): Positions {
   const positions: Positions = {};
   for (const table of tables) {
     const p = whole?.at.get(table.name);
-    if (p) positions[table.name] = { x: GRID_ORIGIN + p.x, y: GRID_ORIGIN + p.y };
+    if (!p) continue;
+    const w = positionOf(placed, table.name)?.w;
+    positions[table.name] = w === undefined ? { x: GRID_ORIGIN + p.x, y: GRID_ORIGIN + p.y } : { x: GRID_ORIGIN + p.x, y: GRID_ORIGIN + p.y, w };
   }
   return positions;
 }
@@ -369,7 +390,7 @@ export function arrangeTables(tables: readonly Table[]): Positions {
 export function arrangeOnly(tables: readonly Table[], positions: Positions, names: readonly string[]): Positions {
   const wanted = new Set(names);
   const chosen = tables.filter((t) => wanted.has(t.name));
-  const arranged = Object.entries(arrangeTables(chosen));
+  const arranged = Object.entries(arrangeTables(chosen, positions));
   const were = chosen.flatMap((t) => positionOf(positions, t.name) ?? []);
   if (!arranged.length) return positions;
   const corner = (points: readonly Position[]) => ({
@@ -379,6 +400,6 @@ export function arrangeOnly(tables: readonly Table[], positions: Positions, name
   const from = corner(arranged.map(([, p]) => p));
   // Tables that were never placed have no corner to keep.
   const to = were.length ? corner(were) : from;
-  const placed = arranged.map(([name, p]) => [name, { x: snap(to.x) + p.x - from.x, y: snap(to.y) + p.y - from.y }]);
+  const placed = arranged.map(([name, p]): [string, Placement] => [name, { ...p, x: snap(to.x) + p.x - from.x, y: snap(to.y) + p.y - from.y }]);
   return { ...positions, ...Object.fromEntries(placed) };
 }

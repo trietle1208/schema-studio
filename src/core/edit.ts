@@ -1,11 +1,17 @@
 import { copyMember, renameMember } from './groups';
-import type { Column, Position, Positions, SchemaSnapshot, Table, TableGroup } from './model';
+import { clampNodeWidth, NODE_WIDTH, nodeWidth } from './layout';
+import type { Column, Placement, Position, Positions, SchemaSnapshot, Table, TableGroup } from './model';
 import { positionOf } from './positions';
 
 // Every edit returns a new snapshot and leaves the input untouched. Tables that an edit does not
 // change keep their identity, and an edit that cannot apply returns the snapshot it was given.
 
 const DUPLICATE_OFFSET = 32;
+
+/** `x`, `y` with the width `like` was given, when it was given one. */
+function placed(x: number, y: number, like: Placement | undefined): Placement {
+  return like?.w === undefined ? { x, y } : { x, y, w: like.w };
+}
 
 /** A snapshot of `tables` and `positions` with the groups of `snapshot`, or with `groups` in their place. One that has no groups gets none. */
 function edited(
@@ -56,7 +62,7 @@ export function copyName(tables: readonly Table[], name: string): string {
   return candidate;
 }
 
-/** Appends a copy of a table, without its foreign keys and indexes, placed just off the original and in its group. */
+/** Appends a copy of a table, without its foreign keys and indexes, placed just off the original, as wide as it and in its group. */
 export function duplicateTable(
   snapshot: SchemaSnapshot,
   name: string,
@@ -74,7 +80,7 @@ export function duplicateTable(
   return edited(
     snapshot,
     [...snapshot.tables, copy],
-    { ...snapshot.positions, [newName]: { x: origin.x + DUPLICATE_OFFSET, y: origin.y + DUPLICATE_OFFSET } },
+    { ...snapshot.positions, [newName]: placed(origin.x + DUPLICATE_OFFSET, origin.y + DUPLICATE_OFFSET, origin) },
     snapshot.groups && copyMember(snapshot.groups, name, newName),
   );
 }
@@ -114,7 +120,7 @@ export function moveTable(snapshot: SchemaSnapshot, name: string, position: Posi
   return moveTables(snapshot, { [name]: position });
 }
 
-/** Places each table named in `moves` at its position there, as when several are dragged together. */
+/** Places each table named in `moves` at its position there, as when several are dragged together. A table stays as wide as it is. */
 export function moveTables(snapshot: SchemaSnapshot, moves: Positions): SchemaSnapshot {
   const known = new Set(snapshot.tables.map((t) => t.name));
   const moved = Object.entries(moves).filter(([name, to]) => {
@@ -122,6 +128,27 @@ export function moveTables(snapshot: SchemaSnapshot, moves: Positions): SchemaSn
     return known.has(name) && (!from || from.x !== to.x || from.y !== to.y);
   });
   if (!moved.length) return snapshot;
-  const placed = Object.fromEntries(moved.map(([name, to]) => [name, { x: to.x, y: to.y }]));
-  return edited(snapshot, snapshot.tables, { ...snapshot.positions, ...placed });
+  const next = Object.fromEntries(moved.map(([name, to]) => [name, placed(to.x, to.y, positionOf(snapshot.positions, name))]));
+  return edited(snapshot, snapshot.tables, { ...snapshot.positions, ...next });
+}
+
+/**
+ * Makes each table named in `sizes` as wide as it is there, and puts it where it is there: a table
+ * whose left side was dragged has moved with it (see `widened` in core/layout). A table that has
+ * no place on the canvas is left out.
+ */
+export function resizeTables(snapshot: SchemaSnapshot, sizes: Positions): SchemaSnapshot {
+  const known = new Set(snapshot.tables.map((t) => t.name));
+  const resized = Object.entries(sizes).filter(([name, to]) => {
+    const from = positionOf(snapshot.positions, name);
+    return known.has(name) && !!from && (from.x !== to.x || from.y !== to.y || nodeWidth(from) !== nodeWidth(to));
+  });
+  if (!resized.length) return snapshot;
+  const next = Object.fromEntries(
+    resized.map(([name, to]): [string, Placement] => {
+      const w = clampNodeWidth(nodeWidth(to));
+      return [name, w === NODE_WIDTH ? { x: to.x, y: to.y } : { x: to.x, y: to.y, w }];
+    }),
+  );
+  return edited(snapshot, snapshot.tables, { ...snapshot.positions, ...next });
 }

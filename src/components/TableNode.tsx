@@ -7,6 +7,8 @@ export interface TableNodeProps {
   table: Table;
   x?: number;
   y?: number;
+  /** How wide the table is, when it was made wider or narrower than tables are by themselves. */
+  width?: number;
   static?: boolean;
   selected?: boolean;
   selectedColumn?: number | null;
@@ -15,6 +17,8 @@ export interface TableNodeProps {
   onSelectColumn?: (index: number, e: MouseEvent) => void;
   dimmed?: boolean;
   dragging?: boolean;
+  /** A side of the table is being dragged. */
+  resizing?: boolean;
   dirty?: boolean;
   invalidColumns?: number[] | null;
   /** The row a foreign key that is being drawn starts from or would end on (see ERCanvas). */
@@ -31,7 +35,17 @@ export interface TableNodeProps {
   onPointerMove?: PointerEventHandler<HTMLDivElement>;
   onPointerUp?: PointerEventHandler<HTMLDivElement>;
   onContextMenu?: MouseEventHandler<HTMLDivElement>;
+  /**
+   * A press on the handle at a side of the table (1 right, -1 left), which does not reach
+   * `onPointerDown`: the side is dragged to make the table wider or narrower. Without it the
+   * table has no handles.
+   */
+  onResizeDown?: (side: 1 | -1, e: PointerEvent<HTMLDivElement>) => void;
+  /** A double click on a handle: the table is to be as wide as its text. */
+  onResizeFit?: () => void;
 }
+
+const SIDES = [-1, 1] as const;
 
 interface NodeRowProps {
   column: Column;
@@ -95,6 +109,7 @@ export function TableNode({
   table: t,
   x,
   y,
+  width,
   static: isStatic,
   selected,
   selectedColumn,
@@ -102,6 +117,7 @@ export function TableNode({
   onSelectColumn,
   dimmed,
   dragging,
+  resizing,
   dirty,
   invalidColumns,
   linkColumn,
@@ -114,6 +130,8 @@ export function TableNode({
   onPointerMove,
   onPointerUp,
   onContextMenu,
+  onResizeDown,
+  onResizeFit,
 }: TableNodeProps) {
   return (
     <div
@@ -123,11 +141,12 @@ export function TableNode({
         selected && 'is-selected',
         dimmed && 'is-dimmed',
         dragging && 'is-dragging',
+        resizing && 'is-resizing',
         state === 'added' && 'is-added',
         state === 'removed' && 'is-removed',
         group && `has-group ss-group--${group.color}`,
       )}
-      style={{ ...(isStatic ? {} : { left: x || 0, top: y || 0 }), ...style }}
+      style={{ ...(isStatic ? {} : { left: x || 0, top: y || 0 }), ...(width === undefined ? {} : { width }), ...style }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -168,6 +187,24 @@ export function TableNode({
           />
         ))}
       </div>
+      {onResizeDown &&
+        SIDES.map((side) => (
+          <div
+            key={side}
+            className={cx('ss-node-resize', side === 1 ? 'ss-node-resize--right' : 'ss-node-resize--left')}
+            title="Drag to resize. Double-click to fit the columns."
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onResizeDown(side, e);
+            }}
+            // A click on a handle is none on the table.
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              onResizeFit?.();
+            }}
+          />
+        ))}
     </div>
   );
 }

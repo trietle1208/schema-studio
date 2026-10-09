@@ -6,6 +6,7 @@ import { schemaSummary } from './db/schemas';
 import { useSchemas } from './db/useSchemas';
 import { go } from './screens/navigation';
 import { Overlays } from './screens/Overlays';
+import { PanelHandle } from './screens/PanelHandle';
 import { requestNewSchema } from './screens/schemaActions';
 import { SchemaDiff } from './screens/SchemaDiff';
 import { SchemaList } from './screens/SchemaList';
@@ -50,17 +51,20 @@ export function App() {
   return (
     <AppShell
       sidebar={
-        <Sidebar
-          schemas={summaries}
-          // On the list no schema is the current one, as in the design.
-          activeSchema={routeSchema(route) ?? undefined}
-          onNavigate={(id) => {
-            if (id === 'schemas') go(SCHEMAS_ROUTE);
-          }}
-          onSelectSchema={(schema) => go({ screen: 'workspace', schema })}
-          onNew={requestNewSchema}
-          onSettings={requestSettings}
-        />
+        <>
+          <Sidebar
+            schemas={summaries}
+            // On the list no schema is the current one, as in the design.
+            activeSchema={routeSchema(route) ?? undefined}
+            onNavigate={(id) => {
+              if (id === 'schemas') go(SCHEMAS_ROUTE);
+            }}
+            onSelectSchema={(schema) => go({ screen: 'workspace', schema })}
+            onNew={requestNewSchema}
+            onSettings={requestSettings}
+          />
+          <PanelHandle panel="sidebar" />
+        </>
       }
       overlay={<Overlays />}
     >

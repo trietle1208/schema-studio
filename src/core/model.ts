@@ -45,7 +45,15 @@ export interface Position {
   y: number;
 }
 
-export type Positions = Record<string, Position>;
+/**
+ * Where a table is on the canvas, and how wide it is when it was given another width than tables
+ * have by themselves (see `nodeWidth` in core/layout).
+ */
+export interface Placement extends Position {
+  w?: number;
+}
+
+export type Positions = Record<string, Placement>;
 
 /** The colours a group of tables can have: the `--group-*` tokens of the styles. */
 export type GroupColor = 'violet' | 'pink' | 'orange' | 'lime' | 'cyan' | 'brown' | 'gray';

@@ -1,9 +1,14 @@
-import type { Position, Positions, Table } from './model';
+import type { Placement, Position, Positions, Table } from './model';
 import { positionOf } from './positions';
 import { curveBlocked, curvePath, roundedPath, routeAround } from './route';
 
 // Node metrics in canvas units. They mirror the design tokens (--w-node, --h-row) and the .ss-node-head height.
 export const NODE_WIDTH = 228;
+/** How narrow and how wide a table can be made. */
+export const MIN_NODE_WIDTH = 160;
+export const MAX_NODE_WIDTH = 640;
+/** The widths a table is given are whole steps of this: half the grid, which the width tables have by themselves is on. */
+const WIDTH_STEP = 4;
 export const NODE_HEAD_HEIGHT = 33;
 export const NODE_ROW_HEIGHT = 24;
 
@@ -26,6 +31,58 @@ export function nodeHeight(table: Table): number {
 
 export function snap(value: number, grid: number = GRID): number {
   return Math.round(value / grid) * grid;
+}
+
+/** How wide the table placed at `at` is: as wide as it was made, or as tables are by themselves. */
+export function nodeWidth(at: Placement | undefined): number {
+  return at?.w ?? NODE_WIDTH;
+}
+
+/** The width a table gets when `w` is wanted: a whole step, no narrower and no wider than a table can be. */
+export function clampNodeWidth(w: number): number {
+  return Math.min(MAX_NODE_WIDTH, Math.max(MIN_NODE_WIDTH, snap(w, WIDTH_STEP)));
+}
+
+/**
+ * The width of the table at `at` once the side `side` of it (1 right, -1 left) has been dragged
+ * `dx` across the canvas. The left side lands on the grid tables are moved on.
+ */
+export function draggedWidth(at: Placement, side: 1 | -1, dx: number): number {
+  if (side === 1) return clampNodeWidth(nodeWidth(at) + dx);
+  return clampNodeWidth(at.x + nodeWidth(at) - snap(at.x + dx));
+}
+
+/**
+ * Where the table at `at` is once it is `w` wide: its left side stays where it is, or its right
+ * side when it is the left one that was dragged (`side` -1). The width tables have by themselves
+ * is not kept, so a table that is made that wide again is as it was.
+ */
+export function widened(at: Placement, w: number, side: 1 | -1 = 1): Placement {
+  const width = clampNodeWidth(w);
+  const x = side === 1 ? at.x : at.x + nodeWidth(at) - width;
+  return width === NODE_WIDTH ? { x, y: at.y } : { x, y: at.y, w: width };
+}
+
+// A table as the styles lay it out, for the width its text takes: a character of the mono face is
+// 0.6 of its size wide (12px, the count of the columns 11px). A row has 10px and the border at
+// either side, the glyph of a key (14px), the name, the type and the flag (18px), 6px between
+// them; the head has the icon (14px), the name, the dot of unsaved changes and the count, 7px
+// between them.
+const CHAR = 7.2;
+const COUNT_CHAR = 6.6;
+const ROW_CHROME = 2 * 11 + 14 + 6 + 6 + 6 + 18;
+const HEAD_CHROME = 2 * 11 + 14 + 7 + 7 + 6 + 7;
+
+/** The width at which the table shows its name and the name and type of every column whole, as far as a table can be that wide. */
+export function fittingWidth(table: Table): number {
+  const schema = table.schema && table.schema !== 'public' ? `${table.schema}.` : '';
+  const head = HEAD_CHROME + (schema + (table.name || 'unnamed')).length * CHAR + String(table.columns.length).length * COUNT_CHAR;
+  const rows = table.columns.map(
+    (c) => ROW_CHROME + ((c.name || 'unnamed').length + (c.type || '—').length + (c.nullable ? 1 : 0)) * CHAR,
+  );
+  // To a tenth of a px first: the sum of the characters is not exact.
+  const widest = Math.round(Math.max(head, ...rows) * 10) / 10;
+  return clampNodeWidth(Math.ceil(widest / WIDTH_STEP) * WIDTH_STEP);
 }
 
 export function clampZoom(zoom: number): number {
@@ -98,16 +155,18 @@ export interface Ends {
  * `referencedRow` of the table at `pr`: out of the sides that face each other, or out of the right
  * side of both tables when one is over the other.
  */
-export function edgeEnds(pt: Position, row: number, pr: Position, referencedRow: number): Ends {
+export function edgeEnds(pt: Placement, row: number, pr: Placement, referencedRow: number): Ends {
   const fy = rowY(pt, row);
   const ry = rowY(pr, referencedRow);
-  if (pr.x + NODE_WIDTH + 24 <= pt.x) {
-    return { a: { x: pr.x + NODE_WIDTH, y: ry, side: 1 }, b: { x: pt.x, y: fy, side: -1 } };
+  const tRight = pt.x + nodeWidth(pt);
+  const rRight = pr.x + nodeWidth(pr);
+  if (rRight + 24 <= pt.x) {
+    return { a: { x: rRight, y: ry, side: 1 }, b: { x: pt.x, y: fy, side: -1 } };
   }
-  if (pt.x + NODE_WIDTH + 24 <= pr.x) {
-    return { a: { x: pr.x, y: ry, side: -1 }, b: { x: pt.x + NODE_WIDTH, y: fy, side: 1 } };
+  if (tRight + 24 <= pr.x) {
+    return { a: { x: pr.x, y: ry, side: -1 }, b: { x: tRight, y: fy, side: 1 } };
   }
-  return { a: { x: pr.x + NODE_WIDTH, y: ry, side: 1 }, b: { x: pt.x + NODE_WIDTH, y: fy, side: 1 } };
+  return { a: { x: rRight, y: ry, side: 1 }, b: { x: tRight, y: fy, side: 1 } };
 }
 
 /**
@@ -116,8 +175,8 @@ export function edgeEnds(pt: Position, row: number, pr: Position, referencedRow:
  * relationship it leaves the left side of the table for a point left of it and the right side for
  * any other, which it loops back to when the point is not past that side.
  */
-export function drawnEnds(pt: Position, row: number, to: Position): Ends {
-  const right = pt.x + NODE_WIDTH;
+export function drawnEnds(pt: Placement, row: number, to: Position): Ends {
+  const right = pt.x + nodeWidth(pt);
   const y = rowY(pt, row);
   if (to.x < pt.x) return { a: { x: to.x, y: to.y, side: 1 }, b: { x: pt.x, y, side: -1 } };
   return { a: { x: to.x, y: to.y, side: to.x < right ? 1 : -1 }, b: { x: right, y, side: 1 } };
@@ -182,7 +241,7 @@ export function zoomAt(offset: Position, zoom: number, nextZoom: number, point: 
 export function nodeRects(tables: readonly Table[], positions: Positions): (Rect & { name: string })[] {
   return tables.flatMap((t) => {
     const p = positionOf(positions, t.name);
-    return p ? [{ name: t.name, x: p.x, y: p.y, w: NODE_WIDTH, h: nodeHeight(t) }] : [];
+    return p ? [{ name: t.name, x: p.x, y: p.y, w: nodeWidth(p), h: nodeHeight(t) }] : [];
   });
 }
 
@@ -308,8 +367,9 @@ export function gridColumns(count: number): number {
  * Positions for tables that have none, such as imported ones: a grid filled row by row. Tables
  * differ in height, so each one goes under the column that is shortest so far, which keeps the
  * grid compact; tables of one height simply fill the rows from left to right. Snapped to the grid.
+ * The columns are `width` wide, for tables that are wider than tables are by themselves.
  */
-export function gridLayout(tables: readonly Table[], columns: number = gridColumns(tables.length)): Positions {
+export function gridLayout(tables: readonly Table[], columns: number = gridColumns(tables.length), width: number = NODE_WIDTH): Positions {
   const count = Math.max(1, Math.floor(columns));
   /** Where the next table of each column goes. */
   const bottoms = new Array<number>(count).fill(GRID_ORIGIN);
@@ -317,7 +377,7 @@ export function gridLayout(tables: readonly Table[], columns: number = gridColum
   for (const table of tables) {
     const column = bottoms.indexOf(Math.min(...bottoms));
     const y = snap(bottoms[column]);
-    positions[table.name] = { x: snap(GRID_ORIGIN + column * (NODE_WIDTH + GRID_GAP_X)), y };
+    positions[table.name] = { x: snap(GRID_ORIGIN + column * (width + GRID_GAP_X)), y };
     bottoms[column] = y + nodeHeight(table) + GRID_GAP_Y;
   }
   return positions;

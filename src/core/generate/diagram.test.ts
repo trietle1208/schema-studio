@@ -172,6 +172,48 @@ describe('generateDiagram', () => {
   });
 });
 
+describe('generateDiagram for tables that were made wider or narrower', () => {
+  const long: Table = {
+    name: 'da_chung_tu_phe_duyet',
+    columns: [
+      { name: 'id', type: 'BIGINT', nullable: false, pk: true },
+      { name: 'nguoi_phe_duyet_cuoi_cung_id', type: 'BIGINT UNSIGNED', nullable: true, unique: true },
+    ],
+  };
+
+  it('draws a table as wide as it is, with what that width shows of its text', () => {
+    const plain = generateDiagram({ tables: [long], positions: { [long.name]: { x: 24, y: 24 } } }, colors, { background: true });
+    expectWellFormed(plain.svg);
+    expect(plain.svg).toContain('<rect x="24.5" y="24.5" width="227" height="86"');
+    // 228 wide, the name of the column has to give way to its type.
+    expect(plain.svg).toContain('>nguoi_phe_duye…</text>');
+
+    const wide = generateDiagram({ tables: [long], positions: { [long.name]: { x: 24, y: 24, w: 392 } } }, colors, { background: true });
+    expectWellFormed(wide.svg);
+    expect(wide.svg).toContain('<rect x="24.5" y="24.5" width="391" height="86"');
+    expect(wide.width - plain.width).toBe(392 - 228);
+    expect(wide.svg).toContain('>nguoi_phe_duyet_cuoi_cung_id</text>');
+    expect(wide.svg).toContain('>BIGINT UNSIGNED</text>');
+    expect(wide.svg).not.toContain('…');
+    // The flag, the `?` and the count of the columns are at the right side of the table: 11px from it, the `?` 24px further in.
+    expect(count(wide.svg, `x="${24 + 392 - 11}"`)).toBe(2);
+    expect(wide.svg).toContain(`<text x="${24 + 392 - 11 - 24}" y="`);
+
+    const narrow = generateDiagram({ tables: [long], positions: { [long.name]: { x: 24, y: 24, w: 160 } } }, colors, { background: true });
+    expectWellFormed(narrow.svg);
+    expect(narrow.svg).toContain('<rect x="24.5" y="24.5" width="159" height="86"');
+    expect(narrow.svg).toContain('…</text>');
+  });
+
+  it('ends the lines of a wider table at its side', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const wide: SchemaSnapshot = { tables, positions: { ...positions, payments: { ...positions.payments, w: 160 } } };
+    const edge = computeEdges(wide.tables, wide.positions).find((e) => e.id === 'payments:1')!;
+    expect(edge.b.x).toBe(24 + 160);
+    expect(generateDiagram(wide, colors, { background: false }).svg).toContain(`<path d="${edgePath(edge.a, edge.b, edge.via)}"`);
+  });
+});
+
 describe('imageScale', () => {
   it('is the scale that is asked for while the picture stays within what a browser draws', () => {
     expect(imageScale(836, 519, 2)).toBe(2);

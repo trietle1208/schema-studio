@@ -12,6 +12,7 @@ import {
   newTable,
   newTableName,
   renameTable,
+  resizeTables,
   updateTable,
 } from '../core/edit';
 import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
@@ -120,6 +121,11 @@ export interface SchemaState extends SchemaSnapshot {
   moveTable: (name: string, position: Position) => void;
   /** The same for a drag of several tables: where each of them is now. */
   moveTables: (positions: Positions) => void;
+  /**
+   * The same for a drag of the side of a table, or of one of several selected tables: how wide
+   * each of them is now, and where (see `widened` in core/layout).
+   */
+  resizeTables: (sizes: Positions) => void;
   endMove: () => void;
   /**
    * Stores the working copy as a new version. A schema with validation problems is not saved: the
@@ -323,7 +329,7 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample, persi
 
           arrangeTables: (only) => {
             const { tables, positions } = get();
-            const next = only ? arrangeOnly(tables, positions, only) : arrangeTables(tables);
+            const next = only ? arrangeOnly(tables, positions, only) : arrangeTables(tables, positions);
             const moved = tables.some((t) => {
               const from = positionOf(positions, t.name);
               const to = positionOf(next, t.name);
@@ -338,6 +344,17 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample, persi
           moveTables: (positions) => {
             const state = get();
             const next = moveTables(state, positions);
+            if (next === state) return;
+            set({ positions: next.positions });
+            if (!dragging) {
+              dragging = true;
+              history().pause();
+            }
+          },
+
+          resizeTables: (sizes) => {
+            const state = get();
+            const next = resizeTables(state, sizes);
             if (next === state) return;
             set({ positions: next.positions });
             if (!dragging) {

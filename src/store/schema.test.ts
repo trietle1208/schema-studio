@@ -277,6 +277,43 @@ describe('schema store', () => {
     expect(state().positions.users).toEqual({ x: 96, y: 120 });
   });
 
+  it('records a whole drag of the side of a table as one undo step', () => {
+    state().resizeTables({ users: { x: 24, y: 48, w: 240 } });
+    state().resizeTables({ users: { x: 24, y: 48, w: 280 } });
+    state().resizeTables({ users: { x: 24, y: 48, w: 300 } });
+    state().endMove();
+
+    expect(state().positions.users).toEqual({ x: 24, y: 48, w: 300 });
+    expect(history().pastStates).toHaveLength(1);
+    expect(selectDirtyTables(state())).toEqual(['users']);
+
+    history().undo();
+    expect(state().positions.users).toEqual({ x: 24, y: 48 });
+    expect(selectDirty(state())).toBe(false);
+
+    history().redo();
+    expect(state().positions.users).toEqual({ x: 24, y: 48, w: 300 });
+
+    // A side that is dragged and let go where it was records nothing more.
+    state().resizeTables({ users: { x: 24, y: 48, w: 300 } });
+    state().endMove();
+    expect(history().pastStates).toHaveLength(1);
+    state().deleteTable('payments');
+    expect(history().pastStates).toHaveLength(2);
+  });
+
+  it('keeps the width of a table that is moved or arranged', () => {
+    state().resizeTables({ orders: { x: 304, y: 24, w: 400 } });
+    state().endMove();
+    state().moveTable('orders', { x: 320, y: 40 });
+    state().endMove();
+    expect(state().positions.orders).toEqual({ x: 320, y: 40, w: 400 });
+
+    expect(state().arrangeTables()).toBe(true);
+    expect(state().positions).toEqual(arrangeTables(state().tables, { orders: { x: 0, y: 0, w: 400 } }));
+    expect(state().positions.orders.w).toBe(400);
+  });
+
   it('records the next edit after a drag, and a drag that goes nowhere records nothing', () => {
     state().moveTable('users', { x: 24, y: 48 });
     state().endMove();

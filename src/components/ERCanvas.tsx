@@ -4,17 +4,20 @@ import {
   centreOn,
   clampZoom,
   computeEdges,
+  draggedWidth,
   drawnEnds,
   edgeEndPaths,
   edgeEnds,
   edgePath,
   fitView,
+  fittingWidth,
   minimapLayout,
   minimapPoint,
   rectBetween,
   snap,
   tablesInRect,
   viewRect,
+  widened,
   zoomAt,
   type Ends,
   type MinimapScale,
@@ -56,6 +59,13 @@ export interface ERCanvasProps {
   onMove?: (name: string, position: Position) => void;
   /** Where each table of a drag is now: the dragged one and, when it is one of `selection`, the others. Without it `onMove` is called for each. */
   onMoveTables?: (positions: Positions) => void;
+  /**
+   * How wide each table of a drag of a side is now, and where: the table whose side is dragged
+   * and, when it is one of `selection`, the others, which get its width. A double click on a side
+   * makes each as wide as its text. `onMoveEnd` ends it like a move. Without it tables have no
+   * handles at their sides.
+   */
+  onResizeTables?: (sizes: Positions) => void;
   onMoveEnd?: (name: string) => void;
   selected?: string | null;
   onSelect?: (name: string | null) => void;
@@ -125,6 +135,8 @@ interface DragState {
   column?: number;
   /** Where the tables that move with `table` were when the drag began, `table` among them. */
   origins?: Positions;
+  /** The side of `table` that is dragged (1 right, -1 left), when the drag began on a handle: the tables of `origins` get its width. */
+  side?: 1 | -1;
   /** The canvas point a frame is dragged from and the tables that were selected then, when the drag began on the empty canvas with Shift held. */
   frame?: { from: Position; base: readonly string[] };
   sx: number;
@@ -252,6 +264,7 @@ export function ERCanvas({
   positions,
   onMove,
   onMoveTables,
+  onResizeTables,
   onMoveEnd,
   selected: sel,
   onSelect,
@@ -295,6 +308,8 @@ export function ERCanvas({
   const [offset, setOffset] = useState<Position>(initialOffset ?? { x: 0, y: 0 });
   /** The tables that are being dragged. */
   const [dragged, setDragged] = useState<ReadonlySet<string> | null>(null);
+  /** The tables whose width is being dragged. */
+  const [resized, setResized] = useState<ReadonlySet<string> | null>(null);
   const [panning, setPanning] = useState(false);
   const [link, setLink] = useState<Link | null>(null);
   /** The two corners of the frame that is being dragged over the canvas, in canvas units. */
@@ -475,6 +490,53 @@ export function ERCanvas({
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
+  /** Where the tables are that a drag of `name` takes along: the selected ones when it is one of them. */
+  function originsOf(name: string): Positions {
+    return Object.fromEntries(
+      (isChosen.has(name) ? chosen : [name]).flatMap((n) => {
+        const p = positionOf(positions, n);
+        return p ? [[n, p] as const] : [];
+      }),
+    );
+  }
+
+  function onResizeDown(name: string, side: 1 | -1, e: PointerEvent<HTMLDivElement>) {
+    const q = positionOf(positions, name);
+    if (e.button !== 0 || !q) return;
+    setMenu(null);
+    // As for a press on the head of a table: the keyboard stays with the canvas.
+    e.preventDefault();
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    if (!isChosen.has(name)) onSelect?.(name);
+    drag.current = { table: name, origins: originsOf(name), side, sx: e.clientX, sy: e.clientY, ox: q.x, oy: q.y, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onResizeMove(table: string, side: 1 | -1, d: DragState, e: PointerEvent) {
+    const origins = d.origins ?? {};
+    const own = positionOf(origins, table);
+    const dx = (e.clientX - d.sx) / zoom;
+    if (!own || (!d.moved && Math.abs(dx) < DRAG_THRESHOLD)) return;
+    if (!d.moved) {
+      d.moved = true;
+      swallowClick.current = true;
+      setResized(new Set(Object.keys(origins)));
+    }
+    // Every table gets the width of the one whose side is dragged, and keeps its other side where it is.
+    const w = draggedWidth(own, side, dx);
+    onResizeTables?.(Object.fromEntries(Object.entries(origins).map(([name, o]) => [name, widened(o, w, side)])));
+  }
+
+  /** A double click on a side of a table: it, or each of the selected tables it is one of, is as wide as its text. */
+  function onResizeFit(name: string) {
+    const sizes = Object.entries(originsOf(name)).flatMap(([n, p]) => {
+      const table = tables.find((t) => t.name === n);
+      return table ? [[n, widened(p, fittingWidth(table))] as const] : [];
+    });
+    onResizeTables?.(Object.fromEntries(sizes));
+    onMoveEnd?.(name);
+  }
+
   function onNodeClick(name: string, e: MouseEvent) {
     if (!e.shiftKey || !onSelectTables) return onSelect?.(name);
     if (!added.current) onSelectTables(isChosen.has(name) ? chosen.filter((n) => n !== name) : [...chosen, name]);
@@ -484,6 +546,7 @@ export function ERCanvas({
     const d = drag.current;
     if (!d || d.table === null) return;
     if (d.column !== undefined) return onLinkMove({ table: d.table, column: d.column }, d, e);
+    if (d.side !== undefined) return onResizeMove(d.table, d.side, d, e);
     const dx = (e.clientX - d.sx) / zoom;
     const dy = (e.clientY - d.sy) / zoom;
     if (!d.moved && Math.abs(dx) + Math.abs(dy) < DRAG_THRESHOLD) return;
@@ -507,6 +570,7 @@ export function ERCanvas({
     if (d && d.table !== null && d.moved) onMoveEnd?.(d.table);
     drag.current = null;
     setDragged(null);
+    setResized(null);
   }
 
   function onBgDown(e: PointerEvent<HTMLDivElement>) {
@@ -550,6 +614,7 @@ export function ERCanvas({
     drag.current = null;
     setPanning(false);
     setDragged(null);
+    setResized(null);
     setFrame(null);
   }
 
@@ -694,11 +759,13 @@ export function ERCanvas({
               table={t}
               x={q.x}
               y={q.y}
+              width={q.w}
               selected={isChosen.has(t.name)}
               group={groupOf(groups, t.name)}
               // While a foreign key is drawn every table is one it may end on, and none is faded.
               dimmed={dimUnrelated && !related && !link}
               dragging={!!dragged && dragged.has(t.name)}
+              resizing={!!resized && resized.has(t.name)}
               dirty={!!dirtyTables && dirtyTables.includes(t.name)}
               selectedColumn={selectedColumn}
               invalidColumns={sel === t.name ? invalidColumns : null}
@@ -714,6 +781,8 @@ export function ERCanvas({
               onPointerMove={onNodeMove}
               onPointerUp={onNodeUp}
               onContextMenu={(e) => onNodeMenu(t.name, e)}
+              onResizeDown={readOnly || !onResizeTables ? undefined : (side, e) => onResizeDown(t.name, side, e)}
+              onResizeFit={() => onResizeFit(t.name)}
             />
           );
         })}

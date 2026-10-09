@@ -223,6 +223,68 @@ describe('arrangeTables', () => {
   });
 });
 
+describe('arranging tables that were made wider or narrower', () => {
+  it('changes nothing for tables that are as wide as tables are by themselves', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    expect(arrangeTables(tables, positions)).toEqual(arrangeTables(tables));
+    expect(arrangeTables(tables, {})).toEqual(arrangeTables(tables));
+  });
+
+  it('keeps the width of a table and makes its column as wide', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const plain = arrangeTables(tables);
+    const arranged = arrangeTables(tables, { ...positions, orders: { ...positions.orders, w: 400 } });
+    expectTidy(tables, arranged);
+    expect(arranged.orders).toEqual({ ...plain.orders, w: 400 });
+    expect(columns(arranged)).toEqual(columns(plain));
+    // products is over orders, in its column; the tables that reference orders are right of all of it.
+    expect(arranged.products).toEqual(plain.products);
+    expect(arranged.users).toEqual(plain.users);
+    expect(arranged.order_items.x).toBe(arranged.payments.x);
+    expect(arranged.order_items.x - (arranged.orders.x + 400)).toBe(plain.order_items.x - (plain.orders.x + NODE_WIDTH) + 4);
+    expect(linesBehind(tables, arranged)).toEqual([]);
+    // Arranged again it stays as it is.
+    expect(arrangeTables(tables, arranged)).toEqual(arranged);
+  });
+
+  it('brings the next column nearer for a column of narrower tables', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const plain = arrangeTables(tables);
+    const arranged = arrangeTables(tables, { ...positions, users: { ...positions.users, w: 160 } });
+    expectTidy(tables, arranged);
+    expect(arranged.users).toEqual({ ...plain.users, w: 160 });
+    expect(plain.orders.x - arranged.orders.x).toBeGreaterThanOrEqual(64);
+  });
+
+  it('gives the grid of the tables without a relationship columns as wide as the widest of them', () => {
+    const loose = removeInferred(dumped(shopVietnameseDump));
+    const wide = loose[2].name;
+    const arranged = arrangeTables(loose, { [wide]: { x: 0, y: 0, w: 480 } });
+    expectTidy(loose, arranged);
+    expect(arranged[wide].w).toBe(480);
+    expect(Object.values(arranged).filter((p) => p.w !== undefined)).toHaveLength(1);
+    const xs = [...new Set(Object.values(arranged).map((p) => p.x))].sort((a, b) => a - b);
+    expect(xs.length).toBeGreaterThan(1);
+    for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(480);
+  });
+
+  it('keeps the widths of the tables it arranges among themselves and of the others', () => {
+    const { tables, positions } = ecommerceSnapshot();
+    const some = ['orders', 'order_items', 'payments'];
+    const wide = { ...positions, orders: { ...positions.orders, w: 400 }, users: { ...positions.users, w: 300 } };
+    const arranged = arrangeOnly(tables, wide, some);
+    expect(arranged.users).toBe(wide.users);
+    expect(arranged.orders.w).toBe(400);
+    expect(arranged.order_items.w).toBeUndefined();
+    expect(arranged.order_items.x).toBeGreaterThanOrEqual(arranged.orders.x + 400);
+    expectTidy(
+      tables.filter((t) => some.includes(t.name)),
+      Object.fromEntries(some.map((name) => [name, arranged[name]])),
+    );
+    expect(arrangeOnly(tables, arranged, some)).toEqual(arranged);
+  });
+});
+
 describe('arrangeOnly', () => {
   const some = ['orders', 'order_items', 'payments'];
 
