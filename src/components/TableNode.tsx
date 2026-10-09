@@ -1,6 +1,7 @@
-import type { CSSProperties, MouseEvent, MouseEventHandler, PointerEvent, PointerEventHandler } from 'react';
+import { memo, type CSSProperties, type MouseEvent, type MouseEventHandler, type PointerEvent, type PointerEventHandler } from 'react';
 import { t } from '../core/i18n';
-import type { Column, Table, TableGroup } from '../core/model';
+import { hasMoreRow, NODE_ROW_HEIGHT, shownColumns } from '../core/layout';
+import type { Column, ColumnsShown, Table, TableGroup } from '../core/model';
 import { cx } from './cx';
 import { Icon } from './Icon';
 
@@ -10,6 +11,10 @@ export interface TableNodeProps {
   y?: number;
   /** How wide the table is, when it was made wider or narrower than tables are by themselves. */
   width?: number;
+  /** Which of its columns the table shows, when it is not all of them. */
+  cols?: ColumnsShown;
+  /** Draws the head only, over a blank body as tall as the rows would be: for a large diagram zoomed so far out that rows cannot be read. */
+  lite?: boolean;
   static?: boolean;
   selected?: boolean;
   selectedColumn?: number | null;
@@ -106,11 +111,13 @@ function NodeRow({ column: c, index, selected, invalid, linked, refused, onClick
   );
 }
 
-export function TableNode({
+export const TableNode = memo(function TableNode({
   table,
   x,
   y,
   width,
+  cols,
+  lite,
   static: isStatic,
   selected,
   selectedColumn,
@@ -134,10 +141,13 @@ export function TableNode({
   onResizeDown,
   onResizeFit,
 }: TableNodeProps) {
+  const shown = shownColumns(table, { cols });
+  const hidden = table.columns.length - shown.length;
   return (
     <div
       className={cx(
         'ss-node',
+        cols === 'none' && 'is-bare',
         isStatic && 'ss-node--static',
         selected && 'is-selected',
         dimmed && 'is-dimmed',
@@ -169,25 +179,43 @@ export function TableNode({
         {dirty && <span className="ss-dirty-dot" title={t('save.dirty')} />}
         <span className="ss-node-count">{table.columns.length}</span>
       </div>
-      <div className="ss-node-body">
-        {table.columns.map((c, i) => (
-          <NodeRow
-            key={i}
-            column={c}
-            index={i}
-            selected={selected && selectedColumn === i}
-            invalid={!!invalidColumns && invalidColumns.includes(i)}
-            linked={linkColumn === i}
-            refused={linkRefused}
-            onPointerDown={onColumnPointerDown && ((e) => onColumnPointerDown(i, e))}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect?.(table.name, e);
-              onSelectColumn?.(i, e);
-            }}
-          />
-        ))}
-      </div>
+      {cols !== 'none' && lite && (
+        <div className="ss-node-body" style={{ height: (shown.length + (hasMoreRow(table, { cols }) ? 1 : 0)) * NODE_ROW_HEIGHT + 4 }} />
+      )}
+      {cols !== 'none' && !lite && (
+        <div className="ss-node-body">
+          {shown.map((i) => (
+            <NodeRow
+              key={i}
+              column={table.columns[i]}
+              index={i}
+              selected={selected && selectedColumn === i}
+              invalid={!!invalidColumns && invalidColumns.includes(i)}
+              linked={linkColumn === i}
+              refused={linkRefused}
+              onPointerDown={onColumnPointerDown && ((e) => onColumnPointerDown(i, e))}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect?.(table.name, e);
+                onSelectColumn?.(i, e);
+              }}
+            />
+          ))}
+          {hasMoreRow(table, { cols }) && (
+            <div
+              className="ss-node-more"
+              title={t('columns.moreTitle', {
+                names: table.columns
+                  .filter((_, i) => !shown.includes(i))
+                  .map((c) => c.name || t('common.unnamed'))
+                  .join(', '),
+              })}
+            >
+              {t('columns.more', { count: hidden })}
+            </div>
+          )}
+        </div>
+      )}
       {onResizeDown &&
         SIDES.map((side) => (
           <div
@@ -208,4 +236,4 @@ export function TableNode({
         ))}
     </div>
   );
-}
+});

@@ -13,7 +13,9 @@ import {
   newTableName,
   renameTable,
   resizeTables,
+  showColumns,
   updateTable,
+  type ColumnsChoice,
 } from '../core/edit';
 import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
 import { groupsOf } from '../core/groups';
@@ -117,6 +119,12 @@ export interface SchemaState extends SchemaSnapshot {
    * the tables called `only` among themselves, where they are. Returns whether any table moved.
    */
   arrangeTables: (only?: readonly string[]) => boolean;
+  /**
+   * Makes the tables called `only` (all of them without it) show every column, the key columns
+   * only, none, or the keys of the large tables (see `showColumns` in core/edit), in one undo
+   * step. Returns whether any table changed.
+   */
+  showColumns: (choice: ColumnsChoice, only?: readonly string[]) => boolean;
   /** Call on every pointer move of a drag; the whole drag becomes one undo step once `endMove` runs. */
   moveTable: (name: string, position: Position) => void;
   /** The same for a drag of several tables: where each of them is now. */
@@ -337,6 +345,14 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample, persi
             });
             if (moved) set({ positions: next });
             return moved;
+          },
+
+          showColumns: (choice, only) => {
+            const state = get();
+            const next = showColumns(state, choice, only);
+            if (next === state) return false;
+            set({ positions: next.positions });
+            return true;
           },
 
           moveTable: (name, position) => get().moveTables({ [name]: position }),

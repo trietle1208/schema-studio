@@ -134,6 +134,8 @@ describe('computeEdges', () => {
       to: 'users',
       a: { x: 252, y: 94, side: 1 },
       b: { x: 252, y: 214, side: 1 },
+      // The column may be empty: a row of users need not be referred by another.
+      optional: true,
     });
   });
 });

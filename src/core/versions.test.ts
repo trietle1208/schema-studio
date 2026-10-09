@@ -88,6 +88,25 @@ describe('versionSummary', () => {
   });
 });
 
+describe('a note on a version', () => {
+  const noted = (): SavedVersion[] => [saved()[0], { ...saved()[1], note: 'Ask billing before this ships.' }, saved()[2]];
+
+  it('is part of the summary the list shows, and left out when there is none', () => {
+    const [latest, normalized] = versionEntries(noted());
+    expect(versionSummary(normalized, 3, NOW).note).toBe('Ask billing before this ships.');
+    expect(versionSummary(latest, 3, NOW)).not.toHaveProperty('note');
+  });
+
+  it('is matched by the filter', () => {
+    expect(filterVersions(versionEntries(noted()), 'BILLING').map((e) => e.version)).toEqual([2]);
+    expect(filterVersions(versionEntries(saved()), 'billing')).toEqual([]);
+  });
+
+  it('does not stand in for the message', () => {
+    expect(versionMessage(versionEntries(noted())[1])).toBe('Normalize order line items');
+  });
+});
+
 describe('filterVersions', () => {
   const versions = (query: string) => filterVersions(versionEntries(saved()), query).map((e) => e.version);
 

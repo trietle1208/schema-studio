@@ -4,7 +4,7 @@ import type { Placement, SchemaSnapshot } from './model';
 import { positionOf } from './positions';
 
 function samePosition(a: Placement | undefined, b: Placement | undefined): boolean {
-  return a === b || (!!a && !!b && a.x === b.x && a.y === b.y && nodeWidth(a) === nodeWidth(b));
+  return a === b || (!!a && !!b && a.x === b.x && a.y === b.y && nodeWidth(a) === nodeWidth(b) && a.cols === b.cols);
 }
 
 function moved(current: SchemaSnapshot, saved: SchemaSnapshot, name: string): boolean {
@@ -24,7 +24,7 @@ function identical(current: SchemaSnapshot, saved: SchemaSnapshot): boolean {
 }
 
 /**
- * Names of the tables in `current` that differ from `saved`: new, edited, moved, resized or put in another group.
+ * Names of the tables in `current` that differ from `saved`: new, edited, moved, resized, collapsed or put in another group.
  * Tables are compared by identity, so undoing back to the saved snapshot reads as clean.
  */
 export function dirtyTables(current: SchemaSnapshot, saved: SchemaSnapshot): string[] {

@@ -2,6 +2,7 @@ import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { LOCALES, parseLocale, t } from '../core/i18n';
+import { notationOptions, parseNotation } from '../core/notation';
 import { parseTheme, themeOptions } from '../core/theme';
 import { useSettingsStore } from '../store/settings';
 import { useUiStore } from '../store/ui';
@@ -13,6 +14,8 @@ export function SettingsDialog() {
   const setTheme = useSettingsStore((s) => s.setTheme);
   const locale = useSettingsStore((s) => s.locale);
   const setLocale = useSettingsStore((s) => s.setLocale);
+  const notation = useSettingsStore((s) => s.notation);
+  const setNotation = useSettingsStore((s) => s.setNotation);
 
   return (
     <Modal
@@ -48,6 +51,18 @@ export function SettingsDialog() {
           </div>
           {/* Each language is called what it calls itself, so that it is found by someone who reads no other. */}
           <SegmentedControl value={locale} onChange={(value) => setLocale(parseLocale(value))} options={[...LOCALES]} />
+        </div>
+        <div className="ss-caption" style={{ margin: '20px 0 8px' }}>
+          {t('settings.diagram')}
+        </div>
+        <div className="ss-row" style={{ gap: 16 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div>{t('settings.notation')}</div>
+            <div className="ss-faint" style={{ fontSize: 12 }}>
+              {t('settings.notationHint')}
+            </div>
+          </div>
+          <SegmentedControl value={notation} onChange={(value) => setNotation(parseNotation(value))} options={notationOptions()} />
         </div>
       </div>
     </Modal>

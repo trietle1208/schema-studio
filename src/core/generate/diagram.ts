@@ -1,6 +1,8 @@
 import { groupOf } from '../groups';
-import { computeEdges, edgeEndPaths, edgePath, NODE_HEAD_HEIGHT, NODE_ROW_HEIGHT, nodeRects, type Rect } from '../layout';
-import type { Column, GroupColor, SchemaSnapshot, Table } from '../model';
+import { translate } from '../i18n';
+import { computeEdges, edgeMarks, edgePath, hasMoreRow, NODE_HEAD_HEIGHT, NODE_ROW_HEIGHT, nodeRects, RING_RADIUS, shownColumns, type Rect } from '../layout';
+import type { Column, GroupColor, Placement, SchemaSnapshot, Table } from '../model';
+import { DEFAULT_NOTATION, type Notation } from '../notation';
 import { positionOf } from '../positions';
 
 /** The colours a diagram is painted in: the tokens of the theme it is exported in. */
@@ -26,6 +28,8 @@ export interface DiagramColors {
 export interface DiagramOptions {
   /** Paints the colour of the canvas behind the tables. Without it the picture is see-through there. */
   background: boolean;
+  /** How the ends of the relationship lines are drawn. Crow's foot when it is left out. */
+  notation?: Notation;
   /** `@font-face` rules that bring the mono face with them, for a picture that is drawn where the app's fonts are not. */
   fontCss?: string;
 }
@@ -113,7 +117,7 @@ function row(column: Column, x: number, y: number, w: number, colors: DiagramCol
   return parts.join('');
 }
 
-function node(table: Table, rect: Rect, index: number, group: GroupColor | undefined, colors: DiagramColors): string {
+function node(table: Table, at: Placement | undefined, rect: Rect, index: number, group: GroupColor | undefined, colors: DiagramColors): string {
   const { x, y, w, h } = rect;
   const parts: string[] = [
     `<rect x="${n(x + 0.5)}" y="${n(y + 0.5)}" width="${n(w - 1)}" height="${n(h - 1)}" rx="${RADIUS - 0.5}" fill="${colors.node}" stroke="${colors.nodeBorder}"/>`,
@@ -139,9 +143,14 @@ function node(table: Table, rect: Rect, index: number, group: GroupColor | undef
     `<text x="${n(nameX)}" y="${baseline(middle, FONT_SIZE)}" font-weight="600" fill="${colors.ink1}">${prefix ? `<tspan fill="${colors.ink3}">${escape(prefix)}</tspan>` : ''}${escape(name.slice(prefix.length))}</text>`,
     `<text x="${n(x + flagRight(w))}" y="${baseline(middle, COUNT_SIZE)}" text-anchor="end" font-size="${COUNT_SIZE}" fill="${colors.ink3}">${count}</text>`,
   );
-  table.columns.forEach((column, i) => {
-    parts.push(row(column, x, y + NODE_HEAD_HEIGHT + i * NODE_ROW_HEIGHT + NODE_ROW_HEIGHT / 2 + 1, w, colors));
-  });
+  const shown = shownColumns(table, at);
+  const rowMiddle = (i: number) => y + NODE_HEAD_HEIGHT + i * NODE_ROW_HEIGHT + NODE_ROW_HEIGHT / 2 + 1;
+  shown.forEach((column, i) => parts.push(row(table.columns[column], x, rowMiddle(i), w, colors)));
+  if (hasMoreRow(table, at)) {
+    // A picture is a file, which stays in English like the SQL.
+    const more = translate('en', 'columns.more', { count: table.columns.length - shown.length });
+    parts.push(`<text x="${n(x + NAME_X)}" y="${baseline(rowMiddle(shown.length), FONT_SIZE)}" fill="${colors.ink3}" font-style="italic">${escape(more)}</text>`);
+  }
   return `<g>${parts.join('')}</g>`;
 }
 
@@ -177,21 +186,33 @@ export function generateDiagram(snapshot: SchemaSnapshot, colors: DiagramColors,
       }
     : EMPTY;
 
-  const lines = edges.map((e) => {
-    const ends = edgeEndPaths(e);
-    return `<path d="${edgePath(e.a, e.b, e.via)}"${e.inferred ? ' stroke-dasharray="5 4"' : ''}/><path d="${ends.one}"/><path d="${ends.many}"/>`;
-  });
+  const notation = options.notation ?? DEFAULT_NOTATION;
+  const marks = edges.map((e) => edgeMarks(e, notation));
+  const rings = marks.flatMap((m) => m.rings);
+  // The line is cut where a ring is, so that it does not run through it, whatever is behind the picture.
+  const cut = rings.length ? 'mask="url(#gaps)"' : '';
+  const gaps = rings.length
+    ? [
+        `<mask id="gaps" maskUnits="userSpaceOnUse" x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}">`,
+        `<rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" fill="#fff"/>`,
+        ...rings.map((c) => `<circle cx="${n(c.x)}" cy="${n(c.y)}" r="${RING_RADIUS}" fill="#000"/>`),
+        '</mask>',
+      ]
+    : [];
+  const lines = edges.map((e) => `<path d="${edgePath(e.a, e.b, e.via)}"${e.inferred ? ' stroke-dasharray="5 4"' : ''}/>`);
+  const ends = marks.flatMap((m) => [...m.paths.map((d) => `<path d="${d}"/>`), ...m.rings.map((c) => `<circle cx="${n(c.x)}" cy="${n(c.y)}" r="${RING_RADIUS}"/>`)]);
   const nodes = tables.flatMap((table, index) => {
     const p = positionOf(positions, table.name);
     const rect = rects.find((r) => r.name === table.name);
-    return p && rect ? [node(table, rect, index, groupOf(groups, table.name)?.color, colors)] : [];
+    return p && rect ? [node(table, p, rect, index, groupOf(groups, table.name)?.color, colors)] : [];
   });
 
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${box.w}" height="${box.h}" viewBox="${box.x} ${box.y} ${box.w} ${box.h}" font-family="${FONT_FAMILY}" font-size="${FONT_SIZE}">`,
     ...(options.fontCss ? [`<style>${options.fontCss}</style>`] : []),
     ...(options.background ? [`<rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" fill="${colors.background}"/>`] : []),
-    `<g fill="none" stroke="${colors.relation}" stroke-width="1.25">${lines.join('')}</g>`,
+    ...(gaps.length ? [`<defs>${gaps.join('')}</defs>`] : []),
+    `<g fill="none" stroke="${colors.relation}" stroke-width="1.25"><g ${cut}>${lines.join('')}</g>${ends.join('')}</g>`,
     ...nodes,
     '</svg>',
     '',

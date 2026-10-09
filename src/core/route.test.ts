@@ -5,7 +5,7 @@ import { addInferred } from './infer';
 import { computeEdges, edgePath, gridLayout, NODE_WIDTH, nodeRects, type Anchor, type Rect } from './layout';
 import type { Position, Table } from './model';
 import { mysqlParser } from './parse/mysql';
-import { curveBlocked, curvePath, roundedPath, routeAround } from './route';
+import { curveBlocked, curveBounds, curvePath, pathBlocked, roundedPath, routeAround } from './route';
 
 /** The tables of a MySQL dump, with the relationships its column names point to. */
 function dumped(sql: string): Table[] {
@@ -184,5 +184,37 @@ describe('computeEdges around tables', () => {
   it('leaves the lines of the ecommerce sample the curves they are', () => {
     const { tables, positions } = ecommerceSnapshot();
     expect(computeEdges(tables, positions).some((e) => e.via)).toBe(false);
+  });
+});
+
+describe('curveBounds', () => {
+  it('holds the curve between two ends', () => {
+    const a: Anchor = { x: 100, y: 50, side: 1 };
+    const b: Anchor = { x: 400, y: 250, side: -1 };
+    const bounds = curveBounds(a, b);
+    expect(bounds).toEqual({ x: 100, y: 50, w: 300, h: 200 });
+    // A curve that is pulled out of the same side at both ends reaches past them.
+    const loop = curveBounds({ x: 100, y: 50, side: 1 }, { x: 100, y: 200, side: 1 });
+    expect(loop.x).toBe(100);
+    expect(loop.w).toBe(36);
+  });
+});
+
+describe('pathBlocked', () => {
+  const tables: Rect[] = [{ x: 100, y: 100, w: 100, h: 100 }];
+
+  it('is true when a stretch of the line crosses a table, and false when it goes by or along its side', () => {
+    expect(pathBlocked([{ x: 0, y: 150 }, { x: 300, y: 150 }], tables)).toBe(true);
+    expect(pathBlocked([{ x: 150, y: 0 }, { x: 150, y: 120 }], tables)).toBe(true);
+    expect(pathBlocked([{ x: 0, y: 50 }, { x: 300, y: 50 }], tables)).toBe(false);
+    expect(pathBlocked([{ x: 100, y: 0 }, { x: 100, y: 300 }], tables)).toBe(false);
+    expect(pathBlocked([{ x: 0, y: 100 }, { x: 300, y: 100 }], tables)).toBe(false);
+    expect(pathBlocked([{ x: 0, y: 0 }], tables)).toBe(false);
+  });
+
+  it('is false for the lines that routeAround draws', () => {
+    const { tables: all, positions } = ecommerceSnapshot();
+    const rects = nodeRects(all, positions);
+    for (const e of computeEdges(all, positions)) if (e.via) expect(pathBlocked(e.via, rects)).toBe(false);
   });
 });

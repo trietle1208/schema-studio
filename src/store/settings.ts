@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_LOCALE, LOCALE_STORAGE_KEY, parseLocale, setLocale, type Locale } from '../core/i18n';
+import { DEFAULT_NOTATION, NOTATION_STORAGE_KEY, parseNotation, type Notation } from '../core/notation';
 import {
   clampPanelWidth,
   formatPanelWidths,
@@ -21,6 +22,10 @@ export interface SettingsState {
   locale: Locale;
   /** Makes the app speak `locale` at once and keeps the choice for the next visit. */
   setLocale: (locale: Locale) => void;
+  /** How the ends of the relationship lines are drawn on the canvas and in a picture of the diagram. */
+  notation: Notation;
+  /** Draws the relationship lines in `notation` at once and keeps the choice for the next visit. */
+  setNotation: (notation: Notation) => void;
   /** How wide the sidebar and the inspector are. */
   panels: PanelWidths;
   /**
@@ -58,6 +63,15 @@ function storedLocale(): Locale {
 function applyLocale(locale: Locale) {
   setLocale(locale);
   document.documentElement.lang = locale;
+}
+
+/** The notation chosen on an earlier visit. */
+function storedNotation(): Notation {
+  try {
+    return parseNotation(localStorage.getItem(NOTATION_STORAGE_KEY));
+  } catch {
+    return DEFAULT_NOTATION;
+  }
 }
 
 /** The widths the panels were given on an earlier visit. */
@@ -98,6 +112,15 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       // The language still holds until the page is closed.
     }
     set({ locale });
+  },
+  notation: storedNotation(),
+  setNotation: (notation) => {
+    try {
+      localStorage.setItem(NOTATION_STORAGE_KEY, notation);
+    } catch {
+      // The notation still holds until the page is closed.
+    }
+    set({ notation });
   },
   panels: storedPanels(),
   setPanelWidth: (panel, width) => {

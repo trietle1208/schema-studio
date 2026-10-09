@@ -4,6 +4,7 @@ import monoSemiBold from '../../design-system/fonts/GeistMono-SemiBold.woff2?url
 import { generateDiagram, imageScale, type Diagram, type DiagramColors } from '../core/generate/diagram';
 import { GROUP_COLORS } from '../core/groups';
 import type { GroupColor, SchemaSnapshot } from '../core/model';
+import type { Notation } from '../core/notation';
 import type { Theme } from '../core/theme';
 import type { DiagramImage } from './exportActions';
 
@@ -84,6 +85,8 @@ export async function renderPng(svg: string, width: number, height: number, scal
 
 export interface DiagramExportOptions {
   theme: Theme;
+  /** How the ends of the relationship lines are drawn. */
+  notation: Notation;
   /** Leaves out the colour of the canvas behind the tables. */
   transparent: boolean;
   /** An SVG file brings the mono face with it. A PNG is always drawn in it. */
@@ -122,16 +125,16 @@ export function useDiagramExport(snapshot: SchemaSnapshot, options: DiagramExpor
     };
   }, [wanted]);
 
-  const { theme, transparent, embedFonts } = options;
+  const { theme, notation, transparent, embedFonts } = options;
   const colors = useMemo(() => (wanted ? diagramColors(theme) : null), [wanted, theme]);
   const plain = useMemo(
-    () => colors && generateDiagram(snapshot, colors, { background: !transparent }),
-    [snapshot, colors, transparent],
+    () => colors && generateDiagram(snapshot, colors, { background: !transparent, notation }),
+    [snapshot, colors, transparent, notation],
   );
   const drawn = useMemo(() => {
     if (!colors || fontCss === null) return null;
-    return fontCss ? generateDiagram(snapshot, colors, { background: !transparent, fontCss }) : plain;
-  }, [snapshot, colors, transparent, fontCss, plain]);
+    return fontCss ? generateDiagram(snapshot, colors, { background: !transparent, notation, fontCss }) : plain;
+  }, [snapshot, colors, transparent, notation, fontCss, plain]);
   if (!colors || !plain) return null;
   const scale = imageScale(plain.width, plain.height, options.scale);
   return {
@@ -141,7 +144,7 @@ export function useDiagramExport(snapshot: SchemaSnapshot, options: DiagramExpor
     pixels: { width: Math.round(plain.width * scale), height: Math.round(plain.height * scale) },
     png: async () => {
       const css = await diagramFonts();
-      const { svg, width, height } = css ? generateDiagram(snapshot, colors, { background: !transparent, fontCss: css }) : plain;
+      const { svg, width, height } = css ? generateDiagram(snapshot, colors, { background: !transparent, notation, fontCss: css }) : plain;
       return renderPng(svg, width, height, scale);
     },
   };

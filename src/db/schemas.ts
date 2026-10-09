@@ -79,6 +79,34 @@ export function restoreVersion(schemaId: number, version: number): Promise<Store
   });
 }
 
+/** The longest name and note a version is given; more is cut off. */
+export const MAX_VERSION_MESSAGE = 120;
+export const MAX_VERSION_NOTE = 2000;
+
+/**
+ * Renames a version and sets its note. Both are trimmed; a blank message makes the history list the
+ * version by what it changed, and a blank note is not stored. The snapshot is not touched.
+ */
+export function describeVersion(schemaId: number, version: number, { message, note }: { message: string; note: string }): Promise<VersionRecord> {
+  return db.transaction('rw', db.versions, async () => {
+    const stored = await getVersion(schemaId, version);
+    if (!stored) throw new Error(t('db.versionGone', { version: versionLabel(version) }));
+    const text = note.trim().slice(0, MAX_VERSION_NOTE);
+    const { id, schemaId: owner, createdAt, snapshot } = stored;
+    const described: VersionRecord = {
+      id,
+      schemaId: owner,
+      version,
+      message: message.trim().slice(0, MAX_VERSION_MESSAGE),
+      ...(text ? { note: text } : {}),
+      createdAt,
+      snapshot,
+    };
+    await db.versions.put(described);
+    return described;
+  });
+}
+
 /** Removes a schema and every version of it. Removing one that is already gone does nothing. */
 export function deleteSchema(id: number): Promise<void> {
   return db.transaction('rw', db.schemas, db.versions, async () => {

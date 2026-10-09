@@ -8,6 +8,7 @@ import {
   diffFileName,
   excerptAround,
   exportFileName,
+  firstLines,
   formatBytes,
   migrationFileName,
   schemaNameFromFile,
@@ -22,6 +23,8 @@ describe('exportFileName', () => {
     expect(exportFileName('ecommerce', 12, 'json')).toBe('ecommerce_v12.json');
     expect(exportFileName('ecommerce', 12, 'svg')).toBe('ecommerce_v12.svg');
     expect(exportFileName('ecommerce', 12, 'png')).toBe('ecommerce_v12.png');
+    expect(exportFileName('ecommerce', 12, 'seed')).toBe('ecommerce_v12_seed.sql');
+    expect(exportFileName('draft', null, 'seed')).toBe('draft_seed.sql');
   });
 
   it('leaves the version out for a schema that is not saved', () => {
@@ -60,6 +63,18 @@ describe('byteLength and formatBytes', () => {
     const sql = postgresGenerator.generate(ecommerceSnapshot().tables);
     expect(byteLength(sql)).toBe(sql.length);
     expect(formatBytes(byteLength(sql))).toMatch(/^\d\.\d KB$/);
+  });
+});
+
+describe('firstLines', () => {
+  it('keeps a text that is short enough as it is', () => {
+    expect(firstLines('a\nb\n', 2)).toEqual({ text: 'a\nb\n', shown: 2, total: 2 });
+    expect(firstLines('', 5)).toEqual({ text: '', shown: 0, total: 0 });
+  });
+
+  it('cuts a longer one to its first lines and counts all of them', () => {
+    expect(firstLines('a\nb\nc\nd\n', 2)).toEqual({ text: 'a\nb\n', shown: 2, total: 4 });
+    expect(firstLines('a\nb\nc', 1)).toEqual({ text: 'a\n', shown: 1, total: 3 });
   });
 });
 

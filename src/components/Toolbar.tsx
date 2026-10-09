@@ -1,8 +1,10 @@
-import type { ReactNode, Ref } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { t } from '../core/i18n';
-import { stepZoom, ZOOM_STEP } from '../core/layout';
+import { LARGE_TABLE, stepZoom, ZOOM_STEP } from '../core/layout';
 import { Badge } from './Badge';
+import type { ColumnsChoice } from '../core/edit';
 import { Button } from './Button';
+import { ContextMenu } from './ContextMenu';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Input } from './Input';
@@ -65,6 +67,49 @@ export function Crumb({ onClick, className, children }: CrumbProps) {
   );
 }
 
+/** The button of the toolbar that opens the menu of what the tables show of their columns. */
+function ColumnsMenu({ onChoose, selected }: { onChoose: (choice: ColumnsChoice) => void; selected?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  // A press anywhere else, or Esc, closes it.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setOpen(false);
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, [open]);
+  return (
+    <div ref={box} style={{ position: 'relative' }}>
+      <IconButton icon="columns" label={selected ? t('columns.menuSelected') : t('columns.menu')} onClick={() => setOpen((o) => !o)} />
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 30 }}>
+          <ContextMenu
+            label={selected ? t('columns.menuSelected') : t('columns.menu')}
+            onClose={() => setOpen(false)}
+            items={[
+              { icon: 'columns', label: t('columns.all'), onSelect: () => onChoose('all') },
+              { icon: 'key', label: t('columns.keys'), onSelect: () => onChoose('keys') },
+              { icon: 'minus', label: t('columns.none'), onSelect: () => onChoose('none') },
+              ...(selected ? [] : (['-', { icon: 'filter', label: `${t('columns.large')} · ${t('columns.largeHint', { count: LARGE_TABLE })}`, onSelect: () => onChoose('large') }] as const)),
+            ]}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface ToolbarProps {
   schema?: string;
   engine?: string;
@@ -79,6 +124,10 @@ export interface ToolbarProps {
   onArrange?: () => void;
   /** Several tables are selected: the button arranges only them, and says so. */
   arrangeSelected?: boolean;
+  /** Adds the "Columns" menu next to them: what the tables show of their columns. */
+  onShowColumns?: (choice: ColumnsChoice) => void;
+  /** Several tables are selected: the menu applies to them, and says so. */
+  columnsSelected?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
   canUndo?: boolean;
@@ -107,6 +156,8 @@ export function Toolbar({
   onFit,
   onArrange,
   arrangeSelected,
+  onShowColumns,
+  columnsSelected,
   onUndo,
   onRedo,
   canUndo,
@@ -162,6 +213,7 @@ export function Toolbar({
         {onArrange && (
           <IconButton icon="sparkle" label={`${arrangeSelected ? t('action.arrangeSelected') : t('action.arrange')} (⇧A)`} onClick={onArrange} />
         )}
+        {onShowColumns && <ColumnsMenu onChoose={onShowColumns} selected={columnsSelected} />}
       </div>
       <span className="ss-tb-sep" />
       <div className="ss-tb-search">

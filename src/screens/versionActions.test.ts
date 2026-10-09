@@ -8,7 +8,7 @@ import { selectDirty, useSchemaStore } from '../store/schema';
 import { memoryAddress } from '../store/testing';
 import { useUiStore, type Dialog } from '../store/ui';
 import { go, startRouting } from './navigation';
-import { exportDiff, exportVersion, generateMigration, requestRestore, restoreVersion } from './versionActions';
+import { editVersion, exportDiff, exportVersion, generateMigration, requestEditVersion, requestRestore, restoreVersion } from './versionActions';
 
 const schema = () => useSchemaStore.getState();
 const ui = () => useUiStore.getState();
@@ -139,5 +139,34 @@ describe('restoreVersion', () => {
     expect(ui().toast).toMatchObject({ tone: 'error', title: 'Could not restore version' });
     expect(schema().version).toBe(2);
     expect(await db.versions.count()).toBe(2);
+  });
+});
+
+describe('editVersion', () => {
+  it('opens its dialog for the version', () => {
+    requestEditVersion(1);
+    expect(ui().dialog).toEqual({ kind: 'edit-version', version: 1 });
+  });
+
+  it('stores the new name and note, closes the dialog and says so', async () => {
+    requestEditVersion(1);
+    await editVersion(1, { message: 'Legacy orders import', note: 'Dump of 2026-09-30.' });
+
+    expect(ui().dialog).toBeNull();
+    expect((await listVersions(shop.id)).map((v) => [v.version, v.message, v.note])).toEqual([
+      [2, 'Normalize order line items', undefined],
+      [1, 'Legacy orders import', 'Dump of 2026-09-30.'],
+    ]);
+    expect(ui().toast).toMatchObject({ title: 'Updated v1' });
+    // The workspace is not touched: no new version, nothing unsaved.
+    expect(schema().version).toBe(2);
+    expect(selectDirty(schema())).toBe(false);
+  });
+
+  it('says so when the version cannot be written, and changes nothing', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await editVersion(7, { message: 'x', note: '' });
+    expect(ui().toast).toMatchObject({ tone: 'error', title: 'Could not update version' });
+    expect((await listVersions(shop.id)).map((v) => v.message)).toEqual(['Normalize order line items', 'Imported from ecommerce_prod.sql']);
   });
 });

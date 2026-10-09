@@ -1,45 +1,64 @@
-import { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent, PointerEvent, ReactNode, Ref } from 'react';
 import {
   centreOn,
   clampZoom,
-  computeEdges,
   draggedWidth,
   drawnEnds,
-  edgeEndPaths,
   edgeEnds,
+  edgeMarks,
   edgePath,
   fitView,
   fittingWidth,
   minimapLayout,
   minimapPoint,
   rectBetween,
+  RING_RADIUS,
+  routeEdges,
+  rowOf,
+  nodeRects,
+  type Edge,
+  type EdgeSet,
   snap,
   tablesInRect,
   viewRect,
   widened,
   zoomAt,
+  type EdgeKind,
   type Ends,
   type MinimapScale,
   type Rect,
   type Size,
 } from '../core/layout';
+import type { ColumnsChoice } from '../core/edit';
 import { groupOf } from '../core/groups';
 import { t } from '../core/i18n';
 import type { Position, Positions, Table, TableGroup } from '../core/model';
+import { DEFAULT_NOTATION, type Notation } from '../core/notation';
 import { positionOf } from '../core/positions';
 import { qualifiedName, referenceProblem, type ColumnRef } from '../core/relations';
 import { ContextMenu, type MenuItem } from './ContextMenu';
 import { cx } from './cx';
 import { Icon } from './Icon';
 import { rich } from './rich';
-import { TableNode } from './TableNode';
+import { TableNode, type TableNodeProps } from './TableNode';
+import { useStableHandlers } from './useStableHandlers';
 
 const MINIMAP_SIZE: Size = { w: 168, h: 108 };
 const DRAG_THRESHOLD = 3;
 const WHEEL_ZOOM_SPEED = 0.0015;
 const MODIFIER_KEYS = ['Shift', 'Control', 'Meta', 'Alt'];
 const NO_GROUPS: readonly TableGroup[] = [];
+const NO_NAMES: ReadonlySet<string> = new Set();
+/** A diagram of more tables than this draws only the ones near the visible area, and the tables without their rows when zoomed far out. */
+const LARGE_DIAGRAM = 60;
+/** How far past the visible area, in canvas units, tables are still drawn, and the steps their bounds move in so that panning does not redraw them all the time. */
+const CULL_MARGIN = 480;
+const CULL_STEP = 256;
+/** Below this zoom the rows of a table of a large diagram are too small to read: the table is drawn as its head over a blank body. */
+const LITE_ZOOM = 0.45;
+/** How long one pass looks for ways around tables, so that a diagram of hundreds of tables stays responsive while its lines are found. */
+const ROUTE_PASS_MS = 12;
 
 export interface CanvasMenu {
   /** The table the menu is for; null for the menu of the empty canvas. */
@@ -110,6 +129,13 @@ export interface ERCanvasProps {
   onNewTable?: (position: Position) => void;
   /** "Arrange tables" in the menu of the empty canvas, "Arrange selected tables" while several are selected. Without it the menu does not offer it. */
   onArrange?: () => void;
+  /** How the ends of the relationship lines are drawn. Crow's foot when it is left out. */
+  notation?: Notation;
+  /**
+   * "Show key columns only", "Hide columns", "Show all columns" and "Collapse large tables" in the
+   * menus: what `choice` says for the tables called `names`, or for every table without them.
+   */
+  onShowColumns?: (choice: ColumnsChoice, names?: readonly string[]) => void;
   /** The groups of the tables: a table of one has its colour, and the canvas lists them over the legend. */
   groups?: readonly TableGroup[];
   /** "Table groups…" in the menu of the empty canvas. Without it the menu does not offer it. */
@@ -164,16 +190,75 @@ interface Link {
   over: Row | null;
 }
 
-// One bar at the referenced (one) end, a crow's foot at the foreign-key (many) end.
-function EdgeEnds(ends: Ends) {
-  const { one, many } = edgeEndPaths(ends);
+// The marks at the two ends of a line: which table is referenced, and how many rows may be on each side.
+function EdgeEnds({ notation, ...kind }: EdgeKind & { notation: Notation }) {
+  const { paths, rings } = edgeMarks(kind, notation);
   return (
     <>
-      <path className="ss-edge-end" d={one} />
-      <path className="ss-edge-end" d={many} />
+      {paths.map((d) => (
+        <path key={d} className="ss-edge-end" d={d} />
+      ))}
+      {rings.map((c) => (
+        <circle key={`${c.x},${c.y}`} className="ss-edge-ring" cx={c.x} cy={c.y} r={RING_RADIUS} />
+      ))}
     </>
   );
 }
+
+/** What a table on the canvas does with the pointer: the same functions for a table from one render to the next. */
+type NodeHandlers = Pick<
+  TableNodeProps,
+  'onSelect' | 'onSelectColumn' | 'onPointerDown' | 'onColumnPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onContextMenu' | 'onResizeDown' | 'onResizeFit'
+>;
+
+/** What the canvas does when a table is pressed, clicked or dragged, as of the latest render. */
+interface NodeActions {
+  onNodeClick: (name: string, e: MouseEvent) => void;
+  onNodeDown: (name: string, e: PointerEvent<HTMLDivElement>) => void;
+  onColumnDown: (name: string, index: number, e: PointerEvent<HTMLDivElement>) => void;
+  onNodeMove: (e: PointerEvent) => void;
+  onNodeUp: (e: PointerEvent) => void;
+  onNodeMenu: (name: string, e: MouseEvent) => void;
+  onResizeDown: (name: string, side: 1 | -1, e: PointerEvent<HTMLDivElement>) => void;
+  onResizeFit: (name: string) => void;
+  onSelectColumn?: (index: number | null) => void;
+  onSelectTables?: (names: readonly string[]) => void;
+}
+
+/** The handlers of one table; `resizable` gives it handles at its sides. */
+function makeHandlers(name: string, current: () => NodeActions, resizable: boolean): NodeHandlers {
+  return {
+    onSelect: (n, e) => current().onNodeClick(n, e),
+    // Shift + click on a row is for its table, as on the head: it opens no column.
+    onSelectColumn: (i, e) => {
+      if (!e.shiftKey || !current().onSelectTables) current().onSelectColumn?.(i);
+    },
+    onPointerDown: (e) => current().onNodeDown(name, e),
+    onColumnPointerDown: (i, e) => current().onColumnDown(name, i, e),
+    onPointerMove: (e) => current().onNodeMove(e),
+    onPointerUp: (e) => current().onNodeUp(e),
+    onContextMenu: (e) => current().onNodeMenu(name, e),
+    onResizeDown: resizable ? (side, e) => current().onResizeDown(name, side, e) : undefined,
+    onResizeFit: () => current().onResizeFit(name),
+  };
+}
+
+interface EdgeLineProps {
+  edge: Edge;
+  /** How the line stands to the selected tables: on one of them, or not (when something is selected), or neither. */
+  mode: 'active' | 'dim' | 'plain';
+  notation: Notation;
+}
+
+/** One relationship line. It is redrawn only when its line, or how it stands to the selection, changes. */
+const EdgeLine = memo(function EdgeLine({ edge: e, mode, notation }: EdgeLineProps) {
+  return (
+    <g className={cx('ss-edge-g', e.inferred && 'is-inferred', mode === 'active' && 'is-active', mode === 'dim' && 'is-dim')}>
+      <path className="ss-edge" d={edgePath(e.a, e.b, e.via)} />
+      <EdgeEnds {...e} notation={notation} />
+    </g>
+  );
+});
 
 interface MinimapProps {
   tables: Table[];
@@ -294,6 +379,8 @@ export function ERCanvas({
   onShowAll,
   onNewTable,
   onArrange,
+  notation = DEFAULT_NOTATION,
+  onShowColumns,
   groups = NO_GROUPS,
   onGroups,
   onInferRelations,
@@ -319,6 +406,8 @@ export function ERCanvas({
   const [menu, setMenu] = useState<CanvasMenu | null>(initialMenu ?? null);
   const [size, setSize] = useState<Size>({ w: 840, h: 800 });
   const [seenFit, setSeenFit] = useState(fitSignal);
+  /** Counts the passes that look for the ways around tables; each one is a render of its own. */
+  const [pass, setPass] = useState(0);
   const drag = useRef<DragState | null>(null);
   /** Set once a table is dragged or a foreign key drawn: the click that ends the drag is not a click on what it began on. */
   const swallowClick = useRef(false);
@@ -533,7 +622,7 @@ export function ERCanvas({
   function onResizeFit(name: string) {
     const sizes = Object.entries(originsOf(name)).flatMap(([n, p]) => {
       const table = tables.find((t) => t.name === n);
-      return table ? [[n, widened(p, fittingWidth(table))] as const] : [];
+      return table ? [[n, widened(p, fittingWidth(table, p))] as const] : [];
     });
     onResizeTables?.(Object.fromEntries(sizes));
     onMoveEnd?.(name);
@@ -648,8 +737,26 @@ export function ERCanvas({
 
   const closeMenu = () => setMenu(null);
   const menuSchema = (menu && tables.find((t) => t.name === menu.table)?.schema) || 'public';
-  // Not on every pan and zoom: a line that goes around tables is looked for among all of them.
-  const edges = useMemo(() => computeEdges(tables, positions), [tables, positions]);
+  // A line that goes around tables is looked for among all of them, which takes long in a large
+  // diagram. So the lines are found a pass at a time: each pass keeps the lines that are still
+  // right, looks for the ones that are not until its time is up, and leaves the rest as curves for
+  // the next pass. Not on every pan and zoom, but on every change of the tables and their places.
+  // While tables are dragged or resized the lines that need a way around are left as curves, which is
+  // quick; they are found once the pointer is let go.
+  const busy = !!dragged || !!resized;
+  const limit = busy ? { searches: 0 } : { ms: ROUTE_PASS_MS };
+  const [found, setFound] = useState<EdgeSet>(() => routeEdges(tables, positions, [], limit));
+  const [routedFor, setRoutedFor] = useState({ tables, positions, pass: 0 });
+  if (routedFor.tables !== tables || routedFor.positions !== positions || routedFor.pass !== pass) {
+    setRoutedFor({ tables, positions, pass });
+    setFound(routeEdges(tables, positions, found.edges, limit));
+  }
+  useEffect(() => {
+    if (!found.pending || busy) return;
+    const timer = setTimeout(() => setPass((n) => n + 1), 0);
+    return () => clearTimeout(timer);
+  }, [found, busy]);
+  const edges = found.edges;
 
   // The foreign key that is being drawn: its two columns, why it cannot end where the pointer is,
   // and its line, which ends on the column as the relationship will once the column is one it can end on.
@@ -660,7 +767,14 @@ export function ERCanvas({
   const linkEnd = link?.over && linkTo && !linkProblem ? positionOf(positions, link.over.table) : undefined;
   let drawn: Ends | null = null;
   if (link && linkAt) {
-    drawn = link.over && linkEnd ? edgeEnds(linkAt, link.from.column, linkEnd, link.over.column) : drawnEnds(linkAt, link.from.column, link.at);
+    // The rows are those the tables show: a table that shows fewer columns has the line end at its head for the others.
+    const rowIn = (name: string, column: number) => {
+      const table = tables.find((t) => t.name === name);
+      return table ? rowOf(table, positionOf(positions, name), column) : column;
+    };
+    drawn = link.over && linkEnd
+      ? edgeEnds(linkAt, rowIn(link.from.table, link.from.column), linkEnd, rowIn(link.over.table, link.over.column))
+      : drawnEnds(linkAt, rowIn(link.from.table, link.from.column), link.at);
   }
   let linkHint: ReactNode = null;
   if (linkFrom) {
@@ -682,6 +796,17 @@ export function ERCanvas({
     .map((group) => ({ group, shown: tables.filter((t) => group.tables.includes(t.name)).map((t) => t.name) }))
     .filter((g) => g.shown.length > 0);
 
+  /** The menu entries for what the tables show of their columns; for `names`, or for every table without them. */
+  const columnItems = (names?: readonly string[]): MenuItem[] =>
+    onShowColumns
+      ? [
+          { icon: 'key', label: t('columns.keys'), onSelect: () => onShowColumns('keys', names) },
+          { icon: 'minus', label: t('columns.none'), onSelect: () => onShowColumns('none', names) },
+          { icon: 'columns', label: t('columns.all'), onSelect: () => onShowColumns('all', names) },
+          ...(names ? [] : [{ icon: 'filter' as const, label: t('columns.large'), onSelect: () => onShowColumns('large') }]),
+        ]
+      : [];
+
   const menuTable = menu ? menu.table : null;
   let items: (MenuItem | '-')[] | null = null;
   if (menu && menuTable === null) {
@@ -692,6 +817,7 @@ export function ERCanvas({
     }
     if (focused != null && onShowAll) items.push({ icon: 'eye', label: t('action.showAllTables'), onSelect: onShowAll });
     if (onGroups) items.push({ icon: 'folder', label: t('canvas.menu.groups'), onSelect: onGroups });
+    if (onShowColumns) items.push('-', ...columnItems(chosen.length > 1 ? chosen : undefined));
     if (onInferRelations || onReviewInferred || onRemoveInferred) items.push('-');
     if (onInferRelations) items.push({ icon: 'link', label: t('action.inferRelationships'), onSelect: onInferRelations });
     if (onReviewInferred) items.push({ icon: 'check', label: t('canvas.menu.reviewInferred'), onSelect: onReviewInferred });
@@ -710,10 +836,62 @@ export function ERCanvas({
           focused === table && onShowAll
             ? { icon: 'eye', label: t('action.showAllTables'), onSelect: onShowAll }
             : { icon: 'eye', label: t('canvas.menu.focus'), onSelect: () => onFocusRelated?.(table) },
+          ...(onShowColumns ? ['-' as const, ...columnItems(isChosen.has(table) ? chosen : [table])] : []),
           '-',
           { icon: 'trash', label: t('action.deleteTable'), shortcut: '⌫', danger: true, onSelect: () => onDeleteTable?.(table) },
         ];
   }
+
+  // A diagram of hundreds of tables is not drawn whole: only the tables near the visible area are, and
+  // zoomed far out only their heads. The area moves in steps, so that panning does not redraw all the time.
+  const culling = tables.length > LARGE_DIAGRAM;
+  const lite = culling && zoom < LITE_ZOOM;
+  const seen = viewRect(offset, zoom, size);
+  const left = Math.floor((seen.x - CULL_MARGIN) / CULL_STEP) * CULL_STEP;
+  const top = Math.floor((seen.y - CULL_MARGIN) / CULL_STEP) * CULL_STEP;
+  const right = Math.ceil((seen.x + seen.w + CULL_MARGIN) / CULL_STEP) * CULL_STEP;
+  const bottom = Math.ceil((seen.y + seen.h + CULL_MARGIN) / CULL_STEP) * CULL_STEP;
+  const inView = useMemo(() => {
+    if (!culling) return null;
+    const window = { x: left, y: top, w: right - left, h: bottom - top };
+    return new Set(nodeRects(tables, positions).filter((r) => r.x < left + window.w && r.x + r.w > left && r.y < top + window.h && r.y + r.h > top).map((r) => r.name));
+  }, [culling, tables, positions, left, top, right, bottom]);
+  const isShown = (name: string) =>
+    !inView || inView.has(name) || isChosen.has(name) || !!dragged?.has(name) || !!resized?.has(name) || link?.from.table === name || link?.over?.table === name;
+  const shownEdges = useMemo(() => {
+    if (!culling) return edges;
+    return edges.filter((e) => {
+      const points = e.via ?? [e.a, e.b];
+      const x1 = Math.min(...points.map((p) => p.x));
+      const x2 = Math.max(...points.map((p) => p.x));
+      const y1 = Math.min(...points.map((p) => p.y));
+      const y2 = Math.max(...points.map((p) => p.y));
+      return x1 < right && x2 > left && y1 < bottom && y2 > top;
+    });
+  }, [culling, edges, left, top, right, bottom]);
+
+  // The tables that stay clear when some are selected: those and the tables one foreign key from them.
+  const chosenKey = chosen.join('\u0000');
+  const related = useMemo(() => {
+    if (!chosenKey) return null;
+    const own = new Set(chosenKey.split('\u0000'));
+    const names = new Set(own);
+    for (const e of edges) {
+      if (own.has(e.from)) names.add(e.to);
+      if (own.has(e.to)) names.add(e.from);
+    }
+    return names;
+  }, [chosenKey, edges]);
+  const groupByTable = useMemo(() => new Map(groups.flatMap((g) => g.tables.map((name) => [name, g] as const)).reverse()), [groups]);
+  const dirtySet = useMemo(() => (dirtyTables?.length ? new Set(dirtyTables) : NO_NAMES), [dirtyTables]);
+
+  // Every table gets the same handlers from one render to the next, so that a table whose own props
+  // did not change is not drawn again when the canvas is panned or another table is dragged.
+  const handlersFor = useStableHandlers(
+    { onNodeClick, onNodeDown, onColumnDown, onNodeMove, onNodeUp, onNodeMenu, onResizeDown, onResizeFit, onSelectColumn, onSelectTables },
+    makeHandlers,
+    !readOnly && !!onResizeTables,
+  );
 
   return (
     <div
@@ -739,23 +917,15 @@ export function ERCanvas({
     >
       <div className="ss-canvas-layer" style={{ transform: `translate(${offset.x}px,${offset.y}px) scale(${zoom})` }}>
         <svg className="ss-edges" width={1} height={1}>
-          {edges.map((e) => {
+          {shownEdges.map((e) => {
             const active = isChosen.has(e.from) || isChosen.has(e.to);
-            return (
-              <g key={e.id} className={cx('ss-edge-g', e.inferred && 'is-inferred', active && 'is-active', chosen.length > 0 && !active && 'is-dim')}>
-                <path className="ss-edge" d={edgePath(e.a, e.b, e.via)} />
-                <EdgeEnds {...e} />
-              </g>
-            );
+            return <EdgeLine key={e.id} edge={e} mode={active ? 'active' : chosen.length > 0 ? 'dim' : 'plain'} notation={notation} />;
           })}
         </svg>
         {tables.map((t) => {
           const q = positionOf(positions, t.name);
-          if (!q) return null;
-          const related =
-            !chosen.length ||
-            isChosen.has(t.name) ||
-            edges.some((e) => (isChosen.has(e.from) && e.to === t.name) || (isChosen.has(e.to) && e.from === t.name));
+          if (!q || !isShown(t.name)) return null;
+          const chosenHere = isChosen.has(t.name);
           return (
             <TableNode
               key={t.name}
@@ -763,29 +933,20 @@ export function ERCanvas({
               x={q.x}
               y={q.y}
               width={q.w}
-              selected={isChosen.has(t.name)}
-              group={groupOf(groups, t.name)}
+              cols={q.cols}
+              lite={lite}
+              selected={chosenHere}
+              group={groupByTable.get(t.name)}
               // While a foreign key is drawn every table is one it may end on, and none is faded.
-              dimmed={dimUnrelated && !related && !link}
+              dimmed={!!dimUnrelated && !!related && !related.has(t.name) && !link}
               dragging={!!dragged && dragged.has(t.name)}
               resizing={!!resized && resized.has(t.name)}
-              dirty={!!dirtyTables && dirtyTables.includes(t.name)}
-              selectedColumn={selectedColumn}
+              dirty={dirtySet.has(t.name)}
+              selectedColumn={chosenHere ? selectedColumn : null}
               invalidColumns={sel === t.name ? invalidColumns : null}
               linkColumn={link?.from.table === t.name ? link.from.column : link?.over?.table === t.name ? link.over.column : null}
               linkRefused={!!linkProblem && link?.over?.table === t.name}
-              onSelect={onNodeClick}
-              // Shift + click on a row is for its table, as on the head: it opens no column.
-              onSelectColumn={(i, e) => {
-                if (!e.shiftKey || !onSelectTables) onSelectColumn?.(i);
-              }}
-              onPointerDown={(e) => onNodeDown(t.name, e)}
-              onColumnPointerDown={(i, e) => onColumnDown(t.name, i, e)}
-              onPointerMove={onNodeMove}
-              onPointerUp={onNodeUp}
-              onContextMenu={(e) => onNodeMenu(t.name, e)}
-              onResizeDown={readOnly || !onResizeTables ? undefined : (side, e) => onResizeDown(t.name, side, e)}
-              onResizeFit={() => onResizeFit(t.name)}
+              {...handlersFor(t.name)}
             />
           );
         })}
@@ -794,7 +955,7 @@ export function ERCanvas({
           <svg className="ss-edges" width={1} height={1}>
             <g className={cx('ss-edge-g', 'is-active', !linkEnd && 'is-open')}>
               <path className="ss-edge" d={edgePath(drawn.a, drawn.b)} />
-              {linkEnd && <EdgeEnds {...drawn} />}
+              {linkEnd && <EdgeEnds {...drawn} notation={notation} />}
             </g>
           </svg>
         )}

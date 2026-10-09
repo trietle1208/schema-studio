@@ -19,13 +19,19 @@ export interface SchemaRecord {
   updatedAt: number;
 }
 
-/** One row per saved version. A row is written once and never changed. */
+/**
+ * One row per saved version. The snapshot of a row is written once and never changed; only the
+ * words about it, `message` and `note`, can be edited afterwards (see `describeVersion`).
+ */
 export interface VersionRecord {
   id: number;
   schemaId: number;
   /** Counts up from 1 within a schema. */
   version: number;
+  /** What the version is called in the history. Blank for a version that is listed by what it changed. */
   message: string;
+  /** A longer text about the version. Left out when there is none. */
+  note?: string;
   createdAt: number;
   snapshot: SchemaSnapshot;
 }

@@ -3,7 +3,9 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { DiffList } from '../components/DiffList';
 import { ERCanvas, type ERCanvasActions } from '../components/ERCanvas';
+import { IconButton } from '../components/IconButton';
 import { Input } from '../components/Input';
+import { Select } from '../components/Select';
 import { VersionList } from '../components/VersionList';
 import { blockTable } from '../core/generate/options';
 import { groupsOf } from '../core/groups';
@@ -14,7 +16,7 @@ import { useVersions } from '../db/useSchemas';
 import { useSchemaStore } from '../store/schema';
 import { go } from './navigation';
 import { SchemaCrumbs } from './SchemaCrumbs';
-import { exportVersion, requestRestore } from './versionActions';
+import { exportVersion, requestEditVersion, requestRestore } from './versionActions';
 
 const PANEL = { background: 'var(--bg-2)', border: '1px solid var(--line-1)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' };
 const PANEL_HEAD = { padding: '10px 12px', borderBottom: '1px solid var(--line-1)' };
@@ -80,7 +82,7 @@ export function VersionHistory({ now }: VersionHistoryProps) {
           </div>
         </div>
         <div style={{ flex: 1, minWidth: 0, overflow: 'auto', background: 'var(--bg-1)' }}>
-          {selected && <VersionDetail key={selected.version} entry={selected} current={current} now={now} />}
+          {selected && <VersionDetail key={selected.version} entry={selected} current={current} others={entries.map((e) => e.version)} now={now} />}
         </div>
       </div>
     </>
@@ -91,11 +93,13 @@ interface VersionDetailProps {
   entry: VersionEntry;
   /** The number of the schema's current version. */
   current: number;
+  /** The numbers of all the versions, newest first. */
+  others: readonly number[];
   now: number;
 }
 
 /** One version: its numbers, what it changed from the version before, and its diagram. */
-function VersionDetail({ entry, current, now }: VersionDetailProps) {
+function VersionDetail({ entry, current, others, now }: VersionDetailProps) {
   const name = useSchemaStore((s) => s.name);
   const summary = versionSummary(entry, current, now);
   const { tables, positions } = entry.snapshot;
@@ -109,6 +113,11 @@ function VersionDetail({ entry, current, now }: VersionDetailProps) {
   useEffect(() => {
     canvas.current?.fit();
   }, []);
+
+  /** Any other version can be compared with this one, the older of the two as the base. */
+  const compareWith = (other: number) => {
+    if (Number.isFinite(other)) go({ screen: 'diff', schema: name, from: Math.min(other, entry.version), to: Math.max(other, entry.version) });
+  };
 
   /** A change that is picked in the list shows its table in the diagram, when the version still has it. */
   const pick = (path: string, item: DiffItem) => {
@@ -129,6 +138,7 @@ function VersionDetail({ entry, current, now }: VersionDetailProps) {
               {t('version.current')}
             </Badge>
           )}
+          <IconButton icon="pencil" label={t('history.edit')} size="sm" onClick={() => requestEditVersion(entry.version)} />
           <span className="ss-spacer" />
           <Button
             icon="diff"
@@ -139,6 +149,20 @@ function VersionDetail({ entry, current, now }: VersionDetailProps) {
           >
             {t('history.compare', { version: entry.previous === null ? '—' : versionLabel(entry.previous) })}
           </Button>
+          <Select
+            size="sm"
+            mono
+            // Always showing its caption: picking a version goes to the comparison, so nothing stays picked.
+            value=""
+            onChange={(v) => compareWith(Number(v))}
+            options={[
+              { value: '', label: t('history.compareWith'), disabled: true },
+              ...others.filter((n) => n !== entry.version).map((n) => ({ value: String(n), label: versionLabel(n) })),
+            ]}
+            label={t('history.compareWithLabel', { version: versionLabel(entry.version) })}
+            disabled={others.length < 2}
+            style={{ width: 132 }}
+          />
           <Button icon="restore" disabled={summary.current} onClick={() => requestRestore(entry.version)}>
             {t('action.restore')}
           </Button>
@@ -147,6 +171,14 @@ function VersionDetail({ entry, current, now }: VersionDetailProps) {
           </Button>
         </div>
         <div style={{ marginTop: 4, color: 'var(--ink-2)' }}>{summary.message}</div>
+        {summary.note && (
+          <div
+            aria-label={t('history.note')}
+            style={{ marginTop: 10, padding: '8px 12px', background: 'var(--bg-3)', border: '1px solid var(--line-1)', borderRadius: 'var(--radius-md)', color: 'var(--ink-2)', fontSize: 12.5, whiteSpace: 'pre-wrap' }}
+          >
+            {summary.note}
+          </div>
+        )}
         <div className="ss-stats" style={{ marginTop: 16 }}>
           <div className="ss-stat">
             <span className="ss-stat-k">{t('noun.tables')}</span>

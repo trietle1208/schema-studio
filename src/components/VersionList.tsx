@@ -2,6 +2,7 @@ import { t } from '../core/i18n';
 import type { Version } from '../core/model';
 import { Badge } from './Badge';
 import { cx } from './cx';
+import { Icon } from './Icon';
 
 export interface VersionListProps {
   /** Newest first. */
@@ -34,6 +35,7 @@ export function VersionList({ versions, selected, onSelect }: VersionListProps) 
                   {t('version.current')}
                 </Badge>
               )}
+              {v.note && <Icon name="file" size={12} className="ss-faint" label={t('history.note')} />}
               <span className="ss-ver-time">{v.time}</span>
             </span>
             <span className="ss-ver-msg" style={{ display: 'block' }}>

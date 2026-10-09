@@ -4,7 +4,7 @@ import { EXPORT_ENGINES, generatorFor } from '../core/generate';
 import { groupsOf } from '../core/groups';
 import { t } from '../core/i18n';
 import { versionLabel, type SavedVersion } from '../core/versions';
-import { restoreVersion as restoreStored } from '../db/schemas';
+import { describeVersion, restoreVersion as restoreStored } from '../db/schemas';
 import { useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
 import { exportFile } from './exportActions';
@@ -96,6 +96,33 @@ export async function restoreVersion(version: number): Promise<void> {
       tone: 'error',
       title: t('toast.restoreFailed.title'),
       description: t('toast.restoreFailed.description'),
+    });
+  }
+}
+
+/** Edit in the version history: opens the dialog that renames a version and writes a note on it. */
+export function requestEditVersion(version: number) {
+  useUiStore.getState().openDialog({ kind: 'edit-version', version });
+}
+
+/**
+ * The confirmed edit: stores the new name and note of a version of the open schema, which the
+ * history shows at once, and says in a toast how it went. Never rejects.
+ */
+export async function editVersion(version: number, words: { message: string; note: string }): Promise<void> {
+  const ui = useUiStore.getState();
+  const { id } = useSchemaStore.getState();
+  ui.closeDialog();
+  if (id === null) return;
+  try {
+    await describeVersion(id, version, words);
+    ui.showToast({ title: t('toast.versionEdited.title', { version: versionLabel(version) }) });
+  } catch (error) {
+    console.error(error);
+    ui.showToast({
+      tone: 'error',
+      title: t('toast.versionEditFailed.title'),
+      description: t('toast.versionEditFailed.description'),
     });
   }
 }

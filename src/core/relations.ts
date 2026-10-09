@@ -95,7 +95,7 @@ export function freeColumns(table: Table): Column[] {
 }
 
 /** A table's name as one of its rows is called: `users` → `user`, `categories` → `category`. Only the last word may be a plural. */
-function singular(name: string): string {
+export function singular(name: string): string {
   if (/[^aeiou]ies$/i.test(name)) return `${name.slice(0, -3)}y`;
   if (/(?:ss|x|ch|sh)es$/i.test(name)) return name.slice(0, -2);
   if (/s$/i.test(name) && !/(?:ss|us|is)$/i.test(name)) return name.slice(0, -1);

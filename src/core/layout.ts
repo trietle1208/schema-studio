@@ -1,6 +1,7 @@
-import type { Placement, Position, Positions, Table } from './model';
+import type { Column, Placement, Position, Positions, Table } from './model';
+import type { Notation } from './notation';
 import { positionOf } from './positions';
-import { curveBlocked, curvePath, roundedPath, routeAround } from './route';
+import { curveBlocked, curveBounds, curvePath, pathBlocked, roundedPath, routeAround } from './route';
 
 // Node metrics in canvas units. They mirror the design tokens (--w-node, --h-row) and the .ss-node-head height.
 export const NODE_WIDTH = 228;
@@ -25,8 +26,51 @@ export interface Size {
 
 export interface Rect extends Position, Size {}
 
-export function nodeHeight(table: Table): number {
-  return NODE_HEAD_HEIGHT + table.columns.length * NODE_ROW_HEIGHT + 4 + 2;
+/** A table with more columns than this is a large one: "Collapse large tables" shows only its key columns. */
+export const LARGE_TABLE = 12;
+
+/** Whether a column is one of the keys of its table: it is a primary key, references another table, or is unique. */
+export function isKeyColumn(column: Column): boolean {
+  return !!column.pk || !!column.fk || !!column.unique;
+}
+
+/**
+ * The columns of `table` that its place on the canvas shows, as indexes of `table.columns`: all of
+ * them, only the keys, or none. A column that a foreign key can reference is a primary key or a
+ * unique column, so every end of a relationship line is on a shown row.
+ */
+export function shownColumns(table: Table, at?: Pick<Placement, 'cols'>): number[] {
+  const all = table.columns.map((_, i) => i);
+  if (at?.cols === 'none') return [];
+  return at?.cols === 'keys' ? all.filter((i) => isKeyColumn(table.columns[i])) : all;
+}
+
+/** Whether the table shows a row that says how many columns it leaves out: it shows the keys, and has others. */
+export function hasMoreRow(table: Table, at?: Pick<Placement, 'cols'>): boolean {
+  return at?.cols === 'keys' && shownColumns(table, at).length < table.columns.length;
+}
+
+/** How many rows the table at `at` draws under its head. */
+function bodyRows(table: Table, at?: Pick<Placement, 'cols'>): number {
+  return shownColumns(table, at).length + (hasMoreRow(table, at) ? 1 : 0);
+}
+
+/** The height of a table, with the columns that `at` shows. A table that shows none is its head alone, and its two borders. */
+export function nodeHeight(table: Table, at?: Pick<Placement, 'cols'>): number {
+  return at?.cols === 'none' ? NODE_HEAD_HEIGHT + 2 : NODE_HEAD_HEIGHT + bodyRows(table, at) * NODE_ROW_HEIGHT + 4 + 2;
+}
+
+/**
+ * Where column `column` of `table` is among the rows it shows: its row number from 0, or -1 for a
+ * column it does not show, which a relationship line then meets at the head.
+ */
+export function rowOf(table: Table, at: Pick<Placement, 'cols'> | undefined, column: number): number {
+  return shownColumns(table, at).indexOf(column);
+}
+
+/** The placement `to` with the width and the columns shown of `like`, for a table that was moved. */
+export function lookOf(to: Position, like: Placement | undefined): Placement {
+  return { x: to.x, y: to.y, ...(like?.w === undefined ? {} : { w: like.w }), ...(like?.cols === undefined ? {} : { cols: like.cols }) };
 }
 
 export function snap(value: number, grid: number = GRID): number {
@@ -60,7 +104,7 @@ export function draggedWidth(at: Placement, side: 1 | -1, dx: number): number {
 export function widened(at: Placement, w: number, side: 1 | -1 = 1): Placement {
   const width = clampNodeWidth(w);
   const x = side === 1 ? at.x : at.x + nodeWidth(at) - width;
-  return width === NODE_WIDTH ? { x, y: at.y } : { x, y: at.y, w: width };
+  return { x, y: at.y, ...(width === NODE_WIDTH ? {} : { w: width }), ...(at.cols === undefined ? {} : { cols: at.cols }) };
 }
 
 // A table as the styles lay it out, for the width its text takes: a character of the mono face is
@@ -73,13 +117,14 @@ const COUNT_CHAR = 6.6;
 const ROW_CHROME = 2 * 11 + 14 + 6 + 6 + 6 + 18;
 const HEAD_CHROME = 2 * 11 + 14 + 7 + 7 + 6 + 7;
 
-/** The width at which the table shows its name and the name and type of every column whole, as far as a table can be that wide. */
-export function fittingWidth(table: Table): number {
+/** The width at which the table shows its name and the name and type of every column it shows whole, as far as a table can be that wide. */
+export function fittingWidth(table: Table, at?: Pick<Placement, 'cols'>): number {
   const schema = table.schema && table.schema !== 'public' ? `${table.schema}.` : '';
   const head = HEAD_CHROME + (schema + (table.name || 'unnamed')).length * CHAR + String(table.columns.length).length * COUNT_CHAR;
-  const rows = table.columns.map(
-    (c) => ROW_CHROME + ((c.name || 'unnamed').length + (c.type || '—').length + (c.nullable ? 1 : 0)) * CHAR,
-  );
+  const rows = shownColumns(table, at).map((i) => {
+    const c = table.columns[i];
+    return ROW_CHROME + ((c.name || 'unnamed').length + (c.type || '—').length + (c.nullable ? 1 : 0)) * CHAR;
+  });
   // To a tenth of a px first: the sum of the characters is not exact.
   const widest = Math.round(Math.max(head, ...rows) * 10) / 10;
   return clampNodeWidth(Math.ceil(widest / WIDTH_STEP) * WIDTH_STEP);
@@ -99,6 +144,11 @@ export interface Anchor extends Position {
   side: 1 | -1;
 }
 
+/** Whether no two rows of `table` can hold the same value in `column`: it is unique, or the only column of the primary key. */
+function isSingle(table: Table, column: Column): boolean {
+  return !!column.unique || (!!column.pk && table.columns.filter((c) => c.pk).length === 1);
+}
+
 /** A relationship line. `a` is the referenced column (one), `b` the foreign-key column (many). */
 export interface Edge {
   id: string;
@@ -108,6 +158,10 @@ export interface Edge {
   b: Anchor;
   /** Set for a foreign key that was inferred, which is drawn dashed. */
   inferred?: true;
+  /** Set when the foreign-key column may be empty: a row need not reference the other table. */
+  optional?: true;
+  /** Set when the foreign-key column is unique: a row of the referenced table is referenced by one row at most, a one-to-one relationship. */
+  single?: true;
   /**
    * The corners of the line, from `a` to `b`, when it goes around the tables that stand between
    * its two ends (see core/route). Left out for a line that is the curve between them.
@@ -120,17 +174,39 @@ export function edgePath(a: Anchor, b: Anchor, via?: readonly Position[]): strin
   return via ? roundedPath(via) : curvePath(a, b);
 }
 
+/** The radius of the ring that marks "zero" at an end of a relationship line (see `edgeMarks`). */
+export const RING_RADIUS = 3.5;
+
+/** The marks at the two ends of a relationship line: strokes, as the `d` of SVG paths, and the centres of rings. */
+export interface EdgeMarks {
+  paths: string[];
+  rings: Position[];
+}
+
+/** What the marks of a line need to know about it besides where it ends. */
+export interface EdgeKind extends Ends {
+  optional?: true;
+  single?: true;
+}
+
 /**
- * The marks at the two ends of a relationship line, each as the `d` of an SVG path: one bar at the
- * referenced (one) end, a crow's foot at the foreign-key (many) end.
+ * The marks at the two ends of a relationship line. Simple: one bar at the referenced (one) end, a
+ * crow's foot at the foreign-key (many) end. Crow's foot: at the referenced end two bars (exactly
+ * one), or a bar and a ring (zero or one) when the foreign-key column may be empty; at the other
+ * end a foot and a ring (zero or many), or a bar and a ring (zero or one) when the column is unique.
  */
-export function edgeEndPaths({ a, b }: Ends): { one: string; many: string } {
-  const bar = a.x + a.side * 8;
-  const foot = b.x + b.side * 9;
-  return {
-    one: `M${bar} ${a.y - 5} V${a.y + 5}`,
-    many: `M${foot} ${b.y} L${b.x} ${b.y - 5} M${foot} ${b.y} L${b.x} ${b.y + 5} M${foot} ${b.y} L${b.x} ${b.y}`,
+export function edgeMarks({ a, b, optional, single }: EdgeKind, notation: Notation = 'crowsfoot'): EdgeMarks {
+  const bar = (end: Anchor, distance: number) => `M${end.x + end.side * distance} ${end.y - 5} V${end.y + 5}`;
+  const foot = (end: Anchor, apex: number) => {
+    const x = end.x + end.side * apex;
+    return `M${x} ${end.y} L${end.x} ${end.y - 5} M${x} ${end.y} L${end.x} ${end.y + 5} M${x} ${end.y} L${end.x} ${end.y}`;
   };
+  if (notation === 'simple') return { paths: [bar(a, 8), foot(b, 9)], rings: [] };
+
+  const ring = (end: Anchor, distance: number): Position => ({ x: end.x + end.side * distance, y: end.y });
+  const one = optional ? [bar(a, 7)] : [bar(a, 7), bar(a, 12)];
+  const paths = single ? [...one, bar(b, 7)] : [...one, foot(b, 10)];
+  return { paths, rings: [...(optional ? [ring(a, 14)] : []), ring(b, single ? 14 : 14.5)] };
 }
 
 // A line that goes around tables keeps this far from them. Lines to different columns keep
@@ -140,7 +216,9 @@ const CLEARANCE = 10;
 const LANE_GAP = 4;
 const LANES = 3;
 
+/** The height of a row of a table at `position`; of the head for the row -1, a column the table does not show. */
 function rowY(position: Position, row: number): number {
+  if (row < 0) return position.y + NODE_HEAD_HEIGHT / 2 + 1;
   return position.y + NODE_HEAD_HEIGHT + row * NODE_ROW_HEIGHT + NODE_ROW_HEIGHT / 2 + 1;
 }
 
@@ -152,7 +230,7 @@ export interface Ends {
 
 /**
  * The ends of the line for a foreign key on row `row` of the table at `pt` that references row
- * `referencedRow` of the table at `pr`: out of the sides that face each other, or out of the right
+ * `referencedRow` of the table at `pr` (rows are those a table shows, see `rowOf`; -1 is its head): out of the sides that face each other, or out of the right
  * side of both tables when one is over the other.
  */
 export function edgeEnds(pt: Placement, row: number, pr: Placement, referencedRow: number): Ends {
@@ -182,16 +260,71 @@ export function drawnEnds(pt: Placement, row: number, to: Position): Ends {
   return { a: { x: to.x, y: to.y, side: to.x < right ? 1 : -1 }, b: { x: right, y, side: 1 } };
 }
 
+/** The lines of a diagram, and how many of the lines that go behind a table were left as curves because the time given to look for a way around them ran out. */
+export interface EdgeSet {
+  edges: Edge[];
+  pending: number;
+}
+
+/** How long and how much `routeEdges` may search for ways around tables. Without a limit it finds a way for every line. */
+export interface RouteLimit {
+  /** The most lines a way around is searched for. */
+  searches?: number;
+  /** How long after the call begins no more searches are begun, in ms. */
+  ms?: number;
+}
+
+/** The side of the squares that `RectIndex` sorts rectangles into, in canvas units. */
+const INDEX_CELL = 512;
+
+/** Finds the rectangles near a place without looking at all of them: they are sorted into squares of the canvas. */
+class RectIndex {
+  private cells = new Map<number, Rect[]>();
+
+  constructor(rects: readonly Rect[]) {
+    for (const r of rects) this.each(r, (key) => (this.cells.get(key) ?? this.cells.set(key, []).get(key)!).push(r));
+  }
+
+  private each(box: Rect, visit: (key: number) => void) {
+    const x1 = Math.floor(box.x / INDEX_CELL);
+    const x2 = Math.floor((box.x + box.w) / INDEX_CELL);
+    const y1 = Math.floor(box.y / INDEX_CELL);
+    const y2 = Math.floor((box.y + box.h) / INDEX_CELL);
+    for (let cy = y1; cy <= y2; cy++) for (let cx = x1; cx <= x2; cx++) visit(cy * 65536 + cx);
+  }
+
+  /** The rectangles that touch the inside of `box`. */
+  near(box: Rect): Rect[] {
+    const found = new Set<Rect>();
+    this.each(box, (key) => this.cells.get(key)?.forEach((r) => intersects(r, box) && found.add(r)));
+    return [...found];
+  }
+}
+
+const sameAnchor = (p: Anchor, q: Anchor) => p.x === q.x && p.y === q.y && p.side === q.side;
+const intersects = (r: Rect, box: Rect) => r.x < box.x + box.w && r.x + r.w > box.x && r.y < box.y + box.h && r.y + r.h > box.y;
+
 /**
- * One edge per foreign key whose two tables are both present and placed. An edge whose curve would
+ * One edge per foreign key whose two tables are both present and placed. A line whose curve would
  * run behind a table goes around the tables instead, when there is a way around.
+ *
+ * `previous` is the lines of an earlier call: a line that has the same ends and does not run behind
+ * a table now is kept as it was, itself and not a copy, so that only the lines the change touched
+ * are searched for again. Searching is the costly part: when `limit` runs out, the lines still to
+ * search for are drawn as the curve they would have been, and counted in `pending`. Calling again
+ * with the lines that came back finishes the job.
  */
-export function computeEdges(tables: readonly Table[], positions: Positions): Edge[] {
+export function routeEdges(tables: readonly Table[], positions: Positions, previous: readonly Edge[] = [], limit: RouteLimit = {}): EdgeSet {
   const byName = new Map(tables.map((t) => [t.name, t]));
+  const before = new Map(previous.map((e) => [e.id, e]));
   const rects = nodeRects(tables, positions);
+  const index = new RectIndex(rects);
   /** The referenced columns of the edges that go around, in the order they are met: each has a lane. */
   const lanes = new Map<string, number>();
   const edges: Edge[] = [];
+  const deadline = limit.ms === undefined ? Infinity : performance.now() + limit.ms;
+  let searches = 0;
+  let pending = 0;
   for (const table of tables) {
     table.columns.forEach((column, i) => {
       const fk = column.fk;
@@ -200,30 +333,63 @@ export function computeEdges(tables: readonly Table[], positions: Positions): Ed
       const pr = referenced ? positionOf(positions, referenced.name) : undefined;
       if (!fk || !referenced || !pt || !pr) return;
 
-      const row = Math.max(
+      const target = Math.max(
         0,
         referenced.columns.findIndex((c) => c.name === fk.column),
       );
-      const ends = edgeEnds(pt, i, pr, row);
-      let via: Position[] | null = null;
-      if (curveBlocked(ends.a, ends.b, rects)) {
-        const key = `${referenced.name}:${row}`;
-        const lane = lanes.get(key) ?? lanes.size;
-        const clearance = CLEARANCE + (lane % LANES) * LANE_GAP;
-        via = routeAround(ends.a, ends.b, rects, clearance) ?? (clearance > CLEARANCE ? routeAround(ends.a, ends.b, rects, CLEARANCE) : null);
-        if (via) lanes.set(key, lane);
-      }
-      edges.push({
-        id: `${table.name}:${i}`,
-        from: referenced.name,
-        to: table.name,
-        ...ends,
+      const row = rowOf(referenced, pr, target);
+      const ends = edgeEnds(pt, rowOf(table, pt, i), pr, row);
+      const id = `${table.name}:${i}`;
+      const flags = {
         ...(fk.inferred ? { inferred: true as const } : {}),
-        ...(via ? { via } : {}),
-      });
+        ...(column.nullable ? { optional: true as const } : {}),
+        ...(isSingle(table, column) ? { single: true as const } : {}),
+      };
+
+      // Only the tables next to the line can be in its way.
+      const old = before.get(id);
+      const reach = old?.via ? boundsOf(old.via) : curveBounds(ends.a, ends.b);
+      const nearby = index.near(reach);
+      const kept =
+        old && old.from === referenced.name && old.to === table.name && sameAnchor(old.a, ends.a) && sameAnchor(old.b, ends.b) &&
+        !(old.via ? pathBlocked(old.via, nearby) : curveBlocked(ends.a, ends.b, nearby));
+      if (kept) {
+        const same = !!old.inferred === !!flags.inferred && !!old.optional === !!flags.optional && !!old.single === !!flags.single;
+        edges.push(same ? old : { id, from: referenced.name, to: table.name, ...ends, ...flags, ...(old.via ? { via: old.via } : {}) });
+        return;
+      }
+
+      let via: Position[] | null = null;
+      if (curveBlocked(ends.a, ends.b, nearby)) {
+        const out = (limit.searches !== undefined && searches >= limit.searches) || (deadline !== Infinity && performance.now() > deadline);
+        if (out) pending++;
+        else {
+          searches++;
+          const key = `${referenced.name}:${target}`;
+          const lane = lanes.get(key) ?? lanes.size;
+          const clearance = CLEARANCE + (lane % LANES) * LANE_GAP;
+          via = routeAround(ends.a, ends.b, rects, clearance) ?? (clearance > CLEARANCE ? routeAround(ends.a, ends.b, rects, CLEARANCE) : null);
+          if (via) lanes.set(key, lane);
+        }
+      }
+      edges.push({ id, from: referenced.name, to: table.name, ...ends, ...flags, ...(via ? { via } : {}) });
     });
   }
-  return edges;
+  return { edges, pending };
+}
+
+/** The rectangle that holds the points. */
+function boundsOf(points: readonly Position[]): Rect {
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+}
+
+/** Every line of the diagram, with a way around the tables for each one that needs it. */
+export function computeEdges(tables: readonly Table[], positions: Positions): Edge[] {
+  return routeEdges(tables, positions).edges;
 }
 
 /** The part of the canvas that is on screen, in canvas units. */
@@ -241,7 +407,7 @@ export function zoomAt(offset: Position, zoom: number, nextZoom: number, point: 
 export function nodeRects(tables: readonly Table[], positions: Positions): (Rect & { name: string })[] {
   return tables.flatMap((t) => {
     const p = positionOf(positions, t.name);
-    return p ? [{ name: t.name, x: p.x, y: p.y, w: nodeWidth(p), h: nodeHeight(t) }] : [];
+    return p ? [{ name: t.name, x: p.x, y: p.y, w: nodeWidth(p), h: nodeHeight(t, p) }] : [];
   });
 }
 
@@ -367,9 +533,15 @@ export function gridColumns(count: number): number {
  * Positions for tables that have none, such as imported ones: a grid filled row by row. Tables
  * differ in height, so each one goes under the column that is shortest so far, which keeps the
  * grid compact; tables of one height simply fill the rows from left to right. Snapped to the grid.
- * The columns are `width` wide, for tables that are wider than tables are by themselves.
+ * The columns are `width` wide, for tables that are wider than tables are by themselves. `looks`
+ * has the tables that show fewer columns than they have, which are as short as they show.
  */
-export function gridLayout(tables: readonly Table[], columns: number = gridColumns(tables.length), width: number = NODE_WIDTH): Positions {
+export function gridLayout(
+  tables: readonly Table[],
+  columns: number = gridColumns(tables.length),
+  width: number = NODE_WIDTH,
+  looks: Positions = {},
+): Positions {
   const count = Math.max(1, Math.floor(columns));
   /** Where the next table of each column goes. */
   const bottoms = new Array<number>(count).fill(GRID_ORIGIN);
@@ -378,7 +550,7 @@ export function gridLayout(tables: readonly Table[], columns: number = gridColum
     const column = bottoms.indexOf(Math.min(...bottoms));
     const y = snap(bottoms[column]);
     positions[table.name] = { x: snap(GRID_ORIGIN + column * (width + GRID_GAP_X)), y };
-    bottoms[column] = y + nodeHeight(table) + GRID_GAP_Y;
+    bottoms[column] = y + nodeHeight(table, positionOf(looks, table.name)) + GRID_GAP_Y;
   }
   return positions;
 }

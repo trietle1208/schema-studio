@@ -14,6 +14,8 @@ export function versionLabel(version: number): string {
 export interface SavedVersion {
   version: number;
   message: string;
+  /** A longer text about the version, when it has one. */
+  note?: string;
   /** Milliseconds since the epoch. */
   createdAt: number;
   snapshot: SchemaSnapshot;
@@ -67,6 +69,7 @@ export function versionSummary(entry: VersionEntry, current: number, now: number
     time: relativeTime(entry.createdAt, now),
     timestamp: dateTime(entry.createdAt),
     message: versionMessage(entry),
+    ...(entry.note ? { note: entry.note } : {}),
     tables: tables.length,
     relationships: countRelations(tables),
     indexes: countIndexes(tables),
@@ -75,7 +78,7 @@ export function versionSummary(entry: VersionEntry, current: number, now: number
 }
 
 /**
- * The versions that match `query`: by their number, their message, or the name of something they
+ * The versions that match `query`: by their number, their message or note, or the name of something they
  * changed (a table, a column, an index). Case does not count, and a blank query matches every version.
  */
 export function filterVersions(entries: readonly VersionEntry[], query: string): VersionEntry[] {
@@ -85,6 +88,7 @@ export function filterVersions(entries: readonly VersionEntry[], query: string):
     (entry) =>
       versionLabel(entry.version) === needle ||
       versionMessage(entry).toLowerCase().includes(needle) ||
+      !!entry.note?.toLowerCase().includes(needle) ||
       entry.groups.some((group) => group.items.some((item) => item.path.toLowerCase().includes(needle))),
   );
 }

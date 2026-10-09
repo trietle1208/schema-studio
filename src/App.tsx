@@ -40,7 +40,8 @@ function routeTitle(route: Route): string {
 
 /**
  * The app in the language of the settings. A change of language starts every screen over, so
- * that nothing on it is left in the words of the language before.
+ * that not
+ * hing on it is left in the words of the language before.
  */
 export function App() {
   const locale = useSettingsStore((s) => s.locale);

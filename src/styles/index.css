@@ -566,3 +566,33 @@ body {
   min-width: 0;
   min-height: 0;
 }
+
+/*
+ * A table that shows only its key columns ends with a row that says how many it leaves out; one that
+ * shows none is its head alone, without the rule under it.
+ */
+.ss-node-more {
+  height: var(--h-row);
+  display: flex;
+  align-items: center;
+  padding: 0 10px 0 30px;
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+.ss-node.is-bare .ss-node-head {
+  border-bottom-color: transparent;
+  border-radius: var(--radius-lg);
+}
+
+/* The ring at an end of a relationship line (crow's foot): filled with the canvas, so that the line does not run through it. */
+.ss-edge-ring {
+  fill: var(--bg-1);
+  stroke: var(--relation);
+  stroke-width: 1.25;
+}
+
+.ss-edge-g.is-active .ss-edge-ring {
+  stroke: var(--relation-active);
+  stroke-width: 1.75;
+}

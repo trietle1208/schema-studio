@@ -1,6 +1,6 @@
 import { copyMember, renameMember } from './groups';
-import { clampNodeWidth, NODE_WIDTH, nodeWidth } from './layout';
-import type { Column, Placement, Position, Positions, SchemaSnapshot, Table, TableGroup } from './model';
+import { clampNodeWidth, LARGE_TABLE, lookOf, NODE_WIDTH, nodeWidth } from './layout';
+import type { Column, ColumnsShown, Placement, Position, Positions, SchemaSnapshot, Table, TableGroup } from './model';
 import { positionOf } from './positions';
 
 // Every edit returns a new snapshot and leaves the input untouched. Tables that an edit does not
@@ -8,9 +8,9 @@ import { positionOf } from './positions';
 
 const DUPLICATE_OFFSET = 32;
 
-/** `x`, `y` with the width `like` was given, when it was given one. */
+/** `x`, `y` with the width and the columns shown of `like`, when it has any. */
 function placed(x: number, y: number, like: Placement | undefined): Placement {
-  return like?.w === undefined ? { x, y } : { x, y, w: like.w };
+  return lookOf({ x, y }, like);
 }
 
 /** A snapshot of `tables` and `positions` with the groups of `snapshot`, or with `groups` in their place. One that has no groups gets none. */
@@ -147,8 +147,34 @@ export function resizeTables(snapshot: SchemaSnapshot, sizes: Positions): Schema
   const next = Object.fromEntries(
     resized.map(([name, to]): [string, Placement] => {
       const w = clampNodeWidth(nodeWidth(to));
-      return [name, w === NODE_WIDTH ? { x: to.x, y: to.y } : { x: to.x, y: to.y, w }];
+      // The columns a table shows are not changed by its width.
+      const look = lookOf({ x: to.x, y: to.y }, { ...positionOf(snapshot.positions, name), x: 0, y: 0, w: w === NODE_WIDTH ? undefined : w });
+      return [name, look];
     }),
   );
+  return edited(snapshot, snapshot.tables, { ...snapshot.positions, ...next });
+}
+
+/** What the tables of a schema show of their columns: every column, the keys only, none, or the keys only for tables that have more than `LARGE_TABLE` columns. */
+export type ColumnsChoice = 'all' | ColumnsShown | 'large';
+
+/**
+ * Makes the tables called `names` (all of them when `names` is left out) show their columns as
+ * `choice` says. `large` shows the keys of a table that has more than `LARGE_TABLE` columns and
+ * every column of the others. A table that has no place on the canvas is left out, and a snapshot
+ * in which nothing changes is returned as it is.
+ */
+export function showColumns(snapshot: SchemaSnapshot, choice: ColumnsChoice, names?: readonly string[]): SchemaSnapshot {
+  const wanted = names ? new Set(names) : null;
+  const next: Positions = {};
+  for (const table of snapshot.tables) {
+    const from = positionOf(snapshot.positions, table.name);
+    if (!from || (wanted && !wanted.has(table.name))) continue;
+    const shown = choice === 'large' ? (table.columns.length > LARGE_TABLE ? 'keys' : 'all') : choice;
+    if ((from.cols ?? 'all') === shown) continue;
+    const rest: Placement = { x: from.x, y: from.y, ...(from.w === undefined ? {} : { w: from.w }) };
+    next[table.name] = shown === 'all' ? rest : { ...rest, cols: shown };
+  }
+  if (!Object.keys(next).length) return snapshot;
   return edited(snapshot, snapshot.tables, { ...snapshot.positions, ...next });
 }

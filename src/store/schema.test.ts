@@ -277,6 +277,28 @@ describe('schema store', () => {
     expect(state().positions.users).toEqual({ x: 96, y: 120 });
   });
 
+  it('records what the tables show of their columns as one undo step, whatever the number of tables', () => {
+    expect(state().showColumns('keys')).toBe(true);
+    expect(Object.values(state().positions).every((p) => p.cols === 'keys')).toBe(true);
+    expect(history().pastStates).toHaveLength(1);
+    expect(selectDirtyTables(state()).sort()).toEqual(['order_items', 'orders', 'payments', 'products', 'users']);
+
+    // The same again changes nothing, and records nothing.
+    expect(state().showColumns('keys')).toBe(false);
+    expect(history().pastStates).toHaveLength(1);
+
+    expect(state().showColumns('none', ['users'])).toBe(true);
+    expect(state().positions.users.cols).toBe('none');
+    expect(state().positions.orders.cols).toBe('keys');
+
+    history().undo();
+    history().undo();
+    expect(state().positions.users).toEqual({ x: 24, y: 48 });
+    expect(selectDirty(state())).toBe(false);
+    history().redo();
+    expect(state().positions.users.cols).toBe('keys');
+  });
+
   it('records a whole drag of the side of a table as one undo step', () => {
     state().resizeTables({ users: { x: 24, y: 48, w: 240 } });
     state().resizeTables({ users: { x: 24, y: 48, w: 280 } });

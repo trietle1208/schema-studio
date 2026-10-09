@@ -25,6 +25,7 @@ import {
   useCanUndo,
   useSchemaStore,
 } from '../store/schema';
+import { useSettingsStore } from '../store/settings';
 import { useUiStore } from '../store/ui';
 import { requestExport } from './exportActions';
 import { useWorkspaceShortcuts } from './useWorkspaceShortcuts';
@@ -47,6 +48,7 @@ import {
   saveSchema,
   searchFor,
   showAllTables,
+  showColumns,
 } from './workspaceActions';
 
 export function Workspace() {
@@ -70,6 +72,7 @@ export function Workspace() {
   const selectColumn = useSchemaStore((s) => s.selectColumn);
   const moveTables = useSchemaStore((s) => s.moveTables);
   const resizeTables = useSchemaStore((s) => s.resizeTables);
+  const notation = useSettingsStore((s) => s.notation);
   const endMove = useSchemaStore((s) => s.endMove);
   const updateTable = useSchemaStore((s) => s.updateTable);
   const renameTable = useSchemaStore((s) => s.renameTable);
@@ -130,6 +133,8 @@ export function Workspace() {
         onFit={() => canvas.current?.fit()}
         onArrange={tables.length ? arrangeTables : undefined}
         arrangeSelected={several}
+        onShowColumns={tables.length ? (choice) => showColumns(choice, several ? selection : undefined) : undefined}
+        columnsSelected={several}
         onUndo={undo}
         onRedo={redo}
         canUndo={canUndo}
@@ -174,6 +179,8 @@ export function Workspace() {
           onShowAll={showAllTables}
           onNewTable={newTable}
           onArrange={tables.length ? arrangeTables : undefined}
+          onShowColumns={showColumns}
+          notation={notation}
           groups={groups}
           onGroups={requestTableGroups}
           onInferRelations={inferRelationships}

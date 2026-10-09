@@ -6,6 +6,7 @@ import { db } from './db';
 import {
   createSchema,
   deleteSchema,
+  describeVersion,
   getVersion,
   listSchemas,
   listVersions,
@@ -169,6 +170,51 @@ describe('restoreVersion', () => {
   it('rejects for a version that is not there, and stores nothing', async () => {
     const schema = await createSchema(ecommerce, ecommerceSnapshot());
     await expect(restoreVersion(schema.id, 7)).rejects.toThrow('Version v7 no longer exists.');
+    expect(await db.versions.count()).toBe(1);
+  });
+});
+
+describe('describeVersion', () => {
+  it('renames a version and writes a note on it, trimmed, and leaves the snapshot and the rest alone', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot(), 'Sample schema');
+    at(T0 + HOUR);
+    await saveVersion(schema.id, deleteTable(ecommerceSnapshot(), 'payments'), 'Drop payments');
+    const before = await listVersions(schema.id);
+
+    const described = await describeVersion(schema.id, 2, { message: '  Payments moved out  ', note: '\n Ask billing before this ships. \n' });
+
+    expect(described).toEqual({ ...before[0], message: 'Payments moved out', note: 'Ask billing before this ships.' });
+    const after = await listVersions(schema.id);
+    expect(after[0]).toEqual(described);
+    expect(after[1]).toEqual(before[1]);
+    // Neither the time it was saved nor the schema's current version moved.
+    expect(after[0].createdAt).toBe(T0 + HOUR);
+    expect((await db.schemas.get(schema.id))?.updatedAt).toBe(T0 + HOUR);
+    expect((await db.schemas.get(schema.id))?.version).toBe(2);
+  });
+
+  it('does not store a blank note, and takes an earlier one away', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot(), 'Sample schema');
+    await describeVersion(schema.id, 1, { message: 'Sample schema', note: 'First look' });
+    expect((await getVersion(schema.id, 1))?.note).toBe('First look');
+
+    const cleared = await describeVersion(schema.id, 1, { message: '', note: '   ' });
+    expect(cleared).not.toHaveProperty('note');
+    expect(await getVersion(schema.id, 1)).not.toHaveProperty('note');
+    // A blank name makes the history list the version by what it changed.
+    expect(cleared.message).toBe('');
+  });
+
+  it('cuts a name and a note that are too long', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    const described = await describeVersion(schema.id, 1, { message: 'n'.repeat(500), note: 'x'.repeat(5000) });
+    expect(described.message).toHaveLength(120);
+    expect(described.note).toHaveLength(2000);
+  });
+
+  it('rejects for a version that is not there, storing nothing', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    await expect(describeVersion(schema.id, 7, { message: 'x', note: '' })).rejects.toThrow('Version v7 no longer exists.');
     expect(await db.versions.count()).toBe(1);
   });
 });

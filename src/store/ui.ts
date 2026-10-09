@@ -39,6 +39,8 @@ export type Dialog =
   | { kind: 'delete-schema'; id: number; name: string; versions: number }
   /** Asks before `version` of the open schema is made its current version again. */
   | { kind: 'restore-version'; version: number }
+  /** Renames `version` of the open schema and writes a note on it. */
+  | { kind: 'edit-version'; version: number }
   /** Asks before the unsaved changes of the open schema are dropped; `onDiscard` then goes on. */
   | { kind: 'discard-changes'; onDiscard: () => void };
 

@@ -46,12 +46,20 @@ export interface Position {
 }
 
 /**
- * Where a table is on the canvas, and how wide it is when it was given another width than tables
- * have by themselves (see `nodeWidth` in core/layout).
+ * Where a table is on the canvas, how wide it is when it was given another width than tables have
+ * by themselves (see `nodeWidth` in core/layout), and which of its columns it shows.
  */
 export interface Placement extends Position {
   w?: number;
+  /**
+   * How much of its columns the table shows when it is not all of them (see `shownColumns` in
+   * core/layout): the key columns only, or none. Left out for a table that shows every column.
+   */
+  cols?: ColumnsShown;
 }
+
+/** What a table on the canvas shows of its columns, short of all of them. */
+export type ColumnsShown = 'keys' | 'none';
 
 export type Positions = Record<string, Placement>;
 
@@ -99,6 +107,8 @@ export interface Version {
   author?: string;
   initials?: string;
   message: string;
+  /** A longer text about the version; left out when it has none. */
+  note?: string;
   tables?: number;
   relationships?: number;
   indexes?: number;

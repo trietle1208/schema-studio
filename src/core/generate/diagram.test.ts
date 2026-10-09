@@ -226,3 +226,48 @@ describe('imageScale', () => {
     expect(imageScale(0, 0, 2)).toBe(2);
   });
 });
+
+describe('generateDiagram for the notation and the columns a table shows', () => {
+  const base = () => ecommerceSnapshot();
+
+  it("draws the ends of the lines in crow's foot, with the line cut where a ring is", () => {
+    const { svg } = generateDiagram(base(), colors, { background: true });
+    // One ring at each foot, and the same ones in the mask that holds the lines back from them.
+    expect(count(svg, 'r="3.5"')).toBe(8);
+    expect(svg).toContain('<mask id="gaps"');
+    expect(svg).toContain('<g mask="url(#gaps)">');
+    expect(count(svg, 'fill="#000"')).toBe(4);
+    // Two bars at the referenced end of a line whose column cannot be empty.
+    expect(svg).toContain('<path d="M259 89 V99"/><path d="M264 89 V99"/>');
+  });
+
+  it('draws one bar and a foot, with no ring, in the simple notation', () => {
+    const { svg } = generateDiagram(base(), colors, { background: true, notation: 'simple' });
+    expect(svg).not.toContain('r="3.5"');
+    expect(svg).not.toContain('<mask');
+    expect(svg).toContain('<path d="M260 89 V99"/>');
+  });
+
+  it('is see-through without the background even with rings', () => {
+    const { svg } = generateDiagram(base(), colors, { background: false });
+    expect(svg).toContain('r="3.5"');
+    expect(svg).not.toContain('fill="#131416"');
+  });
+
+  it('draws the columns a table shows, and says what it leaves out', () => {
+    const snapshot = base();
+    const keys = { ...snapshot, positions: { ...snapshot.positions, orders: { ...snapshot.positions.orders, cols: 'keys' as const } } };
+    const { svg, height } = generateDiagram(keys, colors, { background: true });
+    expect(svg).toContain('>3 more columns</text>');
+    expect(svg).not.toContain('>status</text>');
+    // The table is as tall as its rows: an id, a foreign key and the row that counts the others.
+    expect(svg).toContain('<rect x="304.5" y="24.5" width="227" height="110" rx="7.5"');
+    expect(height).toBeGreaterThan(0);
+
+    const none = { ...snapshot, positions: { ...snapshot.positions, orders: { ...snapshot.positions.orders, cols: 'none' as const } } };
+    const bare = generateDiagram(none, colors, { background: true }).svg;
+    expect(bare).toContain('<rect x="304.5" y="24.5" width="227" height="34" rx="7.5"');
+    expect(bare).not.toContain('>user_id</text>');
+    expect(bare).not.toContain('more column');
+  });
+});

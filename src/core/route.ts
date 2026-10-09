@@ -16,6 +16,12 @@ const BEND = 48;
 /** How far past its two ends a line looks for a way around, before it looks over the whole canvas. */
 const REACH = 260;
 const CORNER_RADIUS = 8;
+/**
+ * The most points a search looks through (the crossings of the lines along the sides of the tables
+ * it may run between). A line whose search would be larger stays the curve it was, which a diagram of
+ * hundreds of tables could not afford to route around for every line.
+ */
+const MAX_POINTS = 160_000;
 
 /** The four points of the curve between two ends: the ends and the two that pull it out of the sides. */
 function controls(a: Anchor, b: Anchor): [Position, Position, Position, Position] {
@@ -27,6 +33,30 @@ function controls(a: Anchor, b: Anchor): [Position, Position, Position, Position
 export function curvePath(a: Anchor, b: Anchor): string {
   const [p0, p1, p2, p3] = controls(a, b);
   return `M${p0.x} ${p0.y} C${p1.x} ${p1.y} ${p2.x} ${p2.y} ${p3.x} ${p3.y}`;
+}
+
+/** The rectangle the curve between two ends stays inside: its four control points hold it. */
+export function curveBounds(a: Anchor, b: Anchor): Rect {
+  const points = controls(a, b);
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+}
+
+/** Whether a line through `points`, a stretch after the other, runs behind one of `rects`: one of its stretches crosses the inside of a table. */
+export function pathBlocked(points: readonly Position[], rects: readonly Rect[]): boolean {
+  for (let k = 1; k < points.length; k++) {
+    const p = points[k - 1];
+    const q = points[k];
+    const left = Math.min(p.x, q.x);
+    const right = Math.max(p.x, q.x);
+    const top = Math.min(p.y, q.y);
+    const bottom = Math.max(p.y, q.y);
+    if (rects.some((r) => right > r.x + INSIDE && left < r.x + r.w - INSIDE && bottom > r.y + INSIDE && top < r.y + r.h - INSIDE)) return true;
+  }
+  return false;
 }
 
 /** Whether the curve between two ends runs behind one of `rects`. */
@@ -50,53 +80,99 @@ const DIRECTIONS = [
   { x: 0, y: -1 },
 ] as const;
 
-/** A min-heap of numbers that are ordered by `cost`. */
+/** A min-heap of numbers, each with the key it was pushed with. */
 class Queue {
   private items: number[] = [];
-  private cost: (item: number) => number;
-
-  constructor(cost: (item: number) => number) {
-    this.cost = cost;
-  }
+  private keys: number[] = [];
 
   get size(): number {
     return this.items.length;
   }
 
-  push(item: number) {
-    const items = this.items;
+  push(item: number, key: number) {
+    const { items, keys } = this;
     let i = items.length;
     items.push(item);
+    keys.push(key);
     while (i > 0) {
       const parent = (i - 1) >> 1;
-      if (this.cost(items[parent]) <= this.cost(item)) break;
+      if (keys[parent] <= key) break;
       items[i] = items[parent];
+      keys[i] = keys[parent];
       i = parent;
     }
     items[i] = item;
+    keys[i] = key;
   }
 
   pop(): number {
-    const items = this.items;
+    const { items, keys } = this;
     const top = items[0];
     const last = items.pop() as number;
+    const lastKey = keys.pop() as number;
     if (items.length) {
       let i = 0;
       for (;;) {
         let child = 2 * i + 1;
         if (child >= items.length) break;
-        if (child + 1 < items.length && this.cost(items[child + 1]) < this.cost(items[child])) child++;
-        if (this.cost(items[child]) >= this.cost(last)) break;
+        if (child + 1 < items.length && keys[child + 1] < keys[child]) child++;
+        if (keys[child] >= lastKey) break;
         items[i] = items[child];
+        keys[i] = keys[child];
         i = child;
       }
       items[i] = last;
+      keys[i] = lastKey;
     }
     return top;
   }
 }
 
 const ascending = (values: readonly number[]) => [...new Set(values)].sort((p, q) => p - q);
+
+/** The index of the first number of the sorted `values` that is not less than `value`. */
+function lowerBound(values: readonly number[], value: number): number {
+  let low = 0;
+  let high = values.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (values[middle] < value) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+/** The index of the first number of the sorted `values` that is greater than `value`. */
+function upperBound(values: readonly number[], value: number): number {
+  let low = 0;
+  let high = values.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (values[middle] <= value) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+// A search needs a few arrays as long as its points are many. They are kept from one search to the
+// next, as hundreds of lines of a diagram are searched for one after the other.
+let costs = new Float64Array(0);
+let origins = new Int32Array(0);
+let visited = new Uint8Array(0);
+let shut = new Uint8Array(0);
+
+function scratch(states: number, points: number) {
+  if (costs.length < states) {
+    costs = new Float64Array(states);
+    origins = new Int32Array(states);
+    visited = new Uint8Array(states);
+  }
+  if (shut.length < points * 2) shut = new Uint8Array(points * 2);
+  costs.fill(Infinity, 0, states);
+  origins.fill(-1, 0, states);
+  visited.fill(0, 0, states);
+  shut.fill(0, 0, points * 2);
+}
 
 /** The way from `from` to `to` among `walls`, which it may run along and not through, inside `area`; null when there is none. */
 function wayThrough(from: Position, to: Position, leave: 1 | -1, walls: readonly Rect[], area: Rect | null): Position[] | null {
@@ -111,22 +187,41 @@ function wayThrough(from: Position, to: Position, leave: 1 | -1, walls: readonly
 
   const cols = xs.length;
   const rows = ys.length;
-  const start = ys.indexOf(from.y) * cols + xs.indexOf(from.x);
-  const goal = ys.indexOf(to.y) * cols + xs.indexOf(to.x);
+  if (cols * rows > MAX_POINTS) return null;
   if (inWall(from.x, from.y) || inWall(to.x, to.y)) return null;
+  const start = lowerBound(ys, from.y) * cols + lowerBound(xs, from.x);
+  const goal = lowerBound(ys, to.y) * cols + lowerBound(xs, to.x);
+
+  // No wall begins or ends between two lines next to each other, so a way between two points is
+  // free when the walls do not cover it: found once for every wall instead of for every step.
+  // `shut[2p]` is the way from point p to the point on its right, `shut[2p + 1]` the way down.
+  scratch(cols * rows * 4, cols * rows);
+  for (const w of near) {
+    const left = lowerBound(xs, w.x);
+    const right = upperBound(xs, w.x + w.w) - 1;
+    const top = lowerBound(ys, w.y);
+    const bottom = upperBound(ys, w.y + w.h) - 1;
+    // Along a line strictly inside the wall, the ways between the sides of the wall are covered.
+    for (let j = upperBound(ys, w.y); j < lowerBound(ys, w.y + w.h); j++) {
+      for (let i = left; i < right; i++) shut[2 * (j * cols + i)] = 1;
+    }
+    for (let i = upperBound(xs, w.x); i < lowerBound(xs, w.x + w.w); i++) {
+      for (let j = top; j < bottom; j++) shut[2 * (j * cols + i) + 1] = 1;
+    }
+  }
 
   // A state is a point with the direction the line came to it in.
-  const cost = new Float64Array(cols * rows * 4).fill(Infinity);
-  const came = new Int32Array(cols * rows * 4).fill(-1);
+  const cost = costs;
+  const came = origins;
+  const done = visited;
   const ahead = (state: number) => {
     const point = state >> 2;
     return Math.abs(xs[point % cols] - to.x) + Math.abs(ys[(point / cols) | 0] - to.y);
   };
-  const queue = new Queue((state) => cost[state] + ahead(state));
+  const queue = new Queue();
   const first = start * 4 + (leave === 1 ? 0 : 2);
   cost[first] = 0;
-  queue.push(first);
-  const done = new Uint8Array(cols * rows * 4);
+  queue.push(first, ahead(first));
 
   while (queue.size) {
     const state = queue.pop();
@@ -147,14 +242,15 @@ function wayThrough(from: Position, to: Position, leave: 1 | -1, walls: readonly
       const ni = i + DIRECTIONS[n].x;
       const nj = j + DIRECTIONS[n].y;
       if (ni < 0 || nj < 0 || ni >= cols || nj >= rows) continue;
-      // No wall begins or ends between two lines next to each other, so the middle says whether the way is free.
-      if (inWall((xs[i] + xs[ni]) / 2, (ys[j] + ys[nj]) / 2)) continue;
+      // The way to the next point is the one stored for the point on the left or above.
+      const covered = n === 0 ? shut[2 * point] : n === 1 ? shut[2 * point + 1] : n === 2 ? shut[2 * (point - 1)] : shut[2 * (point - cols) + 1];
+      if (covered) continue;
       const next = (nj * cols + ni) * 4 + n;
       const total = cost[state] + Math.abs(xs[ni] - xs[i]) + Math.abs(ys[nj] - ys[j]) + (n === d ? 0 : BEND);
       if (total >= cost[next]) continue;
       cost[next] = total;
       came[next] = state;
-      queue.push(next);
+      queue.push(next, total + ahead(next));
     }
   }
   return null;

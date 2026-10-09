@@ -2,6 +2,7 @@ import { flushSync } from 'react-dom';
 import { countLines } from '../core/files';
 import { EXPORT_ENGINES, generatorFor, tableScript } from '../core/generate';
 import { convertTables } from '../core/generate/convert';
+import type { ColumnsChoice } from '../core/edit';
 import { assignGroup, newGroupName } from '../core/groups';
 import { t } from '../core/i18n';
 import type { Position } from '../core/model';
@@ -288,4 +289,12 @@ export function groupTablesAsNew(tables: readonly string[]) {
   const schema = useSchemaStore.getState();
   if (!schema.editGroups((groups) => assignGroup(groups, tables, newGroupName(groups)))) return;
   requestTableGroups();
+}
+
+/**
+ * What the tables called `names` (all of them without) show of their columns: every column, the
+ * key columns only, none, or the keys of the large tables. One undo step.
+ */
+export function showColumns(choice: ColumnsChoice, names?: readonly string[]) {
+  useSchemaStore.getState().showColumns(choice, names);
 }

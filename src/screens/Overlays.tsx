@@ -5,6 +5,7 @@ import { AddForeignKeyDialog } from './AddForeignKeyDialog';
 import { DeleteSchemaDialog } from './DeleteSchemaDialog';
 import { DeleteTableDialog } from './DeleteTableDialog';
 import { DiscardChangesDialog } from './DiscardChangesDialog';
+import { EditVersionDialog } from './EditVersionDialog';
 import { ExportDialog } from './ExportDialog';
 import { NewSchemaDialog } from './NewSchemaDialog';
 import { RestoreVersionDialog } from './RestoreVersionDialog';
@@ -59,6 +60,7 @@ export function Overlays() {
         <DeleteSchemaDialog id={dialog.id} name={dialog.name} versions={dialog.versions} />
       )}
       {dialog?.kind === 'restore-version' && <RestoreVersionDialog version={dialog.version} />}
+      {dialog?.kind === 'edit-version' && <EditVersionDialog version={dialog.version} />}
       {dialog?.kind === 'discard-changes' && <DiscardChangesDialog onDiscard={dialog.onDiscard} />}
     </>
   );

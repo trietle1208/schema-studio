@@ -2,8 +2,8 @@ import { versionLabel } from './versions';
 
 // The files a schema is imported from and exported to: their names and sizes.
 
-/** What a schema is exported as: its DDL, its model, or its diagram as a picture. */
-export type ExportFormat = 'sql' | 'json' | 'svg' | 'png';
+/** What a schema is exported as: its DDL, its model, its diagram as a picture, or sample rows for its tables. */
+export type ExportFormat = 'sql' | 'json' | 'svg' | 'png' | 'seed';
 
 /** The largest SQL file the import reads: 10 MB, as the drop zone says. */
 export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
@@ -13,7 +13,9 @@ export const DEFAULT_IMPORT_NAME = 'imported_schema';
 
 /** The file an export is saved as: `ecommerce_v12.sql`. A schema that is not saved yet has no version to name. */
 export function exportFileName(schema: string, version: number | null, format: ExportFormat): string {
-  return `${schema}${version === null ? '' : `_${versionLabel(version)}`}.${format}`;
+  const base = `${schema}${version === null ? '' : `_${versionLabel(version)}`}`;
+  // The rows of a schema are a SQL file of their own: `ecommerce_v12_seed.sql`.
+  return format === 'seed' ? `${base}_seed.sql` : `${base}.${format}`;
 }
 
 /**
@@ -39,6 +41,13 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** The first `max` lines of `text`, and how many lines it has in all. Short enough texts are returned as they are. */
+export function firstLines(text: string, max: number): { text: string; shown: number; total: number } {
+  const total = countLines(text);
+  if (total <= max) return { text, shown: total, total };
+  return { text: `${text.split('\n').slice(0, max).join('\n')}\n`, shown: max, total };
 }
 
 /** How many lines `text` has. The line break that ends a file does not start another line. */
