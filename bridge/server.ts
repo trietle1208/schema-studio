@@ -7,10 +7,11 @@ import {
   type Catalog,
   type Connection,
 } from '../src/core/introspect/catalog.ts';
-import { CatalogError, messageOf } from './errors.ts';
+import { CatalogError, HostKeyError, messageOf, SshError } from './errors.ts';
 import { readMysql } from './mysql.ts';
 import { readPostgres } from './postgres.ts';
 import { addressedHere, allowsOrigin, connectionOf } from './requests.ts';
+import { openTunnel } from './tunnel.ts';
 
 // The connection bridge of Schema Studio: `npm run bridge`.
 //
@@ -59,15 +60,35 @@ async function bodyOf(request: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-async function introspect(connection: Connection): Promise<BridgeAnswer> {
-  const where = `${connection.engine} ${connection.database} @ ${connection.host}:${connection.port}`;
+/** Reads the catalog, through the server of `connection.ssh` when there is one. The tunnel is closed whatever comes of it. */
+async function readCatalog(connection: Connection): Promise<Catalog> {
+  const { ssh } = connection;
+  if (!ssh) return READERS[connection.engine](connection);
+  const tunnel = await openTunnel(ssh, { host: connection.host, port: connection.port });
   try {
-    const catalog = await READERS[connection.engine](connection);
+    return await READERS[connection.engine]({ ...connection, host: tunnel.host, port: tunnel.port });
+  } finally {
+    tunnel.close();
+  }
+}
+
+async function introspect(connection: Connection): Promise<BridgeAnswer> {
+  const { ssh } = connection;
+  const through = ssh ? ` via ${ssh.user}@${ssh.host}:${ssh.port}` : '';
+  const where = `${connection.engine} ${connection.database} @ ${connection.host}:${connection.port}${through}`;
+  try {
+    const catalog = await readCatalog(connection);
     console.log(`${where}: read ${catalog.tables.length} tables`);
     return { ok: true, catalog };
   } catch (thrown) {
     const detail = messageOf(thrown);
     console.log(`${where}: ${detail}`);
+    if (thrown instanceof HostKeyError) {
+      const { fingerprint, changed } = thrown;
+      const message = changed ? 'The key of the SSH server has changed.' : 'The SSH server is not trusted yet.';
+      return { ok: false, error: { message, code: 'hostKey', detail, hostKey: { fingerprint, changed } } };
+    }
+    if (thrown instanceof SshError) return { ok: false, error: { message: 'Could not log in to the SSH server.', code: 'ssh', detail } };
     const read = thrown instanceof CatalogError;
     const message = read ? 'Could not read the tables of the database.' : 'Could not connect to the database.';
     return { ok: false, error: { message, code: read ? 'read' : 'connect', detail } };

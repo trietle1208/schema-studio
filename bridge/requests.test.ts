@@ -77,3 +77,53 @@ describe('connectionOf', () => {
     }
   });
 });
+
+describe('connectionOf through SSH', () => {
+  const FINGERPRINT = `SHA256:${'A'.repeat(43)}`;
+  const ssh = (changes: Record<string, unknown> = {}) => ({ host: 'bastion.example.com', port: 22, user: 'deploy', auth: 'password', password: 'hunter2', ...changes });
+
+  it('reads the server to go through, with what its way of logging in needs', () => {
+    expect(connectionOf(request({ ssh: ssh() }), ENGINES)?.ssh).toEqual({ host: 'bastion.example.com', port: 22, user: 'deploy', auth: 'password', password: 'hunter2' });
+    expect(connectionOf(request({ ssh: ssh({ auth: 'key', keyPath: '~/.ssh/id_ed25519', passphrase: 'pp', hostKey: FINGERPRINT }) }), ENGINES)?.ssh).toEqual({
+      host: 'bastion.example.com',
+      port: 22,
+      user: 'deploy',
+      auth: 'key',
+      keyPath: '~/.ssh/id_ed25519',
+      passphrase: 'pp',
+      hostKey: FINGERPRINT,
+    });
+    expect(connectionOf(request({ ssh: ssh({ auth: 'agent' }) }), ENGINES)?.ssh).toEqual({ host: 'bastion.example.com', port: 22, user: 'deploy', auth: 'agent' });
+  });
+
+  it('keeps no secret that its way of logging in does not use', () => {
+    const agent = connectionOf(request({ ssh: ssh({ auth: 'agent', password: 'hunter2', passphrase: 'pp', keyPath: '/k' }) }), ENGINES)?.ssh;
+    expect(Object.keys(agent ?? {}).sort()).toEqual(['auth', 'host', 'port', 'user']);
+    const key = connectionOf(request({ ssh: ssh({ auth: 'key', keyPath: '/k', password: 'hunter2' }) }), ENGINES)?.ssh;
+    expect(Object.keys(key ?? {}).sort()).toEqual(['auth', 'host', 'keyPath', 'port', 'user']);
+  });
+
+  it('goes without SSH when none is asked for', () => {
+    expect(connectionOf(request(), ENGINES)).not.toHaveProperty('ssh');
+  });
+
+  it('takes nothing that does not describe a server to log in to', () => {
+    for (const bad of [
+      null,
+      'bastion',
+      ssh({ host: ' ' }),
+      ssh({ port: '22' }),
+      ssh({ port: 0 }),
+      ssh({ user: '' }),
+      ssh({ auth: 'kerberos' }),
+      ssh({ password: undefined }),
+      ssh({ auth: 'key' }),
+      ssh({ auth: 'key', keyPath: ' ' }),
+      ssh({ auth: 'key', keyPath: '/k', passphrase: 5 }),
+      ssh({ hostKey: 'md5:abc' }),
+      ssh({ hostKey: 7 }),
+    ]) {
+      expect(connectionOf(request({ ssh: bad }), ENGINES)).toBeNull();
+    }
+  });
+});

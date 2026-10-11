@@ -24,9 +24,10 @@ const noAnswer = (): BridgeError => ({
 });
 
 /** What the bridge says went wrong, in the language of the app. Its own words are English, and stay for a failure it does not name. */
-const FAILURES = { connect: 'bridge.connectFailed', read: 'bridge.readFailed' } as const;
+const FAILURES = { connect: 'bridge.connectFailed', read: 'bridge.readFailed', ssh: 'bridge.sshFailed' } as const;
 
 function inAppLanguage(error: BridgeError): BridgeError {
+  if (error.code === 'hostKey') return { ...error, message: t(error.hostKey?.changed ? 'bridge.hostKeyChanged' : 'bridge.hostKeyUnknown') };
   return error.code ? { ...error, message: t(FAILURES[error.code]) } : error;
 }
 

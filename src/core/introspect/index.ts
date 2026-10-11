@@ -1,6 +1,6 @@
 import { quoteName, quoteText } from '../generate/postgres';
 import { t } from '../i18n';
-import type { Catalog, Connection, MysqlCatalog, PostgresCatalog } from './catalog';
+import type { Catalog, Connection, MysqlCatalog, PostgresCatalog, SshTunnel } from './catalog';
 
 // A live database → DDL. The catalog the bridge read is written out as the script the engine's own
 // dump tool would write, and that script is imported like any other: the parser that reads
@@ -75,6 +75,12 @@ export function connectionLabel(connection: Connection): string {
   return `${connection.database}${schema} @ ${connection.host}:${connection.port}`;
 }
 
+/** The port an SSH server listens on unless told otherwise. */
+export const DEFAULT_SSH_PORT = 22;
+
+/** The ways to log in to an SSH server, in the order they are offered. */
+export const SSH_AUTHS: readonly SshTunnel['auth'][] = ['password', 'key', 'agent'];
+
 /** The fields of the connection form, as they are typed. */
 export interface ConnectionForm {
   host: string;
@@ -86,25 +92,74 @@ export interface ConnectionForm {
   /** PostgreSQL only; blank for `public`. */
   schema: string;
   ssl: boolean;
+  /** Reach the database through an SSH server. `host` and `port` are then as that server sees them. */
+  ssh: boolean;
+  sshHost: string;
+  /** Blank for 22. */
+  sshPort: string;
+  sshUser: string;
+  sshAuth: SshTunnel['auth'];
+  sshPassword: string;
+  sshKeyPath: string;
+  sshPassphrase: string;
 }
 
-export const EMPTY_CONNECTION_FORM: ConnectionForm = { host: 'localhost', port: '', database: '', user: '', password: '', schema: '', ssl: false };
+export const EMPTY_CONNECTION_FORM: ConnectionForm = {
+  host: 'localhost',
+  port: '',
+  database: '',
+  user: '',
+  password: '',
+  schema: '',
+  ssl: false,
+  ssh: false,
+  sshHost: '',
+  sshPort: '',
+  sshUser: '',
+  sshAuth: 'key',
+  sshPassword: '',
+  sshKeyPath: '',
+  sshPassphrase: '',
+};
 
-export type ConnectionField = 'host' | 'port' | 'database' | 'user';
+export type ConnectionField = 'host' | 'port' | 'database' | 'user' | 'sshHost' | 'sshPort' | 'sshUser' | 'sshKeyPath';
+
+const validPort = (port: string) => /^\d+$/.test(port) && Number(port) >= 1 && Number(port) <= 65535;
 
 /** The first problem of each field that has one, in the wording of the design system. A password may be blank. */
 export function validateConnection(form: ConnectionForm): Partial<Record<ConnectionField, string>> {
   const problems: Partial<Record<ConnectionField, string>> = {};
   if (!form.host.trim()) problems.host = t('connection.hostEmpty');
   const port = form.port.trim();
-  if (port && !(/^\d+$/.test(port) && Number(port) >= 1 && Number(port) <= 65535)) problems.port = t('connection.portInvalid');
+  if (port && !validPort(port)) problems.port = t('connection.portInvalid');
   if (!form.database.trim()) problems.database = t('connection.databaseEmpty');
   if (!form.user.trim()) problems.user = t('connection.userEmpty');
+  if (form.ssh) {
+    if (!form.sshHost.trim()) problems.sshHost = t('connection.sshHostEmpty');
+    const sshPort = form.sshPort.trim();
+    if (sshPort && !validPort(sshPort)) problems.sshPort = t('connection.portInvalid');
+    if (!form.sshUser.trim()) problems.sshUser = t('connection.sshUserEmpty');
+    if (form.sshAuth === 'key' && !form.sshKeyPath.trim()) problems.sshKeyPath = t('connection.sshKeyPathEmpty');
+  }
   return problems;
 }
 
-/** The connection a valid form stands for. */
-export function toConnection(form: ConnectionForm, engine: string): Connection {
+/** The server of SSH a valid form says to go through, with the fingerprint it is known by when there is one. */
+function toSshTunnel(form: ConnectionForm, hostKey: string | undefined): SshTunnel {
+  return {
+    host: form.sshHost.trim(),
+    port: form.sshPort.trim() ? Number(form.sshPort.trim()) : DEFAULT_SSH_PORT,
+    user: form.sshUser.trim(),
+    auth: form.sshAuth,
+    // Only what the way of logging in uses is sent.
+    ...(form.sshAuth === 'password' ? { password: form.sshPassword } : {}),
+    ...(form.sshAuth === 'key' ? { keyPath: form.sshKeyPath.trim(), ...(form.sshPassphrase ? { passphrase: form.sshPassphrase } : {}) } : {}),
+    ...(hostKey ? { hostKey } : {}),
+  };
+}
+
+/** The connection a valid form stands for. `hostKey` is the fingerprint trusted for the SSH server of the form, if it has one. */
+export function toConnection(form: ConnectionForm, engine: string, hostKey?: string): Connection {
   return {
     engine,
     host: form.host.trim(),
@@ -114,5 +169,6 @@ export function toConnection(form: ConnectionForm, engine: string): Connection {
     password: form.password,
     ...(engine === 'PostgreSQL' ? { schema: form.schema.trim() || DEFAULT_POSTGRES_SCHEMA } : {}),
     ...(form.ssl ? { ssl: true } : {}),
+    ...(form.ssh ? { ssh: toSshTunnel(form, hostKey) } : {}),
   };
 }

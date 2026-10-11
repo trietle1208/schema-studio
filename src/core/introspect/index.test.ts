@@ -214,3 +214,69 @@ describe('the connection form', () => {
     expect(connectionLabel(toConnection(form({ host: '10.0.0.5' }), 'MySQL'))).toBe('shop @ 10.0.0.5:3306');
   });
 });
+
+describe('the connection form through SSH', () => {
+  const form = (changes: Partial<ConnectionForm> = {}): ConnectionForm => ({
+    ...EMPTY_CONNECTION_FORM,
+    host: 'db.internal',
+    database: 'shop',
+    user: 'reader',
+    ssh: true,
+    sshHost: 'bastion.example.com',
+    sshUser: 'deploy',
+    sshKeyPath: '~/.ssh/id_ed25519',
+    ...changes,
+  });
+
+  it('asks nothing of SSH until it is turned on', () => {
+    expect(validateConnection({ ...EMPTY_CONNECTION_FORM, database: 'shop', user: 'reader' })).toEqual({});
+    expect(toConnection({ ...EMPTY_CONNECTION_FORM, database: 'shop', user: 'reader', sshHost: 'ignored' }, 'MySQL')).not.toHaveProperty('ssh');
+  });
+
+  it('has no problem with a filled form, a blank SSH port or a blank passphrase', () => {
+    expect(validateConnection(form())).toEqual({});
+    expect(validateConnection(form({ sshPort: ' 2222 ', sshPassphrase: '' }))).toEqual({});
+  });
+
+  it('says what is wrong with a field of the SSH server', () => {
+    expect(validateConnection(form({ sshHost: ' ', sshUser: '', sshKeyPath: '' }))).toEqual({
+      sshHost: 'SSH host cannot be empty.',
+      sshUser: 'SSH user cannot be empty.',
+      sshKeyPath: 'Path of the private key cannot be empty.',
+    });
+    for (const sshPort of ['0', '65536', '2x', '-1']) {
+      expect(validateConnection(form({ sshPort }))).toEqual({ sshPort: 'Port must be a number from 1 to 65535.' });
+    }
+  });
+
+  it('wants a key path only for a login with a key', () => {
+    expect(validateConnection(form({ sshAuth: 'password', sshKeyPath: '' }))).toEqual({});
+    expect(validateConnection(form({ sshAuth: 'agent', sshKeyPath: '' }))).toEqual({});
+  });
+
+  it('becomes a connection through the server, with port 22 filled in and the key it is known by', () => {
+    const fingerprint = `SHA256:${'A'.repeat(43)}`;
+    expect(toConnection(form({ sshPassphrase: 'pp' }), 'PostgreSQL', fingerprint)).toEqual({
+      engine: 'PostgreSQL',
+      host: 'db.internal',
+      port: 5432,
+      database: 'shop',
+      user: 'reader',
+      password: '',
+      schema: 'public',
+      ssh: { host: 'bastion.example.com', port: 22, user: 'deploy', auth: 'key', keyPath: '~/.ssh/id_ed25519', passphrase: 'pp', hostKey: fingerprint },
+    });
+  });
+
+  it('sends only the secret that its way of logging in uses', () => {
+    const secrets = { sshPassword: 'hunter2', sshPassphrase: 'pp', sshKeyPath: '/k' };
+    expect(toConnection(form({ ...secrets, sshAuth: 'password', sshPort: '2222' }), 'MySQL').ssh).toEqual({
+      host: 'bastion.example.com',
+      port: 2222,
+      user: 'deploy',
+      auth: 'password',
+      password: 'hunter2',
+    });
+    expect(toConnection(form({ ...secrets, sshAuth: 'agent' }), 'MySQL').ssh).toEqual({ host: 'bastion.example.com', port: 22, user: 'deploy', auth: 'agent' });
+  });
+});

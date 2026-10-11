@@ -36,9 +36,20 @@ export interface VersionRecord {
   snapshot: SchemaSnapshot;
 }
 
+/** An SSH server whose key was trusted, so the bridge logs in to it without asking again. One row per `host:port`. */
+export interface KnownHostRecord {
+  /** The server as it is named in the connection form, in lower case: `bastion.example.com:22`. */
+  id: string;
+  /** The key of the server as ssh-keygen writes it: `SHA256:…`. */
+  fingerprint: string;
+  /** Milliseconds since the epoch. */
+  trustedAt: number;
+}
+
 export type Database = Dexie & {
   schemas: EntityTable<SchemaRecord, 'id'>;
   versions: EntityTable<VersionRecord, 'id'>;
+  knownHosts: EntityTable<KnownHostRecord, 'id'>;
 };
 
 export const db = new Dexie('schema-studio') as Database;
@@ -47,4 +58,8 @@ db.version(1).stores({
   schemas: '++id, &name, updatedAt',
   // The unique pair is what keeps a version from being stored twice.
   versions: '++id, &[schemaId+version]',
+});
+
+db.version(2).stores({
+  knownHosts: 'id',
 });

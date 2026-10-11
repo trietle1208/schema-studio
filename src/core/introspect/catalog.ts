@@ -3,6 +3,23 @@
 // catalog of the database in a read-only transaction and hands it over as it is; the app turns
 // the answer into DDL (see ./index) and imports that like any other script.
 
+/** A server to reach the database through: the bridge logs in to it and the database is then reached from there. */
+export interface SshTunnel {
+  host: string;
+  port: number;
+  user: string;
+  /** How the user logs in: with a password, with a private key file on the machine of the bridge, or with the key an ssh-agent holds. */
+  auth: 'password' | 'key' | 'agent';
+  /** `password`: the password of the user. */
+  password?: string;
+  /** `key`: where the private key is, on the machine of the bridge: `~/.ssh/id_ed25519`. The key itself never goes through the app. */
+  keyPath?: string;
+  /** `key`: the passphrase of an encrypted key. */
+  passphrase?: string;
+  /** The fingerprint of the key the server is known by, as ssh-keygen writes it: `SHA256:…`. Without one the bridge does not log in, and says what the server's is. */
+  hostKey?: string;
+}
+
 /** A database to read the tables of. */
 export interface Connection {
   /** The engine as schemas name it: `PostgreSQL`. */
@@ -16,6 +33,8 @@ export interface Connection {
   schema?: string;
   /** Encrypts the connection. The certificate of the server is not checked. */
   ssl?: boolean;
+  /** Reach the database through this server. `host` and `port` are then as that server sees them. */
+  ssh?: SshTunnel;
 }
 
 /** A table of PostgreSQL: `pg_class` with its comment. */
@@ -78,9 +97,11 @@ export interface BridgeError {
   /** What happened, in the wording of the design system: "Could not connect to the database." */
   message: string;
   /** Which failure of the bridge it is, by which the app says it in its own language: the database was not reached, or not read. */
-  code?: 'connect' | 'read';
+  code?: 'connect' | 'read' | 'ssh' | 'hostKey';
   /** What the database or the network said about it. */
   detail?: string;
+  /** `hostKey`: the fingerprint the server was found to have, and whether the app knew another one for it. */
+  hostKey?: { fingerprint: string; changed: boolean };
 }
 
 export type BridgeAnswer = { ok: true; catalog: Catalog } | { ok: false; error: BridgeError };

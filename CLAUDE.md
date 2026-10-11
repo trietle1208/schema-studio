@@ -23,7 +23,7 @@ The user is Vietnamese; reply in Vietnamese unless asked otherwise. Code, identi
 - Canvas: start by porting the prototype `ERCanvas`; switch to React Flow (`@xyflow/react`) only if performance requires it
 - SQL parsing: `pgsql-ast-parser` for PostgreSQL first; keep the parser behind an interface (`src/core/parse/`) so MySQL can be added later
 - Persistence: local-first, IndexedDB via Dexie. One record per schema, one immutable JSON snapshot per saved version
-- Live databases: a browser cannot open a database connection, so `bridge/` is a small Node process (`pg`, `mysql2`) that reads a catalog in a read-only transaction. It only sends the fixed queries in `bridge/*.ts`; turning the catalog into DDL is `src/core/introspect/`, which the parsers then read
+- Live databases: a browser cannot open a database connection, so `bridge/` is a small Node process (`pg`, `mysql2`) that reads a catalog in a read-only transaction. When a database is behind a server, the bridge logs in over SSH (`ssh2`, `bridge/tunnel.ts`) and reads through a one-connection loopback tunnel; the app keeps the trusted host-key fingerprints in IndexedDB and sends the right one with each request, so the bridge keeps no state. It only sends the fixed queries in `bridge/*.ts`; turning the catalog into DDL is `src/core/introspect/`, which the parsers then read
 - Tests: Vitest for `src/core/**` (parser, generator, diff). UI tests are optional
 - Package manager: npm
 
