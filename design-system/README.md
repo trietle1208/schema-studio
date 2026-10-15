@@ -71,4 +71,4 @@ Every frequent action has a shortcut, and buttons display it with `Kbd`: ⌘K se
 
 ## Using the components
 
-Components live in `components/bundle.js` as `window.SchemaStudio` and expect React 18 on the page; their styles are in `components/bundle.css` and every class is prefixed `ss-`. Wrap a page in an element with `class="ss-root"` (or use `AppShell`). `Workspace` is the fully wired main screen; the `Screen…` previews compose the eight product screens (schema list, workspace, inspector editing, import, version history, diff, export, empty state) and a sheet of interaction states.
+Components live in `components/bundle.js` as `window.SchemaStudio` and expect React 18 on the page; their styles are in `components/bundle.css` and every class is prefixed `ss-`. Wrap a page in an element with `class="ss-root"` (or use `AppShell`). `Workspace` is the fully wired main screen; the `Screen…` previews compose the product screens (schema list, workspace, inspector editing, import, version history, diff, export, empty state, data grid) and a sheet of interaction states.

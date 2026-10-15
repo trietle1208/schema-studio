@@ -7,7 +7,7 @@
 <div id="root" class="ss-root"></div>
 <script>
 var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
-var NAMES = ['table','database','key','link','search','plus','minus','undo','redo','zoom-in','zoom-out','fit','download','upload','share','settings','keyboard','chevron-down','chevron-right','chevrons-ud','arrow-right','star','clock','layers','history','diff','file','file-code','clipboard','plug','check','check-circle','x','alert','warning','info','trash','copy','pencil','more','filter','grip','hash','columns','folder','code','eye','restore','migration','sidebar','panel','move','lock','external'];
+var NAMES = ['table','database','key','link','search','plus','minus','undo','redo','zoom-in','zoom-out','fit','download','upload','share','settings','keyboard','chevron-down','chevron-right','chevrons-ud','arrow-right','star','clock','layers','history','diff','file','file-code','clipboard','plug','check','check-circle','x','alert','warning','info','trash','refresh','play','copy','pencil','more','filter','grip','hash','columns','folder','code','eye','restore','migration','sidebar','panel','move','lock','external'];
 function App(){
   return h('div',{className:'ss-demo',style:{gap:4,alignContent:'flex-start'}}, NAMES.map(function(n){
     return h('div',{key:n,title:n,style:{width:76,height:52,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:6,borderRadius:6,color:'var(--ink-2)'}},

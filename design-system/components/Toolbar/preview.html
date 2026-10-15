@@ -1,4 +1,4 @@
-<!-- @dsCard group="Navigation" height=150 width=1192 -->
+<!-- @dsCard group="Navigation" height=200 width=1192 -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Toolbar — preview</title>
@@ -9,9 +9,11 @@
 var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
 function App(){
   var _z = useState(1), z = _z[0], setZ = _z[1];
+  var _m = useState('data'), mode = _m[0], setMode = _m[1];
   return h('div',{style:{display:'flex',flexDirection:'column',gap:16,padding:'16px 0',background:'var(--bg-1)'}},
     h(S.Toolbar,{zoom:z,onZoom:setZ,saveState:'saved',canRedo:false}),
-    h(S.Toolbar,{zoom:0.8,saveState:'dirty',version:'v12'}));
+    h(S.Toolbar,{zoom:0.8,saveState:'dirty',version:'v12'}),
+    h(S.Toolbar,{mode:mode,onMode:setMode,saveState:'saved'}));
 }
 ReactDOM.createRoot(document.getElementById('root')).render(h(App));
 </script>

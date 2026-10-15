@@ -1,0 +1,33 @@
+<!-- @dsCard group="Screens" height=900 width=1440 page subtitle="10 · Data mode: records of a table" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Screen10DataGrid — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState, Fragment = React.Fragment;
+function App(){
+  var tables = S.sample.tables, records = S.sample.records;
+  var _n = useState('users'), name = _n[0], setName = _n[1];
+  var _s = useState([1, 2]), sel = _s[0], setSel = _s[1];
+  var _a = useState({ row: 3, column: 'email' }), act = _a[0], setAct = _a[1];
+  var counts = {}; tables.forEach(function (t) { counts[t.name] = records[t.name].length; });
+  var table = tables.find(function (t) { return t.name === name; });
+  var rows = records[name];
+  var edited = name === 'users';
+  function pick(n) { setName(n); setSel([]); setAct(null); }
+  return h('div', { className: 'ss-screen' }, h(S.AppShell, { sidebar: h(S.Sidebar, { activeSchema: 'ecommerce' }) }, h(Fragment, null,
+    h(S.Toolbar, { schema: 'ecommerce', version: 'v12', mode: 'data', saveState: edited ? 'dirty' : 'saved' }),
+    h('div', { className: 'ss-work' },
+      h(S.TableList, { tables: tables, counts: counts, selected: name, onSelect: pick }),
+      h(S.DataGrid, { columns: table.columns, rows: rows, selected: sel, onSelect: setSel, activeCell: act, onActiveCell: setAct, modified: edited ? [{ row: 3, column: 'name' }] : [], empty: rows.length === 0, label: name })),
+    h(S.StatusBar, {
+      left: [h(Fragment, null, h('span', { className: 'ss-status-ok' }), 'Sample data'), 'public.' + name, rows.length + (rows.length === 1 ? ' row' : ' rows') + ' · ' + table.columns.length + ' columns', sel.length ? sel.length + ' selected' : 'Nothing selected'],
+      right: ['PostgreSQL 16', 'UTF-8']
+    }))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

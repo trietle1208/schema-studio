@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"SchemaStudio","components":[{"name":"Icon"},{"name":"Logo"},{"name":"Button"},{"name":"Badge"},{"name":"Input"},{"name":"Select"},{"name":"Checkbox"},{"name":"SegmentedControl"},{"name":"Sidebar"},{"name":"Toolbar"},{"name":"StatusBar"},{"name":"TableNode"},{"name":"ERCanvas"},{"name":"Inspector"},{"name":"TypeSelect"},{"name":"ContextMenu"},{"name":"Modal"},{"name":"DropZone"},{"name":"SqlEditor"},{"name":"ImportSchemaDialog"},{"name":"ExportDialog"},{"name":"Toast"},{"name":"DataTable"},{"name":"VersionList"},{"name":"DiffList"},{"name":"DdlDiff"},{"name":"EmptyState"},{"name":"Workspace"}]} */
+/* @ds-bundle: {"format":4,"namespace":"SchemaStudio","components":[{"name":"Icon"},{"name":"Logo"},{"name":"Button"},{"name":"Badge"},{"name":"Input"},{"name":"Select"},{"name":"Checkbox"},{"name":"SegmentedControl"},{"name":"Sidebar"},{"name":"Toolbar"},{"name":"StatusBar"},{"name":"TableNode"},{"name":"ERCanvas"},{"name":"Inspector"},{"name":"TypeSelect"},{"name":"ContextMenu"},{"name":"Modal"},{"name":"DropZone"},{"name":"SqlEditor"},{"name":"ImportSchemaDialog"},{"name":"ExportDialog"},{"name":"Toast"},{"name":"DataTable"},{"name":"TableList"},{"name":"DataGrid"},{"name":"VersionList"},{"name":"DiffList"},{"name":"DdlDiff"},{"name":"EmptyState"},{"name":"Workspace"}]} */
 (function () {
   var React = window.React;
   var h = React.createElement;
@@ -67,6 +67,8 @@
     move: '<path d="M12 3v18M3 12h18M9 5.5L12 3l3 2.5M9 18.5l3 2.5 3-2.5M5.5 9L3 12l2.5 3M18.5 9L21 12l-2.5 3"/>',
     sparkle: '<path d="M12 4v4M12 16v4M4 12h4M16 12h4"/>',
     lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+    refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4.5V11h-6.5"/>',
+    play: '<path d="M7.5 4.5v15L19 12z"/>',
     external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
   };
 
@@ -291,6 +293,48 @@
     '',
     'CREATE INDEX orders_user_id_idx ON orders (user_id);'
   ].join('\n');
+
+  // ------------------------------------------------------------------ sample records
+  // Rows of the ecommerce sample, keyed by table name; values are null, numbers, booleans or strings
+  // (timestamps as `YYYY-MM-DD HH:mm:ss`, as the seed writes them). Foreign keys point at rows that exist.
+  var SAMPLE_RECORDS = (function () {
+    var DAY = 86400000;
+    function stamp(ms) { return new Date(ms).toISOString().slice(0, 19).replace('T', ' '); }
+    var userRows = [
+      ['luong.hoang@example.com', 'Luong Hoang', 1], ['minh.tran@example.com', 'Minh Tran', 1], ['linh.pham@example.com', 'Linh Pham', 0],
+      ['dev.team@example.com', null, 0], ['hannah.becker@example.com', 'Hannah Becker', 1], ['diego.alvarez@example.com', 'Diego Alvarez', 2],
+      ['sofia.rossi@example.com', 'Sofia Rossi', 1], ['kenji.tanaka@example.com', 'Kenji Tanaka', 0], ['priya.nair@example.com', 'Priya Nair', 1],
+      ['omar.haddad@example.com', 'Omar Haddad', 1], ['billing.ops@example.com', null, 1], ['elena.petrova@example.com', 'Elena Petrova', 0],
+      ['noah.williams@example.com', 'Noah Williams', 1], ['aisha.khan@example.com', 'Aisha Khan', 1], ['lucas.martin@example.com', 'Lucas Martin', 0],
+      ['mai.le@example.com', 'Mai Le', 1], ['k.ito@example.com', null, 1], ['tom.fischer@example.com', 'Tom Fischer', 1],
+      ['zoe.clark@example.com', 'Zoe Clark', 0], ['quang.vo@example.com', 'Quang Vo', 1]
+    ];
+    var users = userRows.map(function (u, i) {
+      return {
+        id: i + 1, email: u[0], name: u[1],
+        avatar_url: u[2] === 0 ? null : u[2] === 2
+          ? 'https://cdn.example.com/avatars/6/original/diego-alvarez-profile-photo-2026-03-14T09-12-44Z.jpg?w=1024&h=1024&fit=crop&crop=faces&auto=format&q=85&sig=7c1f0e5b9a3d4482b6e0f1a2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6'
+          : 'https://cdn.example.com/avatars/' + (i + 1) + '.png',
+        created_at: stamp(Date.UTC(2026, 2, 2, 9, 14, 7) + i * (3 * DAY + 5 * 3600000 + 17 * 60000 + 41000))
+      };
+    });
+    var productRows = [['Mechanical keyboard', 'KB-MX-87', 129.9], ['USB-C dock', 'DK-USBC-11', 89], ['27" monitor', 'MN-27-4K', 349.5], ['Desk mat', 'DM-XL-GRY', 24.99], ['Webcam 1080p', 'WC-1080', 59], ['Laptop stand', 'LS-ALU-02', 39.9], ['Noise-cancelling headset', 'HS-NC-700', 219], ['Ergonomic mouse', 'MS-ERG-05', 74.5], ['Cable organiser', 'CO-6PK', 12.5], ['Portable SSD 1TB', 'SSD-1T-P3', 119]];
+    var products = productRows.map(function (r, i) { return { id: i + 1, name: r[0], sku: r[1], price: r[2] }; });
+    var itemOrder = [], i2;
+    for (i2 = 0; i2 < 20; i2++) itemOrder.push(i2 + 1);
+    [3, 5, 8, 8, 11, 14, 14, 17, 19, 20].forEach(function (o) { itemOrder.push(o); });
+    var items = itemOrder.map(function (orderId, i) {
+      var product = products[(i * 3 + orderId) % products.length];
+      return { id: i + 1, order_id: orderId, product_id: product.id, quantity: 1 + (i * 5) % 4, price: product.price };
+    });
+    var statuses = ['pending', 'paid', 'shipped', 'delivered', 'delivered', 'cancelled', 'paid', 'delivered', 'shipped', 'delivered'];
+    var orderUsers = [1, 2, 2, 3, 5, 1, 6, 7, 2, 9, 10, 5, 13, 1, 14, 16, 18, 2, 20, 7];
+    var orders = orderUsers.map(function (userId, i) {
+      var total = items.filter(function (it) { return it.order_id === i + 1; }).reduce(function (sum, it) { return sum + it.quantity * it.price; }, 0);
+      return { id: i + 1, user_id: userId, status: statuses[(i * 3) % statuses.length], total: Math.round(total * 100) / 100, created_at: stamp(Date.UTC(2026, 5, 1, 8, 30, 12) + i * (2 * DAY + 7 * 3600000 + 9 * 60000 + 23000)) };
+    });
+    return { users: users, orders: orders, order_items: items, products: products, payments: [] };
+  })();
 
   // ------------------------------------------------------------------ SQL highlight
   var KW = 'CREATE|TABLE|PRIMARY|KEY|NOT|NULL|UNIQUE|DEFAULT|REFERENCES|ON|DELETE|UPDATE|CASCADE|RESTRICT|SET|INDEX|ALTER|ADD|COLUMN|DROP|IF|EXISTS|CONSTRAINT|FOREIGN|CHECK|USING|BEGIN|COMMIT|TYPE|IN|AND|OR|INSERT|INTO|VALUES|SELECT|FROM|WHERE|NO|ACTION|COMMENT|IS|RENAME|TO';
@@ -730,22 +774,27 @@
     return h('span', { className: 'ss-save is-saved', role: 'status' }, h(Icon, { name: 'check', size: 14 }), p.label || 'Saved');
   }
 
+  var WORKSPACE_MODES = [{ value: 'diagram', label: 'Diagram' }, { value: 'data', label: 'Data' }, { value: 'query', label: 'Query' }];
+
   function Toolbar(p) {
     var zoom = p.zoom || 1;
+    var showModes = p.mode !== undefined || !!p.onMode;
+    var mode = p.mode || 'diagram';
     return h('header', { className: 'ss-toolbar' },
       h('div', { className: 'ss-tb-crumb' },
         h('span', null, 'Schemas'), h(Icon, { name: 'chevron-right', size: 12 }),
         h('span', { className: 'ss-tb-name' }, p.schema || 'ecommerce', h(Icon, { name: 'chevron-down', size: 12, style: { color: 'var(--ink-3)' } }))),
       h(Badge, { dot: true, title: 'Database engine' }, p.engine || 'PostgreSQL'),
       h(Badge, { tone: 'accent', title: 'Current version' }, p.version || 'v12'),
+      showModes && h(SegmentedControl, { options: WORKSPACE_MODES, value: mode, onChange: p.onMode }),
       h(SaveStatus, { state: p.saveState }),
       p.saveState === 'dirty' && h(Button, { size: 'sm', kbd: ['⌘', 'S'], onClick: p.onSave }, 'Save'),
       h('span', { className: 'ss-spacer' }),
       h('div', { className: 'ss-tb-group' },
         h(IconButton, { icon: 'undo', label: 'Undo (⌘Z)', disabled: p.canUndo === false, onClick: p.onUndo }),
         h(IconButton, { icon: 'redo', label: 'Redo (⇧⌘Z)', disabled: p.canRedo === false, onClick: p.onRedo })),
-      h('span', { className: 'ss-tb-sep' }),
-      h('div', { className: 'ss-tb-group' },
+      mode === 'diagram' && h('span', { className: 'ss-tb-sep' }),
+      mode === 'diagram' && h('div', { className: 'ss-tb-group' },
         h(IconButton, { icon: 'zoom-out', label: 'Zoom out (⌘−)', onClick: function () { p.onZoom && p.onZoom(Math.max(0.25, Math.round((zoom - 0.1) * 100) / 100)); } }),
         h('button', { className: 'ss-tb-zoom', title: 'Reset zoom (⌘0)', onClick: function () { p.onZoom && p.onZoom(1); } }, Math.round(zoom * 100) + '%'),
         h(IconButton, { icon: 'zoom-in', label: 'Zoom in (⌘+)', onClick: function () { p.onZoom && p.onZoom(Math.min(2, Math.round((zoom + 0.1) * 100) / 100)); } }),
@@ -1038,6 +1087,140 @@
       })));
   }
 
+  // ------------------------------------------------------------------ records: table list and data grid
+  function TableList(p) {
+    var _q = useState(''), own = _q[0], setOwn = _q[1];
+    var q = p.search !== undefined ? p.search : own;
+    var all = p.tables || [], counts = p.counts || {};
+    var needle = q.trim().toLowerCase();
+    var shown = needle ? all.filter(function (t) { return t.name.toLowerCase().indexOf(needle) >= 0; }) : all;
+    var total = all.reduce(function (n, t) { return n + (counts[t.name] || 0); }, 0);
+    function search(v) { setOwn(v); p.onSearch && p.onSearch(v); }
+    return h('aside', { className: 'ss-tablelist', 'aria-label': 'Tables' },
+      h('div', { className: 'ss-tl-head' }, h('span', { className: 'ss-caption' }, 'Tables'), h('span', { className: 'ss-tl-count' }, all.length)),
+      h('div', { className: 'ss-tl-search' }, h(Input, { icon: 'search', size: 'sm', placeholder: 'Search tables…', 'aria-label': 'Search tables', value: q, onChange: function (e) { search(e.target.value); } })),
+      h('div', { className: 'ss-tl-list', role: 'listbox', 'aria-label': 'Tables' }, shown.length
+        ? shown.map(function (t) {
+          var on = p.selected === t.name;
+          return h('button', { key: t.name, type: 'button', role: 'option', 'aria-selected': on, className: cx('ss-tl-item', on && 'is-active'), onClick: function () { p.onSelect && p.onSelect(t.name); } },
+            h(Icon, { name: 'table', size: 14 }),
+            h('span', { className: 'ss-tl-name' }, t.name),
+            counts[t.name] != null && h('span', { className: 'ss-tl-rows', title: counts[t.name].toLocaleString('en-US') + (counts[t.name] === 1 ? ' row' : ' rows') }, counts[t.name].toLocaleString('en-US')));
+        })
+        : h('div', { className: 'ss-tl-none' }, 'No tables match "' + q.trim() + '".')),
+      h('div', { className: 'ss-tl-foot' }, all.length + (all.length === 1 ? ' table' : ' tables') + ' · ' + total.toLocaleString('en-US') + (total === 1 ? ' row' : ' rows')));
+  }
+
+  // What a column holds decides how its cells are set: numbers right-aligned, moments as YYYY-MM-DD HH:mm:ss.
+  function cellKind(type) {
+    var t = String(type || '').toUpperCase();
+    if (/^(BIG|SMALL|MEDIUM|TINY)?(INT|INTEGER|SERIAL)\d?\b|^(DECIMAL|NUMERIC|REAL|DOUBLE|FLOAT|MONEY)/.test(t)) return 'number';
+    if (/^BOOL/.test(t)) return 'boolean';
+    if (/^(TIMESTAMP|DATETIME|DATE|TIME)\b/.test(t)) return 'time';
+    return 'text';
+  }
+  function gridCell(value, c, kind) {
+    if (value == null) return h('span', { className: 'ss-null' }, 'NULL');
+    if (kind === 'number') {
+      var scale = /\(\s*\d+\s*,\s*(\d+)\s*\)/.exec(c.type);
+      return scale && typeof value === 'number' ? value.toFixed(Number(scale[1])) : String(value);
+    }
+    if (kind === 'boolean') return value === true || value === 1 || value === 't' || value === 'true' ? 'true' : 'false';
+    if (kind === 'time') return (value instanceof Date ? value.toISOString() : String(value)).replace(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}).*$/, '$1 $2');
+    return String(value);
+  }
+  var GRID_WIDTH = { number: 112, boolean: 96, time: 176, text: 220 };
+  var SKELETON_WIDTH = [58, 82, 46, 70, 54, 76];
+
+  function DataGrid(p) {
+    var cols = p.columns || [], rows = p.rows || [], selected = p.selected || [], modified = p.modified || [], active = p.activeCell || null;
+    var kinds = cols.map(function (c) { return cellKind(c.type); });
+    // A column is as wide as its kind asks, and never narrower than its header: glyphs, name and type.
+    var widths = cols.map(function (c, i) {
+      var head = Math.ceil(c.name.length * 7.3 + c.type.length * 6.7 + 6 + ((c.pk ? 1 : 0) + (c.fk ? 1 : 0)) * 18 + 26);
+      return c.width || Math.max(GRID_WIDTH[kinds[i]], head);
+    });
+    var width = 56 + widths.reduce(function (a, b) { return a + b; }, 0);
+    var ref = useRef(null);
+    var allOn = rows.length > 0 && selected.length === rows.length;
+
+    function isModified(r, name) { return modified.some(function (m) { return m.row === r && m.column === name; }); }
+    function toggle(r) {
+      var next = selected.indexOf(r) >= 0 ? selected.filter(function (x) { return x !== r; }) : selected.concat([r]).sort(function (a, b) { return a - b; });
+      p.onSelect && p.onSelect(next);
+    }
+    function activate(r, name) { p.onActiveCell && p.onActiveCell({ row: r, column: name }); }
+    function onKey(e) {
+      if (!rows.length || !cols.length || e.target.tagName === 'INPUT') return;
+      var r = active ? active.row : 0, c = active ? cols.findIndex(function (x) { return x.name === active.column; }) : 0;
+      if (c < 0) c = 0;
+      var d = { ArrowDown: [1, 0], ArrowUp: [-1, 0], ArrowRight: [0, 1], ArrowLeft: [0, -1] }[e.key];
+      if (d) {
+        e.preventDefault();
+        if (active) { r = Math.max(0, Math.min(rows.length - 1, r + d[0])); c = Math.max(0, Math.min(cols.length - 1, c + d[1])); }
+        activate(r, cols[c].name);
+      } else if (active && e.key === 'Enter') { e.preventDefault(); p.onOpenRow && p.onOpenRow(r); }
+      else if (active && e.key === ' ') { e.preventDefault(); toggle(r); }
+    }
+    useEffect(function () {
+      var el = ref.current && ref.current.querySelector('td.is-active');
+      if (el && ref.current.contains(document.activeElement)) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }, [active && active.row, active && active.column]);
+
+    function head(c, i) {
+      return h('th', { key: c.name, scope: 'col', className: cx(kinds[i] === 'number' && 'is-num', i === 0 && 'is-first'), title: c.name + ' ' + c.type },
+        h('span', { className: 'ss-grid-hc' },
+          c.pk && h(Icon, { name: 'key', size: 12, className: 'ss-grid-key is-pk', label: 'Primary key' }),
+          c.fk && h(Icon, { name: 'link', size: 12, className: 'ss-grid-key is-fk', label: 'Foreign key' }),
+          h('span', { className: 'ss-grid-name' }, c.name),
+          h('span', { className: 'ss-grid-type' }, c.type)));
+    }
+    function body() {
+      if (p.loading) {
+        return Array.from({ length: 12 }, function (_, r) {
+          return h('tr', { key: r, 'aria-hidden': true },
+            h('td', { className: 'ss-grid-gutter' }),
+            cols.map(function (c, i) {
+              return h('td', { key: c.name, className: cx(kinds[i] === 'number' && 'is-num', i === 0 && 'is-first') },
+                h('span', { className: 'ss-grid-skel', style: { width: SKELETON_WIDTH[(r + i * 2) % SKELETON_WIDTH.length] + '%' } }));
+            }));
+        });
+      }
+      return rows.map(function (row, r) {
+        var on = selected.indexOf(r) >= 0;
+        return h('tr', { key: r, className: cx(on && 'is-selected'), 'aria-selected': on, 'aria-rowindex': r + 2, onDoubleClick: function () { p.onOpenRow && p.onOpenRow(r); } },
+          h('td', { className: 'ss-grid-gutter' },
+            h('span', { className: 'ss-grid-n' }, r + 1),
+            h('label', { className: 'ss-check' },
+              h('input', { type: 'checkbox', checked: on, 'aria-label': 'Select row ' + (r + 1), onChange: function () { toggle(r); } }),
+              h('span', { className: 'ss-check-box' }, on && h(Icon, { name: 'check', size: 11, strokeWidth: 3 })))),
+          cols.map(function (c, i) {
+            var v = row[c.name], text = v == null ? null : gridCell(v, c, kinds[i]);
+            var isActive = !!active && active.row === r && active.column === c.name;
+            return h('td', {
+              key: c.name, role: 'gridcell', title: text != null && kinds[i] === 'text' ? text : undefined,
+              className: cx(kinds[i] === 'number' && 'is-num', kinds[i] === 'time' && 'is-time', kinds[i] === 'boolean' && 'is-bool', i === 0 && 'is-first', isActive && 'is-active', isModified(r, c.name) && 'is-modified'),
+              onClick: function () { activate(r, c.name); }
+            }, v == null ? gridCell(v, c, kinds[i]) : text);
+          }));
+      });
+    }
+
+    return h('div', { ref: ref, className: cx('ss-grid', p.density === 'compact' && 'ss-grid--compact'), role: 'grid', tabIndex: 0, 'aria-label': p.label || 'Records', 'aria-busy': p.loading || undefined, 'aria-rowcount': rows.length + 1, 'aria-colcount': cols.length + 1, onKeyDown: onKey },
+      h('table', { className: 'ss-grid-table', style: { width: width } },
+        h('colgroup', null, h('col', { style: { width: 56 } }), cols.map(function (c, i) { return h('col', { key: c.name, style: { width: widths[i] } }); })),
+        h('thead', null, h('tr', null,
+          h('th', { className: 'ss-grid-gutter', scope: 'col' }, h('label', { className: 'ss-check' },
+            h('input', { type: 'checkbox', checked: allOn, disabled: !rows.length || !!p.loading, 'aria-label': 'Select all rows', onChange: function () { p.onSelect && p.onSelect(allOn ? [] : rows.map(function (_, r) { return r; })); } }),
+            h('span', { className: 'ss-check-box' }, allOn && h(Icon, { name: 'check', size: 11, strokeWidth: 3 })))),
+          cols.map(head))),
+        h('tbody', null, body())),
+      p.empty && !p.loading && h('div', { className: 'ss-grid-empty' },
+        p.empty === true
+          ? h(Fragment, null, h('div', { className: 'ss-grid-empty-title' }, 'No records'), h('div', null, 'Add a record, or use Import Records to fill this table.'))
+          : p.empty));
+  }
+
   function VersionList(p) {
     return h('div', { className: 'ss-vlist', role: 'listbox', 'aria-label': 'Versions' }, (p.versions || SAMPLE_VERSIONS).map(function (v) {
       return h('button', { key: v.version, type: 'button', role: 'option', 'aria-selected': p.selected === v.version, className: cx('ss-ver', v.current && 'is-current', p.selected === v.version && 'is-selected'), onClick: function () { p.onSelect && p.onSelect(v.version); } },
@@ -1248,9 +1431,9 @@
     TableNode: TableNode, ERCanvas: ERCanvas, Inspector: Inspector, TypeSelect: TypeSelect, ContextMenu: ContextMenu,
     Modal: Modal, ConfirmDialog: ConfirmDialog, DropZone: DropZone, SqlEditor: SqlEditor, ParseStatus: ParseStatus,
     ImportSchemaDialog: ImportSchemaDialog, ExportDialog: ExportDialog,
-    Toast: Toast, Alert: Alert, DataTable: DataTable, VersionList: VersionList, DiffList: DiffList, DiffRow: DiffRow, DdlDiff: DdlDiff,
+    Toast: Toast, Alert: Alert, DataTable: DataTable, TableList: TableList, DataGrid: DataGrid, VersionList: VersionList, DiffList: DiffList, DiffRow: DiffRow, DdlDiff: DdlDiff,
     EmptyState: EmptyState, Workspace: Workspace,
     highlightSql: highlightSql, validateColumns: validateColumns,
-    sample: { tables: SAMPLE_TABLES, positions: SAMPLE_POSITIONS, schemas: SAMPLE_SCHEMAS, versions: SAMPLE_VERSIONS, diff: SAMPLE_DIFF, sql: SAMPLE_SQL, pasteSql: PASTE_SQL, badSql: BAD_SQL, types: TYPE_OPTIONS }
+    sample: { tables: SAMPLE_TABLES, positions: SAMPLE_POSITIONS, schemas: SAMPLE_SCHEMAS, versions: SAMPLE_VERSIONS, diff: SAMPLE_DIFF, sql: SAMPLE_SQL, pasteSql: PASTE_SQL, badSql: BAD_SQL, types: TYPE_OPTIONS, records: SAMPLE_RECORDS }
   };
 })();
