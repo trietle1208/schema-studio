@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { t } from '../core/i18n';
 import { Button } from './Button';
+import { cx } from './cx';
 import { Icon } from './Icon';
 import { Kbd } from './Kbd';
 
@@ -48,25 +49,33 @@ export interface EmptyStateProps {
   onCreate?: () => void;
   /** False hides the footer line. */
   hints?: boolean;
+  /** A short message under a header, without the picture: for a grid or a pane that has nothing to show. */
+  compact?: boolean;
+  /** Replaces the two schema buttons; an empty node leaves out the row. */
+  actions?: ReactNode;
 }
 
-export function EmptyState({ title, description, onImport, onCreate, hints }: EmptyStateProps) {
-  return (
-    <div className="ss-empty">
-      <EmptyArt />
-      <div className="ss-empty-title">{title || t('empty.title')}</div>
-      <div className="ss-empty-sub">
-        {description || t('empty.description')}
-      </div>
-      <div className="ss-empty-actions">
+export function EmptyState({ title, description, onImport, onCreate, hints, compact, actions }: EmptyStateProps) {
+  const row =
+    actions !== undefined ? (
+      actions
+    ) : compact ? null : (
+      <>
         <Button variant="primary" icon="upload" onClick={onImport} disabled={!onImport} kbd={['⌘', 'I']}>
           {t('action.importSchema')}
         </Button>
         <Button icon="plus" onClick={onCreate} disabled={!onCreate} kbd={['⌘', 'N']}>
           {t('action.createNewSchema')}
         </Button>
-      </div>
-      {hints !== false && (
+      </>
+    );
+  return (
+    <div className={cx('ss-empty', compact && 'ss-empty--compact')}>
+      {!compact && <EmptyArt />}
+      <div className="ss-empty-title">{title || t('empty.title')}</div>
+      {(description || !compact) && <div className="ss-empty-sub">{description || t('empty.description')}</div>}
+      {row && <div className="ss-empty-actions">{row}</div>}
+      {hints !== false && !compact && (
         <div className="ss-empty-keys">
           <span>
             <Icon name="file-code" size={14} />

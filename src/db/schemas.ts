@@ -109,9 +109,13 @@ export function describeVersion(schemaId: number, version: number, { message, no
 
 /** Removes a schema and every version of it. Removing one that is already gone does nothing. */
 export function deleteSchema(id: number): Promise<void> {
-  return db.transaction('rw', db.schemas, db.versions, async () => {
+  return db.transaction('rw', db.schemas, db.versions, db.records, async () => {
     await db.versions
       .where('[schemaId+version]')
+      .between([id, Dexie.minKey], [id, Dexie.maxKey])
+      .delete();
+    await db.records
+      .where('[schemaId+table]')
       .between([id, Dexie.minKey], [id, Dexie.maxKey])
       .delete();
     await db.schemas.delete(id);

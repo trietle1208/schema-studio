@@ -90,6 +90,13 @@ export function t<K extends MessageKey>(key: K, ...args: MessageArgs<K>): string
   return translate(current, key, ...args);
 }
 
+const NUMBER_LOCALES: Record<Locale, string> = { en: 'en-US', vi: 'vi-VN' };
+
+/** A number with the thousands separator of the language of the app: `1,248` in English, `1.248` in Vietnamese. */
+export function formatNumber(value: number, locale: Locale = current): string {
+  return value.toLocaleString(NUMBER_LOCALES[locale]);
+}
+
 /** `a, b or c`: the alternatives of a message, in the language of the app. */
 export function anyOf(items: readonly string[]): string {
   if (items.length < 2) return items[0] ?? '';

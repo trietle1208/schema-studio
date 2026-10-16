@@ -40,6 +40,7 @@ import {
   groupTablesAsNew,
   inferRelationships,
   newTable,
+  openMode,
   removeInferredRelationships,
   requestAddForeignKey,
   requestDeleteTable,
@@ -126,6 +127,9 @@ export function Workspace() {
         schema={name}
         engine={engine}
         version={version === null ? undefined : versionLabel(version)}
+        mode="diagram"
+        onMode={openMode}
+        dataDisabled={tables.length === 0}
         saveState={saveState}
         onSave={saveSchema}
         zoom={zoom}

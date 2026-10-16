@@ -6,11 +6,13 @@ import type { ColumnsChoice } from '../core/edit';
 import { assignGroup, newGroupName } from '../core/groups';
 import { t } from '../core/i18n';
 import type { Position } from '../core/model';
+import { dataTable, modeRoute, type WorkspaceMode } from '../core/routes';
 import { countInferred, qualifiedName, referenceProblem, referenceTargets, relatedTables, type ColumnRef } from '../core/relations';
 import { validateColumns } from '../core/validate';
 import { versionLabel } from '../core/versions';
 import { undo, useSchemaStore, type SaveResult } from '../store/schema';
 import { useUiStore } from '../store/ui';
+import { go } from './navigation';
 
 /**
  * ⌘S and the Save button: stores the working copy as a new version and says in a toast how it went.
@@ -297,4 +299,41 @@ export function groupTablesAsNew(tables: readonly string[]) {
  */
 export function showColumns(choice: ColumnsChoice, names?: readonly string[]) {
   useSchemaStore.getState().showColumns(choice, names);
+}
+
+/**
+ * The mode switch of the toolbar. Data opens on the table selected on the diagram, or the first
+ * one; a schema without tables has none, and the switch does not offer Data for it.
+ */
+export function openMode(mode: WorkspaceMode) {
+  const { name, tables, selected } = useSchemaStore.getState();
+  const route = modeRoute(mode, name, dataTable(tables, selected));
+  if (route) go(route);
+}
+
+/** "Open in Data": the records of `table`. */
+export function openInData(table: string) {
+  go({ screen: 'data', schema: useSchemaStore.getState().name, table });
+}
+
+/** "Open in Diagram" in the menu of a table's header: back to the diagram, with the table selected. */
+export function openInDiagram(table: string) {
+  const schema = useSchemaStore.getState();
+  // A search or a focus could hide the table from the diagram it is opened in.
+  useUiStore.getState().setSearch('');
+  schema.focus(null);
+  schema.select(table);
+  go({ screen: 'workspace', schema: schema.name });
+}
+
+/** "Copy table name" in the menu of a table's header. */
+export async function copyTableName(name: string): Promise<void> {
+  const ui = useUiStore.getState();
+  try {
+    await navigator.clipboard.writeText(name);
+    ui.showToast({ tone: 'success', title: t('toast.copiedTableName.title'), description: name });
+  } catch (error) {
+    console.error(error);
+    ui.showToast({ tone: 'error', title: t('toast.copyFailed.title'), description: t('toast.copyFailed.description') });
+  }
 }

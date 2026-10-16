@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { t } from '../core/i18n';
 import { LARGE_TABLE, stepZoom, ZOOM_STEP } from '../core/layout';
+import type { WorkspaceMode } from '../core/routes';
 import { Badge } from './Badge';
 import type { ColumnsChoice } from '../core/edit';
 import { Button } from './Button';
@@ -9,6 +10,7 @@ import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Input } from './Input';
 import { Kbd } from './Kbd';
+import { ModeSwitch } from './ModeSwitch';
 
 export type SaveState = 'saved' | 'dirty' | 'saving';
 
@@ -115,6 +117,11 @@ export interface ToolbarProps {
   engine?: string;
   /** The current version, e.g. `v12`. The badge is left out until the schema has one. */
   version?: string;
+  /** The mode on show. Giving it, or `onMode`, adds the Diagram / Data / Query switch; the zoom tools are only for the diagram. */
+  mode?: WorkspaceMode;
+  onMode?: (mode: WorkspaceMode) => void;
+  /** The schema has no tables, so Data has nothing to show. */
+  dataDisabled?: boolean;
   saveState?: SaveState;
   onSave?: () => void;
   zoom?: number;
@@ -149,6 +156,9 @@ export function Toolbar({
   schema,
   engine,
   version,
+  mode = 'diagram',
+  onMode,
+  dataDisabled,
   saveState,
   onSave,
   zoom = 1,
@@ -171,6 +181,7 @@ export function Toolbar({
   onShare,
   onExport,
 }: ToolbarProps) {
+  const showModes = !!onMode;
   return (
     <header className="ss-toolbar">
       <div className="ss-tb-crumb">
@@ -191,6 +202,7 @@ export function Toolbar({
           {version}
         </Badge>
       )}
+      {showModes && <ModeSwitch value={mode} onChange={onMode} dataDisabled={dataDisabled} />}
       <SaveStatus state={saveState} />
       {saveState === 'dirty' && (
         <Button size="sm" kbd={['⌘', 'S']} onClick={onSave}>
@@ -202,19 +214,21 @@ export function Toolbar({
         <IconButton icon="undo" label={t('toolbar.undo')} disabled={canUndo === false} onClick={onUndo} />
         <IconButton icon="redo" label={t('toolbar.redo')} disabled={canRedo === false} onClick={onRedo} />
       </div>
-      <span className="ss-tb-sep" />
-      <div className="ss-tb-group">
-        <IconButton icon="zoom-out" label={t('toolbar.zoomOut')} onClick={() => onZoom?.(stepZoom(zoom, -ZOOM_STEP))} />
-        <button type="button" className="ss-tb-zoom" title={t('toolbar.zoomReset')} onClick={() => onZoom?.(1)}>
-          {`${Math.round(zoom * 100)}%`}
-        </button>
-        <IconButton icon="zoom-in" label={t('toolbar.zoomIn')} onClick={() => onZoom?.(stepZoom(zoom, ZOOM_STEP))} />
-        <IconButton icon="fit" label={t('toolbar.fit')} onClick={onFit} />
-        {onArrange && (
-          <IconButton icon="sparkle" label={`${arrangeSelected ? t('action.arrangeSelected') : t('action.arrange')} (⇧A)`} onClick={onArrange} />
-        )}
-        {onShowColumns && <ColumnsMenu onChoose={onShowColumns} selected={columnsSelected} />}
-      </div>
+      {mode === 'diagram' && <span className="ss-tb-sep" />}
+      {mode === 'diagram' && (
+        <div className="ss-tb-group">
+          <IconButton icon="zoom-out" label={t('toolbar.zoomOut')} onClick={() => onZoom?.(stepZoom(zoom, -ZOOM_STEP))} />
+          <button type="button" className="ss-tb-zoom" title={t('toolbar.zoomReset')} onClick={() => onZoom?.(1)}>
+            {`${Math.round(zoom * 100)}%`}
+          </button>
+          <IconButton icon="zoom-in" label={t('toolbar.zoomIn')} onClick={() => onZoom?.(stepZoom(zoom, ZOOM_STEP))} />
+          <IconButton icon="fit" label={t('toolbar.fit')} onClick={onFit} />
+          {onArrange && (
+            <IconButton icon="sparkle" label={`${arrangeSelected ? t('action.arrangeSelected') : t('action.arrange')} (⇧A)`} onClick={onArrange} />
+          )}
+          {onShowColumns && <ColumnsMenu onChoose={onShowColumns} selected={columnsSelected} />}
+        </div>
+      )}
       <span className="ss-tb-sep" />
       <div className="ss-tb-search">
         <Input

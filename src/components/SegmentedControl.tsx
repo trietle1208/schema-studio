@@ -10,6 +10,7 @@ export interface SegmentedOption {
   icon?: IconName;
   badge?: ReactNode;
   disabled?: boolean;
+  title?: string;
 }
 
 export interface SegmentedControlProps {
@@ -29,6 +30,7 @@ export function SegmentedControl({ options, value, onChange, block }: SegmentedC
           role="tab"
           aria-selected={value === o.value}
           disabled={o.disabled}
+          title={o.title}
           className={cx('ss-seg-item', value === o.value && 'is-active')}
           onClick={() => onChange?.(o.value)}
         >

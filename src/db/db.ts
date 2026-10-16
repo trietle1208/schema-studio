@@ -1,5 +1,6 @@
-import Dexie, { type EntityTable } from 'dexie';
+import Dexie, { type EntityTable, type Table } from 'dexie';
 import type { SchemaSnapshot } from '../core/model';
+import type { Row } from '../core/records';
 
 /** One row per schema: what the lists show, and the number of its current version. */
 export interface SchemaRecord {
@@ -36,9 +37,25 @@ export interface VersionRecord {
   snapshot: SchemaSnapshot;
 }
 
+/**
+ * The rows of one table of a schema: one record per table, keyed by the pair. A record that exists
+ * with no rows means the table was filled and then emptied; only a table without a record is
+ * filled with sample data. Rows are not part of a version.
+ */
+export interface RecordsRecord {
+  schemaId: number;
+  table: string;
+  rows: Row[];
+  /** The seed the first rows were drawn with. */
+  seed: number;
+  /** Milliseconds since the epoch: when the rows were made. */
+  createdAt: number;
+}
+
 export type Database = Dexie & {
   schemas: EntityTable<SchemaRecord, 'id'>;
   versions: EntityTable<VersionRecord, 'id'>;
+  records: Table<RecordsRecord, [number, string]>;
 };
 
 export const db = new Dexie('schema-studio') as Database;
@@ -47,4 +64,12 @@ db.version(1).stores({
   schemas: '++id, &name, updatedAt',
   // The unique pair is what keeps a version from being stored twice.
   versions: '++id, &[schemaId+version]',
+});
+
+// Version 2 adds the rows of tables. Nothing stored earlier changes: a table without a record is
+// filled the first time its data is opened.
+db.version(2).stores({
+  schemas: '++id, &name, updatedAt',
+  versions: '++id, &[schemaId+version]',
+  records: '[schemaId+table]',
 });

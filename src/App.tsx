@@ -5,9 +5,11 @@ import { t } from './core/i18n';
 import { routeSchema, SCHEMAS_ROUTE, type Route } from './core/routes';
 import { schemaSummary } from './db/schemas';
 import { useSchemas } from './db/useSchemas';
+import { DataMode } from './screens/DataMode';
 import { go } from './screens/navigation';
 import { Overlays } from './screens/Overlays';
 import { PanelHandle } from './screens/PanelHandle';
+import { QueryMode } from './screens/QueryMode';
 import { requestNewSchema } from './screens/schemaActions';
 import { SchemaDiff } from './screens/SchemaDiff';
 import { SchemaList } from './screens/SchemaList';
@@ -35,6 +37,8 @@ function useNow(): number {
 function routeTitle(route: Route): string {
   if (route.screen === 'schemas') return `${t('common.schemas')} · ${APP_NAME}`;
   if (route.screen === 'workspace') return `${route.schema} · ${APP_NAME}`;
+  if (route.screen === 'data') return `${route.table} · ${route.schema} · ${t('mode.data')} · ${APP_NAME}`;
+  if (route.screen === 'query') return `${route.schema} · ${t('query.title')} · ${APP_NAME}`;
   return `${route.schema} · ${route.screen === 'history' ? t('history.title') : t('compare.title')} · ${APP_NAME}`;
 }
 
@@ -82,6 +86,8 @@ function Screens() {
     >
       {route.screen === 'schemas' && <SchemaList schemas={stored} now={now} />}
       {route.screen === 'workspace' && <Workspace />}
+      {route.screen === 'data' && <DataMode table={route.table} />}
+      {route.screen === 'query' && <QueryMode />}
       {route.screen === 'history' && <VersionHistory now={now} />}
       {route.screen === 'diff' && <SchemaDiff from={route.from} to={route.to} now={now} />}
     </AppShell>

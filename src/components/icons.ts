@@ -19,6 +19,8 @@ export const ICONS = {
   keyboard: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M10.5 10h.01M14 10h.01M17 10h.01M8 14h8"/>',
   'chevron-down': '<path d="M6 9l6 6 6-6"/>',
   'chevron-right': '<path d="M9 6l6 6-6 6"/>',
+  'chevron-left': '<path d="M15 6l-6 6 6 6"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4.5V11h-6.5"/>',
   'chevron-up': '<path d="M6 15l6-6 6 6"/>',
   'chevrons-ud': '<path d="M8 9l4-4 4 4M8 15l4 4 4-4"/>',
   'arrow-up': '<path d="M12 19V5M6 11l6-6 6 6"/>',
