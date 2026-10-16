@@ -1,7 +1,7 @@
 // Schema Studio — window.SchemaStudio (React 18). Types are documentation.
 import type { ReactNode, CSSProperties } from 'react';
 
-export type IconName = 'table' | 'database' | 'key' | 'link' | 'search' | 'plus' | 'minus' | 'undo' | 'redo' | 'zoom-in' | 'zoom-out' | 'fit' | 'download' | 'upload' | 'share' | 'settings' | 'keyboard' | 'chevron-down' | 'chevron-right' | 'chevron-left' | 'chevron-up' | 'chevrons-ud' | 'arrow-up' | 'arrow-down' | 'arrow-right' | 'star' | 'clock' | 'layers' | 'history' | 'diff' | 'file' | 'file-code' | 'clipboard' | 'plug' | 'check' | 'check-circle' | 'x' | 'alert' | 'warning' | 'info' | 'trash' | 'copy' | 'pencil' | 'more' | 'filter' | 'grip' | 'hash' | 'columns' | 'folder' | 'code' | 'eye' | 'restore' | 'migration' | 'command' | 'sidebar' | 'panel' | 'move' | 'lock' | 'external' | 'refresh' | 'play';
+export type IconName = 'table' | 'database' | 'key' | 'link' | 'search' | 'plus' | 'minus' | 'undo' | 'redo' | 'zoom-in' | 'zoom-out' | 'fit' | 'download' | 'upload' | 'share' | 'settings' | 'keyboard' | 'chevron-down' | 'chevron-right' | 'chevron-left' | 'chevron-up' | 'chevrons-ud' | 'arrow-up' | 'arrow-down' | 'arrow-right' | 'star' | 'clock' | 'layers' | 'history' | 'diff' | 'file' | 'file-code' | 'clipboard' | 'plug' | 'check' | 'check-circle' | 'x' | 'alert' | 'warning' | 'info' | 'trash' | 'copy' | 'pencil' | 'more' | 'filter' | 'grip' | 'hash' | 'columns' | 'folder' | 'code' | 'eye' | 'restore' | 'migration' | 'command' | 'sidebar' | 'panel' | 'move' | 'lock' | 'external' | 'refresh' | 'play' | 'bookmark';
 
 export interface Column { name: string; type: string; nullable?: boolean; pk?: boolean; unique?: boolean; default?: string; comment?: string; fk?: { table: string; column: string; onDelete?: 'RESTRICT' | 'CASCADE' | 'SET NULL' | 'NO ACTION' } | null; draft?: boolean; }
 export interface Index { name: string; type: 'PRIMARY KEY' | 'UNIQUE' | 'INDEX'; using: string; columns: string[]; }
@@ -78,7 +78,7 @@ export type RecordData = Record<string, RecordRow[]>;
 export type RecordTab = 'form' | 'json' | 'related';
 /** What is wrong with a record, by column name (see `S.validateRecord`). */
 export type RecordProblems = Record<string, string>;
-export interface ResizeHandleProps { label: string; edge: 'left' | 'right'; width: number; min: number; max: number; onResize?: (width: number) => void; onReset?: () => void; }
+export interface ResizeHandleProps { label: string; /** The side of the panel the line is on: `left` / `right` (a line down, the width) or `top` / `bottom` (a line across, the height). */ edge: 'left' | 'right' | 'top' | 'bottom'; width: number; min: number; max: number; onResize?: (width: number) => void; onReset?: () => void; }
 /**
  * The panel at the right of the grid that edits one record: 520px, dragged between 480 and 720. It keeps its own draft; the host
  * gives it the record (`record`, or none for a new one) and hears `onSave(values)` with the values that were set (a new record
@@ -191,4 +191,54 @@ export interface ImportRecordsDialogProps {
   open?: ImportProblemKind[];
   /** Seconds shown in the result. */
   duration?: number;
+}
+
+// --- Query mode
+export type QueryOp = 'eq' | 'ne' | 'contains' | 'starts' | 'gt' | 'lt' | 'before' | 'after' | 'between' | 'null' | 'notnull';
+/** What was typed for a condition, as text. */
+export interface QueryCondition { column: string; op: QueryOp; value: string; value2: string; }
+export interface QueryGroup { op: 'AND' | 'OR'; items: (QueryCondition | QueryGroup)[]; }
+/** The Builder's query. `columns: null` is every column, `limit: null` is no limit. `S.defaultQuery(table)` makes an empty one. */
+export interface BuilderQuery { table: string; where: QueryGroup; columns: string[] | null; sort: { column: string; dir: 'asc' | 'desc' } | null; limit: number | null; }
+export interface QueryEntry { name?: string; sql: string; /** Set when the query was written in the Builder: it comes back to the Builder. */ spec?: BuilderQuery; ok?: boolean; ms?: number; at?: string; }
+/** `S.runQuery(sql, tables, data)`: `rows` are what the query selects, `sources` the rows of the table they came from, in the same order. */
+export type QueryResult =
+  | { ok: true; table: Table; columns: Column[]; rows: RecordRow[]; sources: RecordRow[]; total: number; shown: number; capped: boolean; removed: number; all: number; sql: string }
+  | { ok: false; line?: number; message: string };
+
+export interface FilterBuilderProps {
+  value: BuilderQuery; onChange: (query: BuilderQuery) => void; tables?: Table[];
+  /** Put each problem under its row and the count in the side. */
+  showErrors?: boolean;
+  /** Under the SQL: the console's Run. */
+  actions?: ReactNode;
+  /** Shows "Edit as SQL"; gets the SQL. */
+  onEditSql?: (sql: string) => void;
+  /** Start with the Columns menu open. */
+  columnsOpen?: boolean;
+}
+/** Query mode: Builder or SQL on top, Results / Messages / Plan below. It keeps its own state and its own working copy of the rows; the other props start it somewhere. */
+export interface QueryConsoleProps {
+  tables?: Table[]; data?: RecordData;
+  onRun?: (entry: QueryEntry) => void; onSaveQuery?: (entry: QueryEntry) => void;
+  /** A row edited in the record editor was saved: the table, the row as it was and as it is. */
+  onSaveRecord?: (table: string, row: RecordRow, saved: RecordRow) => void;
+  mode?: 'builder' | 'sql'; spec?: BuilderQuery; sql?: string;
+  /** The sample SQL with a mistyped column (`countr`, line 7), already run. */
+  error?: boolean;
+  /** Run it as the console opens. */
+  run?: boolean;
+  /** Run was pressed with conditions to fix. */
+  attempted?: boolean;
+  /** The ms shown for a run; the measured time when left out. */
+  duration?: number;
+  tab?: 'results' | 'messages' | 'plan';
+  /** Height of the results, 380 when left out. */
+  height?: number;
+  saved?: QueryEntry[]; recent?: QueryEntry[];
+  historyOpen?: boolean; saveOpen?: boolean;
+  /** A skeleton instead of the grid and Run off. */
+  running?: boolean;
+  /** A row of the results that starts open in the record editor. */
+  openRow?: number;
 }

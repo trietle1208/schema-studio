@@ -1,0 +1,34 @@
+<!-- @dsCard group="Screens" height=900 width=1440 page subtitle="18 · Query mode: SQL with an error" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Screen18QueryConsoleSql — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState, Fragment = React.Fragment;
+
+function stamp(ms) { return new Date(ms).toISOString().slice(0, 19).replace('T', ' '); }
+// 1,248 users as in Screen10: the 20 of the sample first, then more of the same kind.
+var DATA = (function () {
+  var base = S.sample.records.users;
+  var list = Array.from({ length: 1248 }, function (_, i) {
+    if (i < base.length) return base[i];
+    var b = base[i % base.length], k = Math.floor(i / base.length);
+    return { id: i + 1, email: b.email.replace('@', '.' + k + '@'), name: b.name, avatar_url: b.avatar_url ? 'https://cdn.example.com/avatars/' + (i + 1) + '.png' : null, created_at: stamp(Date.UTC(2026, 4, 3, 9, 14, 7) + (i - base.length) * 11520000) };
+  });
+  return Object.assign({}, S.sample.records, { users: list });
+})();
+
+function App() {
+  var _d = useState(false), dirty = _d[0], setDirty = _d[1];
+  return h('div', { className: 'ss-screen' }, h(S.AppShell, { sidebar: h(S.Sidebar, { activeSchema: 'ecommerce' }) }, h(Fragment, null,
+    h(S.Toolbar, { schema: 'ecommerce', version: 'v12', mode: 'query', saveState: dirty ? 'dirty' : 'saved' }),
+    h('div', { className: 'ss-work' },
+      h(S.QueryConsole, Object.assign({ data: DATA, duration: 12, onSaveRecord: function () { setDirty(true); } }, { error: true }))),
+    h(S.StatusBar, { left: [h(Fragment, null, h('span', { className: 'ss-status-ok' }), 'Sample data'), 'ecommerce.public', 'Read-only: SELECT only'], right: ['PostgreSQL 16', 'UTF-8'] }))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

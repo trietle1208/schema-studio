@@ -760,6 +760,88 @@ input.ss-insp-name.is-error { border-color: var(--removed); box-shadow: 0 0 0 1p
 .ss-imp-result-sub { font-size: 13px; line-height: 20px; color: var(--ink-2); }
 .ss-imp-result-sub .ss-mono { color: var(--ink-1); font-size: 12px; }
 
+/* ---------- records: the query console ---------- */
+.ss-qc { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.ss-qc-col { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg-1); container: qc / inline-size; }
+.ss-qc-head { flex: none; display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 16px; background: var(--bg-2); border-bottom: 1px solid var(--line-1); }
+.ss-qc-head .ss-rec-title { margin-right: 4px; }
+.ss-qc-top { flex: 1; min-height: 160px; display: flex; flex-direction: column; overflow: hidden; }
+.ss-qc-sql { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; }
+.ss-qc-tools { flex: none; display: flex; align-items: center; gap: 8px; }
+.ss-qc-status { display: inline-flex; align-items: center; gap: 6px; font: 400 12px/16px var(--font-mono); color: var(--ink-2); }
+.ss-qc-status.is-error { color: var(--removed); }
+.ss-qc-status a { margin-left: 4px; color: var(--accent-text); font-family: var(--font-sans); cursor: pointer; }
+.ss-qc-status a:hover { text-decoration: underline; }
+.ss-qc-res { position: relative; flex: none; min-height: 120px; max-height: calc(100% - 208px); display: flex; flex-direction: column; border-top: 1px solid var(--line-1); background: var(--bg-1); }
+.ss-qc-res > .ss-resize--top { width: 100%; height: 0; cursor: row-resize; }
+.ss-resize--top::before { left: 0; right: 0; top: -4px; bottom: auto; width: auto; height: 8px; }
+.ss-resize--top::after { left: 0; right: 0; top: -1px; bottom: auto; width: auto; height: 2px; }
+.ss-qc-rhead { flex: none; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px 0 8px; background: var(--bg-2); border-bottom: 1px solid var(--line-1); }
+.ss-qc-rhead .ss-tabs { margin: 0; align-self: stretch; }
+.ss-qc-rhead .ss-tab { height: 100%; margin-bottom: -1px; }
+.ss-tab-count.is-error { color: var(--removed); }
+.ss-qc-meta { font: 400 12px/16px var(--font-mono); color: var(--ink-2); }
+.ss-qc-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ss-qc-body > .ss-empty--compact { flex: 1; }
+.ss-qc-pane { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.ss-qc-pane > * { flex: none; }
+.ss-qc-pane .ss-alert > .ss-btn { align-self: center; }
+.ss-qc-msg { display: flex; align-items: flex-start; gap: 8px; font: 400 12px/18px var(--font-mono); color: var(--ink-1); }
+.ss-qc-msg > .ss-icon { margin-top: 2px; flex: none; color: var(--ink-3); }
+.ss-qc-msg.is-ok > .ss-icon { color: var(--added); }
+.ss-qc-plan { margin: 0; font: 400 12px/18px var(--font-mono); color: var(--ink-1); white-space: pre; }
+
+/* the builder */
+.ss-qb { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 400px; }
+.ss-qb-main { min-width: 0; overflow: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ss-qb-from { flex: none; display: flex; align-items: center; gap: 8px; }
+.ss-qb-table { width: 200px; }
+.ss-qb-group { flex: none; display: flex; flex-direction: column; gap: 6px; }
+.ss-qb-group.is-nested { margin-left: 8px; padding: 6px 0 6px 12px; border-left: 1px solid var(--line-3); }
+.ss-qb-ghead { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+.ss-qb-gtext { font: 400 12px/16px var(--font-sans); color: var(--ink-3); }
+.ss-qb-cond { display: grid; grid-template-columns: minmax(104px, 176px) 128px minmax(0, 1fr) 22px; align-items: center; gap: 4px 8px; }
+.ss-qb-err { grid-column: 1 / 4; }
+.ss-qb-value { min-width: 0; }
+.ss-qb-bare { font: 400 12px/16px var(--font-sans); color: var(--ink-3); }
+.ss-qb-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.ss-qb-and { font: 400 12px/16px var(--font-sans); color: var(--ink-3); }
+.ss-qb-add { display: flex; gap: 4px; }
+.ss-qb-side { min-width: 0; min-height: 0; overflow: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-2); border-left: 1px solid var(--line-1); }
+.ss-qb-fields { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) 112px; gap: 8px 12px; }
+.ss-qb-sort { grid-column: 1 / -1; }
+.ss-qb-anchor { display: flex; }
+.ss-qb-anchor > .ss-btn { width: 100%; justify-content: flex-start; }
+.ss-qb-sortrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.ss-qb-sqlbar { flex: none; display: flex; align-items: center; gap: 4px; }
+.ss-qb-sql { flex: 1 1 96px; min-height: 96px; margin: 0; padding: 10px 12px; overflow: auto; background: var(--bg-1); border: 1px solid var(--line-2); border-radius: var(--radius-md); font: 400 12px/18px var(--font-mono); color: var(--ink-1); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ss-qb-actions { flex: none; display: flex; justify-content: flex-end; }
+
+/* beside the record editor the console is narrow: the output goes under the conditions, the buttons keep their icons */
+@container qc (max-width: 820px) {
+  .ss-qb { grid-template-columns: minmax(0, 1fr); align-content: start; overflow: auto; }
+  .ss-qb-main { overflow: visible; }
+  .ss-qb-side { overflow: visible; border-left: 0; border-top: 1px solid var(--line-1); }
+  .ss-qb-sql { flex: none; }
+}
+@container qc (max-width: 600px) {
+  .ss-qc-head .ss-qc-lbl { display: none; }
+}
+
+/* history and saved queries */
+.ss-qh { width: 448px; padding: 4px; }
+.ss-qh-list { max-height: 376px; overflow: auto; }
+.ss-qh-head { display: flex; align-items: center; justify-content: space-between; }
+.ss-root .ss-qh-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 6px 8px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-1); text-align: left; cursor: pointer; }
+.ss-root .ss-qh-item:hover { background: var(--bg-5); }
+.ss-qh-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ss-qh-name { font: 500 13px/18px var(--font-sans); color: var(--ink-1); }
+.ss-qh-sql { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 12px/18px var(--font-mono); color: var(--ink-1); }
+.ss-qh-sql.is-sub { font-size: 11px; line-height: 16px; color: var(--ink-3); }
+.ss-qh-meta { flex: none; display: inline-flex; align-items: center; gap: 4px; font: 400 11px/16px var(--font-mono); color: var(--ink-3); }
+.ss-qh-meta.is-error { color: var(--removed); }
+.ss-qh-none { margin: 4px 8px 8px; }
+
 /* preview helpers */
 .ss-demo { padding: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: var(--bg-2); min-height: 100%; }
 .ss-demo--col { flex-direction: column; align-items: stretch; }

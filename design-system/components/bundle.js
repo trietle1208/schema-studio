@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"SchemaStudio","components":[{"name":"Icon"},{"name":"Logo"},{"name":"Button"},{"name":"Badge"},{"name":"Input"},{"name":"Select"},{"name":"Checkbox"},{"name":"SegmentedControl"},{"name":"Sidebar"},{"name":"Toolbar"},{"name":"StatusBar"},{"name":"TableNode"},{"name":"ERCanvas"},{"name":"Inspector"},{"name":"TypeSelect"},{"name":"ContextMenu"},{"name":"Modal"},{"name":"DropZone"},{"name":"SqlEditor"},{"name":"ImportSchemaDialog"},{"name":"ExportDialog"},{"name":"Toast"},{"name":"DataTable"},{"name":"TableList"},{"name":"DataGrid"},{"name":"TableHeader"},{"name":"TableStructure"},{"name":"TableRelationships"},{"name":"DataToolbar"},{"name":"FilterChips"},{"name":"SelectionBar"},{"name":"Pagination"},{"name":"RecordEditor"},{"name":"Stepper"},{"name":"Progress"},{"name":"ImportRecordsDialog"},{"name":"VersionList"},{"name":"DiffList"},{"name":"DdlDiff"},{"name":"EmptyState"},{"name":"Workspace"}]} */
+/* @ds-bundle: {"format":4,"namespace":"SchemaStudio","components":[{"name":"Icon"},{"name":"Logo"},{"name":"Button"},{"name":"Badge"},{"name":"Input"},{"name":"Select"},{"name":"Checkbox"},{"name":"SegmentedControl"},{"name":"Sidebar"},{"name":"Toolbar"},{"name":"StatusBar"},{"name":"TableNode"},{"name":"ERCanvas"},{"name":"Inspector"},{"name":"TypeSelect"},{"name":"ContextMenu"},{"name":"Modal"},{"name":"DropZone"},{"name":"SqlEditor"},{"name":"ImportSchemaDialog"},{"name":"ExportDialog"},{"name":"Toast"},{"name":"DataTable"},{"name":"TableList"},{"name":"DataGrid"},{"name":"TableHeader"},{"name":"TableStructure"},{"name":"TableRelationships"},{"name":"DataToolbar"},{"name":"FilterChips"},{"name":"SelectionBar"},{"name":"Pagination"},{"name":"RecordEditor"},{"name":"Stepper"},{"name":"Progress"},{"name":"ImportRecordsDialog"},{"name":"FilterBuilder"},{"name":"QueryConsole"},{"name":"VersionList"},{"name":"DiffList"},{"name":"DdlDiff"},{"name":"EmptyState"},{"name":"Workspace"}]} */
 (function () {
   var React = window.React;
   var h = React.createElement;
@@ -70,6 +70,7 @@
     lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
     refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4.5V11h-6.5"/>',
     play: '<path d="M7.5 4.5v15L19 12z"/>',
+    bookmark: '<path d="M6.5 4.5h11v15L12 15.5l-5.5 4z"/>',
     external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
   };
 
@@ -338,7 +339,7 @@
   })();
 
   // ------------------------------------------------------------------ SQL highlight
-  var KW = 'CREATE|TABLE|PRIMARY|KEY|NOT|NULL|UNIQUE|DEFAULT|REFERENCES|ON|DELETE|UPDATE|CASCADE|RESTRICT|SET|INDEX|ALTER|ADD|COLUMN|DROP|IF|EXISTS|CONSTRAINT|FOREIGN|CHECK|USING|BEGIN|COMMIT|TYPE|IN|AND|OR|INSERT|INTO|VALUES|SELECT|FROM|WHERE|NO|ACTION|COMMENT|IS|RENAME|TO';
+  var KW = 'CREATE|TABLE|PRIMARY|KEY|NOT|NULL|UNIQUE|DEFAULT|REFERENCES|ON|DELETE|UPDATE|CASCADE|RESTRICT|SET|INDEX|ALTER|ADD|COLUMN|DROP|IF|EXISTS|CONSTRAINT|FOREIGN|CHECK|USING|BEGIN|COMMIT|TYPE|IN|AND|OR|INSERT|INTO|VALUES|SELECT|FROM|WHERE|NO|ACTION|COMMENT|IS|RENAME|TO|ORDER|BY|LIMIT|OFFSET|LIKE|ILIKE|BETWEEN|DESC|ASC|DISTINCT|AS|TRUE|FALSE';
   var TY = 'BIGSERIAL|SERIAL|SMALLSERIAL|BIGINT|INTEGER|INT|SMALLINT|DECIMAL|NUMERIC|VARCHAR|CHAR|TEXT|BOOLEAN|BOOL|TIMESTAMPTZ|TIMESTAMP|DATE|TIME|UUID|JSONB|JSON|BYTEA|REAL|DOUBLE|PRECISION|INET|DateTime|UInt64|UInt32|String|Float64';
   var TOKEN_RE = new RegExp("(--[^\\n]*)|('(?:[^'\\\\]|\\\\.)*'?)|\\b(" + KW + ")\\b|\\b(" + TY + ")\\b|\\b(\\d+(?:\\.\\d+)?)\\b", 'gi');
   function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -1559,17 +1560,18 @@
   function ResizeHandle(p) {
     var _d = useState(false), dragging = _d[0], setDragging = _d[1];
     var drag = useRef(null);
-    var grows = p.edge === 'right' ? 1 : -1;
+    var across = p.edge === 'top' || p.edge === 'bottom', grows = p.edge === 'right' || p.edge === 'bottom' ? 1 : -1;
     function end() { drag.current = null; setDragging(false); }
     function want(w) { p.onResize && p.onResize(Math.round(Math.max(p.min, Math.min(p.max, w)))); }
     return h('div', {
-      className: cx('ss-resize', 'ss-resize--' + p.edge, dragging && 'is-dragging'), role: 'separator', 'aria-orientation': 'vertical', 'aria-label': p.label,
+      className: cx('ss-resize', 'ss-resize--' + p.edge, dragging && 'is-dragging'), role: 'separator', 'aria-orientation': across ? 'horizontal' : 'vertical', 'aria-label': p.label,
       'aria-valuenow': p.width, 'aria-valuemin': p.min, 'aria-valuemax': p.max, tabIndex: 0, title: p.onReset ? 'Drag to resize. Double-click to reset.' : 'Drag to resize.',
-      onPointerDown: function (e) { if (e.button !== 0) return; e.preventDefault(); drag.current = { x: e.clientX, width: p.width }; setDragging(true); e.currentTarget.setPointerCapture(e.pointerId); },
-      onPointerMove: function (e) { var d = drag.current; if (d) want(d.width + grows * (e.clientX - d.x)); },
+      onPointerDown: function (e) { if (e.button !== 0) return; e.preventDefault(); drag.current = { x: across ? e.clientY : e.clientX, width: p.width }; setDragging(true); e.currentTarget.setPointerCapture(e.pointerId); },
+      onPointerMove: function (e) { var d = drag.current; if (d) want(d.width + grows * ((across ? e.clientY : e.clientX) - d.x)); },
       onPointerUp: end, onLostPointerCapture: end, onDoubleClick: p.onReset,
       onKeyDown: function (e) {
-        var next = e.key === 'ArrowLeft' ? p.width - grows * 16 : e.key === 'ArrowRight' ? p.width + grows * 16 : e.key === 'Home' ? p.min : e.key === 'End' ? p.max : null;
+        var key = across ? { ArrowUp: 'ArrowLeft', ArrowDown: 'ArrowRight' }[e.key] || e.key : e.key;
+        var next = key === 'ArrowLeft' ? p.width - grows * 16 : key === 'ArrowRight' ? p.width + grows * 16 : key === 'Home' ? p.min : key === 'End' ? p.max : null;
         if (next === null) return;
         e.preventDefault(); want(next);
       }
@@ -2961,6 +2963,807 @@
       h('div', { className: 'ss-imp-content' }, body));
   }
 
+  // ------------------------------------------------------------------ records: queries
+  // Everything Query mode does with data is in this section and none of it needs React: the SQL that the Builder writes, a reader
+  // for the SELECT it runs, the run itself over the rows of the sample, the plan and the formatter. The console below only shows it.
+  // Exported for the port and its tests: defaultQuery, queryOps, queryProblems, buildQuery, parseQuery, formatQuery, runQuery, queryPlan.
+  var QUERY_MAX_ROWS = 1000;
+  var QUERY_LIMITS = [10, 25, 50, 100, 500, 1000];
+  var NULL_OPS = [{ value: 'null', label: 'IS NULL' }, { value: 'notnull', label: 'IS NOT NULL' }];
+  // The operators of a condition, by what the column holds.
+  var QUERY_OPS = {
+    text: [{ value: 'eq', label: '=' }, { value: 'ne', label: '≠' }, { value: 'contains', label: 'contains' }, { value: 'starts', label: 'starts with' }].concat(NULL_OPS),
+    number: [{ value: 'eq', label: '=' }, { value: 'gt', label: '>' }, { value: 'lt', label: '<' }, { value: 'between', label: 'between' }].concat(NULL_OPS),
+    time: [{ value: 'before', label: 'before' }, { value: 'after', label: 'after' }, { value: 'between', label: 'between' }].concat(NULL_OPS),
+    boolean: [{ value: 'eq', label: '=' }].concat(NULL_OPS)
+  };
+  function queryOps(column) { return QUERY_OPS[cellKind(column.type)]; }
+  function isBare(op) { return op === 'null' || op === 'notnull'; }
+
+  // --- the Builder: a table, a group of conditions (groups nest), the columns, a sort and a limit
+  // `{ table, where: { op: 'AND' | 'OR', items: (condition | group)[] }, columns: string[] | null, sort: { column, dir } | null, limit: number | null }`
+  // A condition is `{ column, op, value, value2 }` with what was typed as text; a group has `items`.
+  function defaultQuery(table) { return { table: table.name, where: { op: 'AND', items: [] }, columns: null, sort: null, limit: 100 }; }
+  var QUERY_DATE = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2})(?::(\d{2}))?)?$/;
+  function realDate(m) { var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])); return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] && (m[4] == null || (+m[4] < 24 && +m[5] < 60 && (m[6] == null || +m[6] < 60))); }
+  function momentWord(type) { var k = momentKind(type); return k === 'date' ? 'date' : k === 'time' ? 'time' : 'timestamp'; }
+  // What is wrong with one value typed for a column, or null.
+  function valueProblem(col, text) {
+    var kind = cellKind(col.type), v = String(text == null ? '' : text).trim();
+    if (kind === 'boolean') return null;
+    if (v === '') return 'Value cannot be empty.';
+    if (kind === 'number') return isNaN(Number(v)) ? 'Value must be a number.' : null;
+    if (kind === 'time') {
+      var word = momentWord(col.type), m = word === 'timestamp' ? QUERY_DATE.exec(v) : MOMENTS[word].re.exec(v);
+      return m && (word === 'time' || realDate(m)) ? null : 'Invalid ' + word + ' format.';
+    }
+    return null;
+  }
+  function conditionProblem(c, table) {
+    var col = table.columns.find(function (x) { return x.name === c.column; });
+    if (!col) return 'Choose a column.';
+    if (isBare(c.op)) return null;
+    return valueProblem(col, c.value) || (c.op === 'between' ? valueProblem(col, c.value2) : null);
+  }
+  // The conditions that cannot be written yet, with where they are (`path`: the index in each group, from the top).
+  function queryProblems(spec, table) {
+    var out = [];
+    (function walk(g, path) {
+      g.items.forEach(function (it, i) {
+        if (it.items) walk(it, path.concat([i]));
+        else { var m = conditionProblem(it, table); if (m) out.push({ path: path.concat([i]), message: m }); }
+      });
+    })(spec.where, []);
+    return out;
+  }
+
+  function litOf(col, text, kind) {
+    var v = String(text == null ? '' : text).trim();
+    if (kind === 'number') return { t: 'lit', kind: 'num', v: Number(v) };
+    if (kind === 'boolean') return { t: 'lit', kind: 'bool', v: String(text) !== 'false' };
+    return { t: 'lit', kind: 'str', v: kind === 'time' ? v : String(text) };
+  }
+  function likeText(v) { return String(v).replace(/[\\%_]/g, '\\$&'); }
+  function conditionExpr(c, table) {
+    var col = table.columns.find(function (x) { return x.name === c.column; });
+    if (!col || conditionProblem(c, table)) return null;
+    var kind = cellKind(col.type), ref = { t: 'col', name: col.name };
+    function cmp(op, v) { return { t: 'cmp', op: op, l: ref, r: litOf(col, v, kind) }; }
+    switch (c.op) {
+      case 'null': return { t: 'isnull', neg: false, l: ref };
+      case 'notnull': return { t: 'isnull', neg: true, l: ref };
+      case 'eq': return cmp('=', c.value);
+      case 'ne': return cmp('<>', c.value);
+      case 'gt': case 'after': return cmp('>', c.value);
+      case 'lt': case 'before': return cmp('<', c.value);
+      case 'contains': return { t: 'like', ci: true, neg: false, l: ref, r: { t: 'lit', kind: 'str', v: '%' + likeText(c.value) + '%' } };
+      case 'starts': return { t: 'like', ci: true, neg: false, l: ref, r: { t: 'lit', kind: 'str', v: likeText(c.value) + '%' } };
+      case 'between': return { t: 'between', neg: false, l: ref, a: litOf(col, c.value, kind), b: litOf(col, c.value2, kind) };
+    }
+    return null;
+  }
+  function groupExpr(g, table) {
+    var nodes = g.items.map(function (it) { return it.items ? groupExpr(it, table) : conditionExpr(it, table); }).filter(Boolean);
+    var t = g.op === 'OR' ? 'or' : 'and';
+    return nodes.length ? nodes.reduce(function (a, b) { return { t: t, a: a, b: b }; }) : null;
+  }
+  // A condition that is not complete is left out of the SQL (the Builder says which, and does not run until they are fixed).
+  function specQuery(spec, table) {
+    var all = spec.columns && spec.columns.length && spec.columns.length < table.columns.length;
+    return {
+      table: spec.table, cols: all ? spec.columns.map(function (n) { return { name: n }; }) : null, where: groupExpr(spec.where, table),
+      order: spec.sort ? [{ col: { name: spec.sort.column }, dir: spec.sort.dir === 'desc' ? 'DESC' : 'ASC' }] : [], limit: spec.limit == null ? null : spec.limit, offset: null
+    };
+  }
+  function buildQuery(spec, table) { return printQuery(specQuery(spec, table)); }
+
+  // --- SQL written out: one clause to a line, AND / OR under the first condition
+  function sqlIdent(name) { return /^[a-z_][a-z0-9_]*$/.test(name) ? name : '"' + String(name).replace(/"/g, '""') + '"'; }
+  function sqlOperand(o) {
+    if (o.t === 'col') return sqlIdent(o.name);
+    return o.kind === 'null' ? 'NULL' : o.kind === 'bool' ? String(o.v) : o.kind === 'num' ? String(o.v) : sqlLiteral(o.v);
+  }
+  function exprSql(e, ctx) {
+    var s, prec = 3;
+    switch (e.t) {
+      case 'and': s = exprSql(e.a, 2) + ' AND ' + exprSql(e.b, 2); prec = 2; break;
+      case 'or': s = exprSql(e.a, 1) + ' OR ' + exprSql(e.b, 1); prec = 1; break;
+      case 'not': s = 'NOT ' + exprSql(e.e, 3); break;
+      case 'cmp': s = sqlOperand(e.l) + ' ' + e.op + ' ' + sqlOperand(e.r); break;
+      case 'like': s = sqlOperand(e.l) + (e.neg ? ' NOT ' : ' ') + (e.ci ? 'ILIKE ' : 'LIKE ') + sqlOperand(e.r); break;
+      case 'isnull': s = sqlOperand(e.l) + ' IS ' + (e.neg ? 'NOT ' : '') + 'NULL'; break;
+      case 'between': s = sqlOperand(e.l) + (e.neg ? ' NOT ' : ' ') + 'BETWEEN ' + sqlOperand(e.a) + ' AND ' + sqlOperand(e.b); break;
+      case 'in': s = sqlOperand(e.l) + (e.neg ? ' NOT ' : ' ') + 'IN (' + e.list.map(sqlOperand).join(', ') + ')'; break;
+    }
+    return prec < ctx ? '(' + s + ')' : s;
+  }
+  function chain(e, t) { return e.t === t ? chain(e.a, t).concat(chain(e.b, t)) : [e]; }
+  function whereLines(e) {
+    if (e.t !== 'and' && e.t !== 'or') return ['WHERE ' + exprSql(e, 0)];
+    var word = e.t === 'and' ? 'AND' : 'OR', ctx = e.t === 'and' ? 2 : 1;
+    return chain(e, e.t).map(function (x, i) { return (i ? '  ' + word + ' ' : 'WHERE ') + exprSql(x, ctx); });
+  }
+  function printQuery(q) {
+    var list = q.cols ? q.cols.map(function (c) { return sqlIdent(c.name) + (c.alias ? ' AS ' + sqlIdent(c.alias) : ''); }) : ['*'];
+    var inline = 'SELECT ' + list.join(', ');
+    var lines = [inline.length <= 72 ? inline : 'SELECT\n' + list.map(function (c) { return '  ' + c; }).join(',\n'), 'FROM ' + sqlIdent(q.table)];
+    if (q.where) lines = lines.concat(whereLines(q.where));
+    if (q.order && q.order.length) lines.push('ORDER BY ' + q.order.map(function (o) { return sqlIdent(o.col.name) + (o.dir === 'DESC' ? ' DESC' : ''); }).join(', '));
+    if (q.limit != null) lines.push('LIMIT ' + q.limit);
+    if (q.offset != null) lines.push('OFFSET ' + q.offset);
+    return lines.join('\n') + ';';
+  }
+
+  // --- reading a SELECT. `{ ok, query }` or `{ ok: false, line, message }`: the line of the word it could not read.
+  var QUERY_RESERVED = {};
+  'SELECT FROM WHERE ORDER BY LIMIT OFFSET AND OR NOT IS NULL LIKE ILIKE BETWEEN IN AS ASC DESC TRUE FALSE DISTINCT ALL'.split(' ').forEach(function (w) { QUERY_RESERVED[w] = true; });
+  var QUERY_WRITES = { INSERT: 1, UPDATE: 1, DELETE: 1, DROP: 1, ALTER: 1, CREATE: 1, TRUNCATE: 1, GRANT: 1, REVOKE: 1 };
+  var Q_WORD = /[A-Za-z_][A-Za-z0-9_$]*/y, Q_NUMBER = /\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?/y;
+  function lexQuery(sql) {
+    var toks = [], i = 0, n = sql.length, line = 1, comments = false, m;
+    function quoted(q, kind) {
+      var out = '', at = line; i++;
+      for (;;) {
+        if (i >= n) throw { line: at };
+        if (sql[i] === q) { if (sql[i + 1] === q) { out += q; i += 2; continue; } i++; break; }
+        if (sql[i] === '\n') line++;
+        out += sql[i++];
+      }
+      toks.push({ t: kind, v: out, line: at });
+    }
+    while (i < n) {
+      var c = sql[i];
+      if (c === '\n') { line++; i++; }
+      else if (c === ' ' || c === '\t' || c === '\r') i++;
+      else if (c === '-' && sql[i + 1] === '-') { comments = true; while (i < n && sql[i] !== '\n') i++; }
+      else if (c === '/' && sql[i + 1] === '*') {
+        var end = sql.indexOf('*/', i + 2), at = line; comments = true;
+        if (end < 0) throw { line: at };
+        line += sql.slice(i, end).split('\n').length - 1; i = end + 2;
+      }
+      else if (c === "'") quoted("'", 'str');
+      else if (c === '"') quoted('"', 'id');
+      else if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(sql[i + 1] || ''))) { Q_NUMBER.lastIndex = i; m = Q_NUMBER.exec(sql); toks.push({ t: 'num', v: Number(m[0]), line: line }); i += m[0].length; }
+      else if (/[A-Za-z_]/.test(c)) { Q_WORD.lastIndex = i; m = Q_WORD.exec(sql); toks.push({ t: 'w', v: m[0], u: m[0].toUpperCase(), line: line }); i += m[0].length; }
+      else if ((c === '<' || c === '>' || c === '!') && sql[i + 1] === '=' || (c === '<' && sql[i + 1] === '>')) { toks.push({ t: 'op', v: sql.substr(i, 2) === '!=' ? '<>' : sql.substr(i, 2), line: line }); i += 2; }
+      else if ('=<>,().*;-'.indexOf(c) >= 0) { toks.push({ t: 'op', v: c, line: line }); i++; }
+      else throw { line: line };
+    }
+    toks.push({ t: 'eof', line: line });
+    return { toks: toks, comments: comments };
+  }
+  function parseFail(line) { return { ok: false, line: line, message: 'Unable to parse SQL near line ' + line + '.' }; }
+  function parseQuery(sql) {
+    var lexed;
+    try { lexed = lexQuery(sql); } catch (e) { return parseFail(e.line); }
+    var toks = lexed.toks, p = 0;
+    function fail() { throw { line: toks[p].line }; }
+    function isW(w) { return toks[p].t === 'w' && toks[p].u === w; }
+    function eatW(w) { if (isW(w)) { p++; return true; } return false; }
+    function needW(w) { if (!eatW(w)) fail(); }
+    function isOp(o) { return toks[p].t === 'op' && toks[p].v === o; }
+    function eatOp(o) { if (isOp(o)) { p++; return true; } return false; }
+    function needOp(o) { if (!eatOp(o)) fail(); }
+    function name() {
+      var t = toks[p];
+      if (t.t === 'id') { p++; return { v: t.v, line: t.line }; }
+      if (t.t === 'w' && !QUERY_RESERVED[t.u]) { p++; return { v: t.v.toLowerCase(), line: t.line }; }
+      fail();
+    }
+    function colref() { var a = name(); if (eatOp('.')) { var b = name(); return { t: 'col', qual: a.v, name: b.v, line: b.line }; } return { t: 'col', name: a.v, line: a.line }; }
+    function operand() {
+      var t = toks[p];
+      if (t.t === 'num') { p++; return { t: 'lit', kind: 'num', v: t.v, line: t.line }; }
+      if (isOp('-') && toks[p + 1].t === 'num') { p += 2; return { t: 'lit', kind: 'num', v: -toks[p - 1].v, line: t.line }; }
+      if (t.t === 'str') { p++; return { t: 'lit', kind: 'str', v: t.v, line: t.line }; }
+      if (isW('TRUE') || isW('FALSE')) { p++; return { t: 'lit', kind: 'bool', v: t.u === 'TRUE', line: t.line }; }
+      if (isW('NULL')) { p++; return { t: 'lit', kind: 'null', v: null, line: t.line }; }
+      return colref();
+    }
+    function predicate() {
+      if (eatOp('(')) { var inner = expr(); needOp(')'); return inner; }
+      var l = operand(), neg = false;
+      if (toks[p].t === 'op' && /^(=|<>|<|>|<=|>=)$/.test(toks[p].v)) { var op = toks[p++].v; return { t: 'cmp', op: op, l: l, r: operand() }; }
+      if (eatW('IS')) { neg = eatW('NOT'); needW('NULL'); return { t: 'isnull', neg: neg, l: l }; }
+      if (eatW('NOT')) neg = true;
+      if (isW('LIKE') || isW('ILIKE')) { var ci = toks[p++].u === 'ILIKE'; return { t: 'like', ci: ci, neg: neg, l: l, r: operand() }; }
+      if (eatW('BETWEEN')) { var a = operand(); needW('AND'); return { t: 'between', neg: neg, l: l, a: a, b: operand() }; }
+      if (eatW('IN')) { needOp('('); var list = [operand()]; while (eatOp(',')) list.push(operand()); needOp(')'); return { t: 'in', neg: neg, l: l, list: list }; }
+      fail();
+    }
+    function negation() { return eatW('NOT') ? { t: 'not', e: negation() } : predicate(); }
+    function conjunction() { var e = negation(); while (eatW('AND')) e = { t: 'and', a: e, b: negation() }; return e; }
+    function expr() { var e = conjunction(); while (eatW('OR')) e = { t: 'or', a: e, b: conjunction() }; return e; }
+    function count() { var t = toks[p]; if (t.t !== 'num' || t.v < 0 || t.v % 1) fail(); p++; return t.v; }
+    try {
+      var first = toks[0];
+      if (first.t === 'eof') return { ok: false, line: 1, message: 'Write a query to run.' };
+      if (first.t === 'w' && QUERY_WRITES[first.u]) return { ok: false, line: first.line, message: 'Only SELECT statements can be run in Query mode.' };
+      needW('SELECT');
+      var q = { cols: null, where: null, order: [], limit: null, offset: null };
+      if (!eatOp('*')) {
+        q.cols = [];
+        do { var c = colref(); if (eatW('AS')) c.alias = name().v; q.cols.push(c); } while (eatOp(','));
+      }
+      needW('FROM');
+      var t1 = name(), t2 = eatOp('.') ? name() : null, tn = t2 || t1;
+      q.table = tn.v; q.tableLine = tn.line; q.schema = t2 ? t1.v : null;
+      if (eatW('WHERE')) q.where = expr();
+      if (eatW('ORDER')) {
+        needW('BY');
+        do { var o = { col: colref(), dir: 'ASC' }; if (eatW('DESC')) o.dir = 'DESC'; else eatW('ASC'); q.order.push(o); } while (eatOp(','));
+      }
+      if (eatW('LIMIT')) { if (!eatW('ALL')) q.limit = count(); }
+      if (eatW('OFFSET')) q.offset = count();
+      while (eatOp(';'));
+      if (toks[p].t !== 'eof') fail();
+      return { ok: true, query: q, comments: lexed.comments };
+    } catch (e) { return parseFail(e.line); }
+  }
+  // The SQL again as the Builder writes it. A query with comments is not formatted: they would be lost.
+  function formatQuery(sql) {
+    var r = parseQuery(sql);
+    if (!r.ok) return r;
+    if (r.comments) return { ok: false, line: 1, message: 'Unable to format a query that has comments.' };
+    return { ok: true, sql: printQuery(r.query) };
+  }
+
+  // --- running it: what the database would say, over the rows of the sample
+  function typeWord(type) {
+    var t = String(type).toLowerCase().replace(/\(.*\)/, '').trim();
+    return /^bigserial/.test(t) ? 'bigint' : /serial/.test(t) ? 'integer' : t;
+  }
+  // ORDER BY may name a column as the query renamed it: `SELECT name AS n ... ORDER BY n`.
+  function aliased(q, ref) { var c = !ref.qual && q.cols && q.cols.find(function (x) { return x.alias === ref.name; }); return c ? c.name : null; }
+  function checkQuery(q, tables) {
+    var table = tables.find(function (t) { return t.name === q.table; });
+    if (!table) return { line: q.tableLine, message: 'relation "' + q.table + '" does not exist.' };
+    function resolve(ref) {
+      if (ref.qual && ref.qual !== table.name) throw { line: ref.line, message: 'missing FROM-clause entry for table "' + ref.qual + '".' };
+      var col = table.columns.find(function (c) { return c.name === ref.name; });
+      if (!col) throw { line: ref.line, message: 'column ' + (ref.qual ? ref.qual + '.' + ref.name : '"' + ref.name + '"') + ' does not exist.' };
+      return col;
+    }
+    // A literal that the column cannot take: `id = 'abc'`.
+    function fits(col, lit) {
+      if (lit.t !== 'lit' || lit.kind === 'null') return;
+      var kind = cellKind(col.type), s = String(lit.v), bad = false;
+      if (kind === 'number') bad = lit.kind === 'bool' || (lit.kind === 'str' && (s.trim() === '' || isNaN(Number(s))));
+      else if (kind === 'boolean') bad = lit.kind === 'num' || (lit.kind === 'str' && !/^(true|false|t|f|yes|no|on|off|0|1)$/i.test(s.trim()));
+      else if (kind === 'time') bad = lit.kind !== 'str' || !(QUERY_DATE.test(s.trim()) || MOMENTS.time.re.test(s.trim()));
+      if (bad) throw { line: lit.line, message: 'invalid input syntax for type ' + typeWord(col.type) + ': "' + s + '".' };
+    }
+    function side(a, b) { if (a.t === 'col') { var col = resolve(a); if (b) b.forEach(function (x) { fits(col, x); }); } }
+    function walk(e) {
+      switch (e.t) {
+        case 'and': case 'or': walk(e.a); walk(e.b); break;
+        case 'not': walk(e.e); break;
+        case 'cmp': side(e.l, [e.r]); side(e.r, [e.l]); break;
+        case 'like': side(e.l); side(e.r); break;
+        case 'isnull': side(e.l); break;
+        case 'between': side(e.l, [e.a, e.b]); side(e.a); side(e.b); break;
+        case 'in': side(e.l, e.list); e.list.forEach(function (x) { side(x); }); break;
+      }
+    }
+    try {
+      if (q.cols) q.cols.forEach(resolve);
+      if (q.where) walk(q.where);
+      q.order.forEach(function (o) { if (!aliased(q, o.col)) resolve(o.col); });
+    } catch (e) { return { line: e.line, message: e.message }; }
+    return { table: table };
+  }
+  function likeRegex(pattern, ci) {
+    var out = '', i;
+    for (i = 0; i < pattern.length; i++) {
+      var c = pattern[i];
+      if (c === '\\' && i + 1 < pattern.length) out += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      else out += c === '%' ? '.*' : c === '_' ? '.' : c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    return new RegExp('^' + out + '$', ci ? 'si' : 's');
+  }
+  // SQL's three values: true, false and null (unknown).
+  function evalWhere(e, row, table) {
+    function val(o) { return o.t === 'col' ? row[o.name] : o.v; }
+    function kindOf(a, b) {
+      var c = a.t === 'col' ? a : b.t === 'col' ? b : null;
+      if (c) return cellKind(table.columns.find(function (x) { return x.name === c.name; }).type);
+      return a.kind === 'num' && b.kind === 'num' ? 'number' : 'text';
+    }
+    function order(x, y, kind) {
+      if (x == null || y == null) return null;
+      if (kind === 'number') { x = Number(x); y = Number(y); }
+      else if (kind === 'boolean') { x = x === true || x === 1 || /^(t|true|yes|on|1)$/i.test(String(x)); y = y === true || y === 1 || /^(t|true|yes|on|1)$/i.test(String(y)); }
+      else { x = String(x); y = String(y); }
+      return x < y ? -1 : x > y ? 1 : 0;
+    }
+    function flip(r, neg) { return r === null ? null : neg ? !r : r; }
+    switch (e.t) {
+      case 'and': { var a = evalWhere(e.a, row, table); if (a === false) return false; var b = evalWhere(e.b, row, table); return b === false ? false : a === null || b === null ? null : true; }
+      case 'or': { var c = evalWhere(e.a, row, table); if (c === true) return true; var d = evalWhere(e.b, row, table); return d === true ? true : c === null || d === null ? null : false; }
+      case 'not': { var n = evalWhere(e.e, row, table); return n === null ? null : !n; }
+      case 'cmp': {
+        var o = order(val(e.l), val(e.r), kindOf(e.l, e.r));
+        if (o === null) return null;
+        return e.op === '=' ? o === 0 : e.op === '<>' ? o !== 0 : e.op === '<' ? o < 0 : e.op === '>' ? o > 0 : e.op === '<=' ? o <= 0 : o >= 0;
+      }
+      case 'like': { var v = val(e.l), pat = val(e.r); return v == null || pat == null ? null : flip(likeRegex(String(pat), e.ci).test(String(v)), e.neg); }
+      case 'isnull': return (val(e.l) == null) !== !!e.neg;
+      case 'between': {
+        var k = kindOf(e.l, e.a), lo = order(val(e.l), val(e.a), k), hi = order(val(e.l), val(e.b), k);
+        if (lo === null || hi === null) return null;
+        return flip(lo >= 0 && hi <= 0, e.neg);
+      }
+      case 'in': {
+        var k2 = kindOf(e.l, e.l), unknown = false, found = false;
+        e.list.forEach(function (x) { var r = order(val(e.l), val(x), k2); if (r === null) unknown = true; else if (r === 0) found = true; });
+        return flip(found ? true : unknown ? null : false, e.neg);
+      }
+    }
+    return null;
+  }
+  // `{ ok: true, table, columns, rows, sources, total, shown, capped, removed, query, sql }` or `{ ok: false, line, message }`.
+  // `rows` are what the query selects and `sources` the rows of the table they came from, in the same order (a row opens in the record editor).
+  function runQuery(sql, tables, data) {
+    var parsed = parseQuery(sql);
+    if (!parsed.ok) return parsed;
+    var q = parsed.query, checked = checkQuery(q, tables);
+    if (!checked.table) return { ok: false, line: checked.line, message: checked.message };
+    var table = checked.table, all = (data && data[table.name]) || [];
+    var matched = q.where ? all.filter(function (r) { return evalWhere(q.where, r, table) === true; }) : all.slice();
+    var removed = all.length - matched.length;
+    if (q.order.length) {
+      var keys = q.order.map(function (o) { var c = table.columns.find(function (x) { return x.name === (aliased(q, o.col) || o.col.name); }); return { name: c.name, kind: cellKind(c.type), desc: o.dir === 'DESC' }; });
+      matched = matched.map(function (r, i) { return { r: r, i: i }; }).sort(function (x, y) {
+        for (var k = 0; k < keys.length; k++) {
+          var a = x.r[keys[k].name], b = y.r[keys[k].name], d;
+          if (a == null || b == null) d = a == null && b == null ? 0 : a == null ? 1 : -1;
+          else if (keys[k].kind === 'number') d = Number(a) - Number(b);
+          else { a = String(a); b = String(b); d = a < b ? -1 : a > b ? 1 : 0; }
+          if (d) return keys[k].desc ? -d : d;
+        }
+        return x.i - y.i;
+      }).map(function (x) { return x.r; });
+    }
+    var from = q.offset || 0, to = q.limit == null ? matched.length : from + q.limit, cap = Math.min(to, from + QUERY_MAX_ROWS);
+    var picked = matched.slice(from, cap);
+    var columns = (q.cols || table.columns.map(function (c) { return { name: c.name }; })).map(function (ref) {
+      var col = table.columns.find(function (x) { return x.name === ref.name; });
+      return ref.alias ? assign(col, { name: ref.alias, pk: false, fk: null }) : col;
+    });
+    var refs = q.cols || table.columns.map(function (c) { return { name: c.name }; });
+    var rows = picked.map(function (r) { var o = {}; refs.forEach(function (ref, i) { o[columns[i].name] = r[ref.name]; }); return o; });
+    return { ok: true, table: table, columns: columns, rows: rows, sources: picked, total: matched.length, shown: rows.length, capped: cap < to && cap < matched.length, removed: removed, query: q, sql: sql, all: all.length };
+  }
+  // The plan, as lines: what is scanned, filtered, sorted and cut, with the rows each step holds.
+  function queryPlan(r, ms) {
+    var q = r.query, n = function (x) { return x.toLocaleString('en-US'); }, nodes = [];
+    if (q.limit != null || q.offset != null) nodes.push({ text: 'Limit  (rows=' + n(r.shown) + ')', details: [] });
+    if (q.order.length) nodes.push({ text: 'Sort  (rows=' + n(r.total) + ')', details: ['Sort Key: ' + q.order.map(function (o) { return o.col.name + (o.dir === 'DESC' ? ' DESC' : ''); }).join(', ')] });
+    var scan = { text: 'Seq Scan on ' + q.table + '  (rows=' + n(r.total) + ')', details: [] };
+    if (q.where) { scan.details.push('Filter: (' + exprSql(q.where, 0) + ')'); scan.details.push('Rows Removed by Filter: ' + n(r.removed)); }
+    nodes.push(scan);
+    var lines = [];
+    nodes.forEach(function (node, i) {
+      var prefix = i === 0 ? '' : new Array(6 * (i - 1) + 3).join(' ') + '->  ';
+      lines.push(prefix + node.text);
+      node.details.forEach(function (d) { lines.push(new Array(prefix.length + 3).join(' ') + d); });
+    });
+    if (ms != null) lines.push('Execution time: ' + ms + ' ms');
+    return lines;
+  }
+
+  var QUERY_SAMPLE = ['SELECT', '  id,', '  email,', '  name,', '  created_at', 'FROM users', 'WHERE name IS NOT NULL', "  AND created_at >= '2026-03-01'", 'ORDER BY created_at DESC', 'LIMIT 100;'].join('\n');
+  // The same with a column that is not there, on line 7.
+  var QUERY_SAMPLE_BAD = ['SELECT', '  id,', '  email,', '  name,', '  created_at', 'FROM users', "WHERE countr = 'VN'", '  AND name IS NOT NULL', 'ORDER BY created_at DESC', 'LIMIT 100;'].join('\n');
+  // The Builder of Screen17: three conditions and a group inside them.
+  var QUERY_SAMPLE_SPEC = {
+    table: 'users', columns: null, sort: { column: 'created_at', dir: 'desc' }, limit: 100,
+    where: { op: 'AND', items: [
+      { column: 'name', op: 'notnull', value: '', value2: '' },
+      { column: 'created_at', op: 'after', value: '2026-03-01', value2: '' },
+      { column: 'email', op: 'contains', value: 'example.com', value2: '' },
+      { op: 'OR', items: [{ column: 'id', op: 'lt', value: '600', value2: '' }, { column: 'id', op: 'between', value: '900', value2: '1100' }] }
+    ] }
+  };
+  var QUERY_SAVED = [
+    { name: 'Signed up this quarter', sql: "SELECT id, email, created_at\nFROM users\nWHERE created_at >= '2026-04-01'\nORDER BY created_at DESC\nLIMIT 100;" },
+    { name: 'Orders awaiting shipment', sql: "SELECT *\nFROM orders\nWHERE status = 'paid'\nORDER BY created_at\nLIMIT 100;" },
+    { name: 'Products over 100', sql: 'SELECT id, name, sku, price\nFROM products\nWHERE price > 100\nORDER BY price DESC\nLIMIT 100;' }
+  ];
+  var QUERY_RECENT = [
+    { sql: QUERY_SAMPLE, ok: true, ms: 12, at: '2 min ago' },
+    { sql: 'SELECT id, user_id, total\nFROM orders\nWHERE total > 200\nORDER BY total DESC\nLIMIT 50;', ok: true, ms: 8, at: '18 min ago' },
+    { sql: QUERY_SAMPLE_BAD, ok: false, at: '1 h ago' },
+    { sql: 'SELECT *\nFROM order_items\nWHERE quantity BETWEEN 2 AND 3\nLIMIT 100;', ok: true, ms: 15, at: '3 h ago' }
+  ];
+
+  // ------------------------------------------------------------------ records: the query console
+  var QUERY_GROUP_OPS = [{ value: 'AND', label: 'AND' }, { value: 'OR', label: 'OR' }];
+  var QUERY_DIRS = [{ value: 'asc', label: 'ASC' }, { value: 'desc', label: 'DESC' }];
+  var QUERY_MODES = [{ value: 'builder', label: 'Builder', icon: 'filter' }, { value: 'sql', label: 'SQL', icon: 'code' }];
+
+  function newCondition(table) {
+    var c = table.columns[0], kind = cellKind(c.type);
+    return { column: c.name, op: queryOps(c)[0].value, value: kind === 'boolean' ? 'true' : '', value2: '' };
+  }
+  // A group changed at the end of `path` (the index in each group, from the top), the rest as it was.
+  function mapAt(group, path, fn) {
+    if (!path.length) return fn(group);
+    return assign(group, { items: group.items.map(function (it, k) { return k === path[0] ? mapAt(it, path.slice(1), fn) : it; }) });
+  }
+  function removeAt(group, path) {
+    var last = path[path.length - 1];
+    return mapAt(group, path.slice(0, -1), function (g) { return assign(g, { items: g.items.filter(function (_, k) { return k !== last; }) }); });
+  }
+  function countConditions(g) { return g.items.reduce(function (n, it) { return n + (it.items ? countConditions(it) : 1); }, 0); }
+
+  function QueryCondition(p) {
+    var c = p.condition, table = p.table;
+    var col = table.columns.find(function (x) { return x.name === c.column; }) || table.columns[0];
+    var kind = cellKind(col.type), ops = queryOps(col);
+    function set(patch) { p.onChange(assign(c, patch)); }
+    function pickColumn(name) {
+      var next = table.columns.find(function (x) { return x.name === name; }), nk = cellKind(next.type), nops = queryOps(next);
+      set({ column: name, op: nops.some(function (o) { return o.value === c.op; }) ? c.op : nops[0].value, value: nk === kind ? c.value : nk === 'boolean' ? 'true' : '', value2: nk === kind ? c.value2 : '' });
+    }
+    var hint = kind === 'time' ? (momentWord(col.type) === 'timestamp' ? 'YYYY-MM-DD' : MOMENTS[momentWord(col.type)].text) : kind === 'number' ? 'Number' : 'Value';
+    function input(field, label) {
+      return h(Input, { mono: true, placeholder: hint, 'aria-label': label, error: !!p.error && !!valueProblem(col, c[field]), value: c[field], onChange: function (e) { set(kv(field, e.target.value)); } });
+    }
+    var value = isBare(c.op) ? h('span', { className: 'ss-qb-bare' }, 'No value needed')
+      : kind === 'boolean' ? h(Select, { mono: true, label: 'Value', value: c.value || 'true', onChange: function (v) { set({ value: v }); }, options: ['true', 'false'] })
+        : c.op === 'between' ? h('div', { className: 'ss-qb-pair' }, input('value', 'From'), h('span', { className: 'ss-qb-and' }, 'and'), input('value2', 'To'))
+          : input('value', 'Value');
+    return h('div', { className: 'ss-qb-cond' },
+      h(Select, { mono: true, label: 'Column', value: col.name, onChange: pickColumn, options: table.columns.map(function (x) { return x.name; }) }),
+      h(Select, { mono: true, label: 'Operator', value: c.op, onChange: function (v) { set({ op: v }); }, options: ops }),
+      h('div', { className: 'ss-qb-value' }, value),
+      h(IconButton, { icon: 'x', size: 'sm', label: 'Remove condition', onClick: p.onRemove }),
+      p.error && h('div', { className: 'ss-field-error ss-qb-err', role: 'alert' }, h(Icon, { name: 'alert', size: 13 }), p.error));
+  }
+
+  // The Builder: a filter written by choosing instead of typing. It keeps nothing: `value` is the query (see `defaultQuery`), `onChange(query)` hears every change.
+  function FilterBuilder(p) {
+    var tables = p.tables || SAMPLE_TABLES, spec = p.value;
+    var table = tables.find(function (t) { return t.name === spec.table; }) || tables[0];
+    var _cols = usePopover(!!p.columnsOpen);
+    var _copied = useState(false), copied = _copied[0], setCopied = _copied[1];
+    useEffect(function () { if (!copied) return; var t = setTimeout(function () { setCopied(false); }, 1400); return function () { clearTimeout(t); }; }, [copied]);
+    var problems = queryProblems(spec, table), shown = {};
+    problems.forEach(function (x) { shown[x.path.join('.')] = x.message; });
+    var sql = buildQuery(spec, table), total = countConditions(spec.where);
+    function change(patch) { p.onChange(assign(spec, patch)); }
+    function edit(path, fn) { change({ where: mapAt(spec.where, path, fn) }); }
+    function copy() {
+      try { navigator.clipboard.writeText(sql).then(function () { setCopied(true); }, function () { }); } catch (e) { /* no clipboard here */ }
+    }
+    function pickTable(name) { p.onChange(defaultQuery(tables.find(function (t) { return t.name === name; }))); }
+
+    function group(g, path) {
+      var nested = path.length > 0;
+      return h('div', { key: path.join('.') || 'root', className: cx('ss-qb-group', nested && 'is-nested'), role: 'group', 'aria-label': nested ? 'Condition group' : 'Conditions' },
+        h('div', { className: 'ss-qb-ghead' },
+          h(SegmentedControl, { options: QUERY_GROUP_OPS, value: g.op, onChange: function (v) { edit(path, function (x) { return assign(x, { op: v }); }); } }),
+          h('span', { className: 'ss-qb-gtext' }, g.op === 'AND' ? 'All of these must match' : 'Any of these may match'),
+          nested && h('span', { className: 'ss-spacer' }),
+          nested && h(IconButton, { icon: 'x', size: 'sm', label: 'Remove group', onClick: function () { p.onChange(assign(spec, { where: removeAt(spec.where, path) })); } })),
+        g.items.length
+          ? g.items.map(function (it, i) {
+            var at = path.concat([i]);
+            return it.items ? group(it, at) : h(QueryCondition, {
+              key: at.join('.'), condition: it, table: table, error: p.showErrors ? shown[at.join('.')] : null,
+              onChange: function (next) { edit(path, function (x) { return assign(x, { items: x.items.map(function (y, k) { return k === i ? next : y; }) }); }); },
+              onRemove: function () { p.onChange(assign(spec, { where: removeAt(spec.where, at) })); }
+            });
+          })
+          : h('div', { className: 'ss-pane-none' }, nested ? 'This group is empty. Add a condition or remove it.' : 'No conditions. Every row of ' + table.name + ' matches.'),
+        h('div', { className: 'ss-qb-add' },
+          h(Button, { variant: 'ghost', size: 'sm', icon: 'plus', onClick: function () { edit(path, function (x) { return assign(x, { items: x.items.concat([newCondition(table)]) }); }); } }, 'Add condition'),
+          h(Button, { variant: 'ghost', size: 'sm', icon: 'layers', onClick: function () { edit(path, function (x) { return assign(x, { items: x.items.concat([{ op: x.op === 'AND' ? 'OR' : 'AND', items: [newCondition(table)] }]) }); }); } }, 'Add group')));
+    }
+
+    var hidden = spec.columns ? table.columns.filter(function (c) { return spec.columns.indexOf(c.name) < 0; }).map(function (c) { return c.name; }) : [];
+    var visible = table.columns.length - hidden.length;
+    var sortOpts = [{ value: '', label: 'None' }].concat(table.columns.map(function (c) { return { value: c.name, label: c.name }; }));
+    var limitOpts = [{ value: '', label: 'No limit' }].concat(QUERY_LIMITS.concat(spec.limit != null && QUERY_LIMITS.indexOf(spec.limit) < 0 ? [spec.limit] : []).sort(function (a, b) { return a - b; }).map(function (n) { return { value: String(n), label: String(n) }; }));
+
+    return h('div', { className: 'ss-qb' },
+      h('div', { className: 'ss-qb-main' },
+        h('div', { className: 'ss-qb-from' },
+          h('span', { className: 'ss-caption' }, 'From'),
+          h('div', { className: 'ss-qb-table' }, h(Select, { mono: true, label: 'Table', value: table.name, onChange: pickTable, options: tables.map(function (t) { return t.name; }) })),
+          h('span', { className: 'ss-spacer' }),
+          h(Button, { variant: 'ghost', size: 'sm', disabled: !total, onClick: function () { change({ where: { op: 'AND', items: [] } }); } }, 'Clear all')),
+        group(spec.where, [])),
+      h('aside', { className: 'ss-qb-side', 'aria-label': 'Output' },
+        h('div', { className: 'ss-qb-fields' },
+          h(Field, { label: 'Columns' },
+            h('div', { className: 'ss-anchor ss-qb-anchor', ref: _cols.ref },
+              h(Button, { icon: 'columns', active: _cols.open, 'aria-haspopup': 'dialog', 'aria-expanded': _cols.open, onClick: function () { _cols.set(!_cols.open); } }, visible === table.columns.length ? 'All ' + table.columns.length + ' columns' : visible + ' of ' + table.columns.length + ' columns'),
+              _cols.open && h('div', { className: 'ss-anchor-pop' }, h(ColumnsMenu, {
+                columns: table.columns, hidden: hidden,
+                onHidden: function (list) { var keep = table.columns.filter(function (c) { return list.indexOf(c.name) < 0; }).map(function (c) { return c.name; }); change({ columns: keep.length === table.columns.length ? null : keep }); }
+              })))),
+          h(Field, { label: 'Limit' }, h(Select, { mono: true, label: 'Limit', value: spec.limit == null ? '' : String(spec.limit), onChange: function (v) { change({ limit: v === '' ? null : Number(v) }); }, options: limitOpts })),
+          h(Field, { label: 'Sort', className: 'ss-qb-sort' },
+            h('div', { className: 'ss-qb-sortrow' },
+              h(Select, { mono: true, label: 'Sort by', value: spec.sort ? spec.sort.column : '', onChange: function (v) { change({ sort: v ? { column: v, dir: spec.sort ? spec.sort.dir : 'asc' } : null }); }, options: sortOpts }),
+              h(SegmentedControl, { options: spec.sort ? QUERY_DIRS : QUERY_DIRS.map(function (d) { return assign(d, { disabled: true }); }), value: spec.sort ? spec.sort.dir : 'asc', onChange: function (v) { change({ sort: assign(spec.sort, { dir: v }) }); } })))),
+        h('div', { className: 'ss-qb-sqlbar' },
+          h('span', { className: 'ss-caption' }, 'SQL'),
+          h('span', { className: 'ss-spacer' }),
+          h(Button, { variant: 'ghost', size: 'sm', icon: copied ? 'check' : 'copy', onClick: copy }, copied ? 'Copied' : 'Copy'),
+          p.onEditSql && h(Button, { variant: 'ghost', size: 'sm', icon: 'code', onClick: function () { p.onEditSql(sql); } }, 'Edit as SQL')),
+        h('pre', { className: 'ss-qb-sql', 'aria-label': 'Generated SQL', dangerouslySetInnerHTML: { __html: highlightSql(sql) } }),
+        p.showErrors && problems.length > 0 && h('div', { className: 'ss-field-error', role: 'alert' }, h(Icon, { name: 'alert', size: 13 }), 'Complete or remove ' + countText(problems.length, 'condition', 'conditions') + ' to run.'),
+        p.actions && h('div', { className: 'ss-qb-actions' }, p.actions)));
+  }
+
+  // The panel under the query: Results, Messages and Plan.
+  var QUERY_TABS = [{ value: 'results', label: 'Results' }, { value: 'messages', label: 'Messages' }, { value: 'plan', label: 'Plan' }];
+  var QUERY_RESULTS_H = 380;
+
+  function QuerySaveForm(p) {
+    var _n = useState(''), name = _n[0], setName = _n[1];
+    var _e = useState(null), error = _e[0], setError = _e[1];
+    var ref = useRef(null);
+    useEffect(function () { if (ref.current) ref.current.focus(); }, []);
+    function submit() {
+      var v = name.trim();
+      if (!v) { setError('Query name cannot be empty.'); return; }
+      if (p.names.indexOf(v) >= 0) { setError('A saved query named "' + v + '" already exists.'); return; }
+      p.onSave(v);
+    }
+    return h('div', { className: 'ss-menu ss-dt-pop', role: 'dialog', 'aria-label': 'Save query', onKeyDown: function (e) { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); submit(); } } },
+      h('div', { className: 'ss-menu-label' }, 'Save query'),
+      h('div', { className: 'ss-dt-form' },
+        h(Field, { error: error, hint: 'Saved queries are listed in History.' }, h(Input, { placeholder: 'Signed up this quarter', 'aria-label': 'Query name', error: !!error, value: name, inputRef: ref, onChange: function (e) { setName(e.target.value); setError(null); } })),
+        h('div', { className: 'ss-dt-form-foot' }, h(Button, { variant: 'primary', size: 'sm', kbd: '⏎', onClick: submit }, 'Save query'))));
+  }
+
+  function QueryHistory(p) {
+    function item(x, i, saved) {
+      var line = x.sql.replace(/\s+/g, ' ');
+      return h('button', { key: (saved ? 's' : 'r') + i, type: 'button', className: 'ss-qh-item', title: x.sql, onClick: function () { p.onPick(x); } },
+        h('span', { className: 'ss-qh-main' },
+          saved && h('span', { className: 'ss-qh-name' }, x.name),
+          h('span', { className: cx('ss-qh-sql', saved && 'is-sub') }, line)),
+        h('span', { className: cx('ss-qh-meta', x.ok === false && 'is-error') }, x.ok === false && h(Icon, { name: 'alert', size: 12 }), [x.ok === false ? 'Failed' : x.ms != null ? x.ms + ' ms' : null, x.at].filter(Boolean).join(' · ')));
+    }
+    return h('div', { className: 'ss-menu ss-qh', role: 'dialog', 'aria-label': 'Query history' },
+      h('div', { className: 'ss-qh-list' },
+        h('div', { className: 'ss-menu-label ss-qh-head' }, h('span', null, 'Saved'), h('span', { className: 'ss-tl-count' }, p.saved.length)),
+        p.saved.length ? p.saved.map(function (x, i) { return item(x, i, true); }) : h('div', { className: 'ss-pane-none ss-qh-none' }, 'No saved queries. Save query keeps one here.'),
+        h('div', { className: 'ss-menu-sep', role: 'separator' }),
+        h('div', { className: 'ss-menu-label ss-qh-head' }, h('span', null, 'Recent'), h('span', { className: 'ss-tl-count' }, p.recent.length)),
+        p.recent.length ? p.recent.map(function (x, i) { return item(x, i, false); }) : h('div', { className: 'ss-pane-none ss-qh-none' }, 'Nothing has been run yet.')));
+  }
+
+  // Query mode: a console over the rows of the sample. Builder or SQL on top, Results / Messages / Plan below, divided by a line that is dragged.
+  // It keeps its own state and its own working copy of the rows (`data`: a row edited in the record editor is changed there, and the results follow);
+  // the host hears `onSaveRecord(table, row, saved)`, `onSaveQuery(entry)` and `onRun(entry)`. The other props start it somewhere for a preview or a test:
+  // `mode`, `spec`, `sql`, `error` (the SQL with a mistyped column, already run), `run` (run it as it opens), `attempted` (Run was pressed with conditions to fix), `duration` (the ms shown), `tab`, `height` (of the
+  // results), `saved`, `recent`, `historyOpen`, `saveOpen`, `running`, `openRow` (a row of the results that opens in the editor).
+  function QueryConsole(p) {
+    var tables = p.tables || SAMPLE_TABLES;
+    var _data = useState(p.data || SAMPLE_RECORDS), data = _data[0], setData = _data[1];
+    var _mode = useState(p.mode || (p.error || p.sql != null ? 'sql' : 'builder')), mode = _mode[0], setMode = _mode[1];
+    var _spec = useState(p.spec || defaultQuery(tables[0])), spec = _spec[0], setSpec = _spec[1];
+    var _sql = useState(p.sql != null ? p.sql : p.error ? QUERY_SAMPLE_BAD : QUERY_SAMPLE), sql = _sql[0], setSql = _sql[1];
+    var _tried = useState(!!p.attempted), tried = _tried[0], setTried = _tried[1];
+    var seq = useRef(0);
+    var table = tables.find(function (t) { return t.name === spec.table; }) || tables[0];
+    // Starting by running: what the first run would be, and how long it took.
+    function measure(text) { var t0 = performance.now(); runQuery(text, tables, data); return Math.max(1, Math.round(performance.now() - t0)); }
+    var firstSql = mode === 'builder' ? buildQuery(spec, table) : sql;
+    var _ran = useState(p.run || p.error ? { sql: firstSql, ms: p.duration != null ? p.duration : measure(firstSql) } : null), ran = _ran[0], setRan = _ran[1];
+    var result = useMemo(function () { return ran ? runQuery(ran.sql, tables, data) : null; }, [ran, data, tables]);
+    var _tab = useState(p.tab || (p.error ? 'messages' : 'results')), tab = _tab[0], setTab = _tab[1];
+    var _h = useState(p.height || QUERY_RESULTS_H), height = _h[0], setHeight = _h[1];
+    var _saved = useState(p.saved || QUERY_SAVED), saved = _saved[0], setSaved = _saved[1];
+    var _recent = useState(p.recent || QUERY_RECENT), recent = _recent[0], setRecent = _recent[1];
+    var _notes = useState([]), notes = _notes[0], setNotes = _notes[1];
+    var _cleared = useState(null), cleared = _cleared[0], setCleared = _cleared[1];
+    var _fmt = useState(null), fmtError = _fmt[0], setFmtError = _fmt[1];
+    var _act = useState(null), act = _act[0], setAct = _act[1];
+    var _edit = useState(function () { return p.openRow != null && result && result.ok ? { id: 0, source: result.sources[p.openRow] } : null; }), edit = _edit[0], setEdit = _edit[1];
+    var _ed = useState(false), editDirty = _ed[0], setEditDirty = _ed[1];
+    var _ec = useState([]), editChanged = _ec[0], setEditChanged = _ec[1];
+    var _ew = useState(520), editWidth = _ew[0], setEditWidth = _ew[1];
+    var _pend = useState(null), pending = _pend[0], setPending = _pend[1];
+    var sqlEdited = useRef(p.sql != null || !!p.error || p.mode === 'sql');
+    var history = usePopover(!!p.historyOpen), saving = usePopover(!!p.saveOpen), exporting = usePopover();
+    var root = useRef(null);
+    var running = !!p.running;
+
+    function runSql(text, entry) {
+      var ms = p.duration != null ? p.duration : measure(text), r = runQuery(text, tables, data);
+      setRan({ sql: text, ms: ms }); setNotes([]); setAct(null); setCleared(null); setFmtError(null);
+      setTab(r.ok ? (tab === 'plan' ? 'plan' : 'results') : 'messages');
+      var item = assign(entry, { sql: text, ok: r.ok, ms: r.ok ? ms : undefined, at: 'Just now' });
+      setRecent([item].concat(recent.filter(function (x) { return x.sql !== text; })).slice(0, 8));
+      if (p.onRun) p.onRun(item);
+    }
+    function run() {
+      if (running) return;
+      if (mode === 'builder') {
+        if (queryProblems(spec, table).length) { setTried(true); return; }
+        setTried(false); runSql(buildQuery(spec, table), { mode: 'builder', spec: spec });
+      } else if (sql.trim()) runSql(sql, { mode: 'sql' });
+    }
+    function onKey(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !pending) { e.preventDefault(); e.stopPropagation(); run(); }
+    }
+    function switchMode(m) {
+      if (m === mode) return;
+      if (m === 'sql' && !sqlEdited.current) setSql(buildQuery(spec, table));
+      setMode(m);
+    }
+    function load(x) {
+      history.set(false);
+      if (x.spec) { setSpec(x.spec); setMode('builder'); setTried(false); } else { setSql(x.sql); sqlEdited.current = true; setMode('sql'); setCleared(null); setFmtError(null); }
+    }
+    function currentSql() { return mode === 'builder' ? buildQuery(spec, table) : sql; }
+    function saveQuery(name) {
+      var entry = assign({ name: name, sql: currentSql() }, mode === 'builder' ? { spec: spec } : null);
+      setSaved([entry].concat(saved)); saving.set(false);
+      if (p.onSaveQuery) p.onSaveQuery(entry);
+    }
+    function gotoLine(n) {
+      var ta = root.current && root.current.querySelector('.ss-qc-sql textarea');
+      if (!ta) return;
+      var at = 0, k;
+      for (k = 1; k < n; k++) { var nl = sql.indexOf('\n', at); if (nl < 0) break; at = nl + 1; }
+      ta.focus(); ta.setSelectionRange(at, at);
+    }
+    function format() {
+      var r = formatQuery(sql);
+      if (!r.ok) { setFmtError(r.message); return; }
+      setSql(r.sql); setFmtError(null); sqlEdited.current = true;
+    }
+    function exportAs(kind) {
+      exporting.set(false);
+      if (!result || !result.ok) return;
+      var rows = result.rows;
+      if (kind === 'csv') saveText('query-results.csv', [result.columns.map(function (c) { return csvCell(c.name); }).join(',')].concat(rows.map(function (r) { return result.columns.map(function (c) { return csvCell(r[c.name]); }).join(','); })).join('\n') + '\n', 'text/csv');
+      else if (kind === 'json') saveText('query-results.json', JSON.stringify(rows, null, 2) + '\n', 'application/json');
+      else { try { navigator.clipboard.writeText(JSON.stringify(rows, null, 2)); } catch (e) { /* no clipboard here */ } }
+      setNotes(notes.concat([{ text: (kind === 'copy' ? 'Copied ' : 'Exported ') + countText(rows.length, 'row', 'rows') + (kind === 'csv' ? ' as CSV.' : ' as JSON.') }]));
+    }
+
+    // The record editor: a row of the results opens the row of the table it came from.
+    function leave(next) { if (edit && editDirty) setPending({ run: next }); else next(); }
+    function openRow(r) {
+      if (!result || !result.ok) return;
+      var source = result.sources[r];
+      if (edit && edit.source === source) return;
+      leave(function () { setEdit({ id: ++seq.current, source: source }); setEditDirty(false); });
+    }
+    function saveRecord(values) {
+      var old = edit.source, next = assign(data), saved2 = assign(old, values), tname = result.table.name;
+      next[tname] = (data[tname] || []).map(function (r) { return r === old ? saved2 : r; });
+      setData(next); setEdit(null); setEditDirty(false);
+      setNotes(notes.concat([{ text: 'Updated ' + recordLabel(result.table, saved2) + ' in the working copy. Not saved yet.' }]));
+      if (p.onSaveRecord) p.onSaveRecord(tname, old, saved2);
+    }
+
+    // ---- the header
+    var names = saved.map(function (x) { return x.name; });
+    var header = h('div', { className: 'ss-qc-head' },
+      h('h2', { className: 'ss-rec-title' }, 'Query'),
+      h(Badge, { dot: true, title: 'The rows are sample data made for this schema.' }, 'Sample data'),
+      h(SegmentedControl, { options: QUERY_MODES, value: mode, onChange: switchMode }),
+      h('span', { className: 'ss-spacer' }),
+      h('div', { className: 'ss-anchor', ref: saving.ref },
+        h(Button, { icon: 'bookmark', active: saving.open, disabled: !currentSql().trim(), 'aria-haspopup': 'dialog', 'aria-expanded': saving.open, title: 'Save query', onClick: function () { history.set(false); saving.set(!saving.open); } }, h('span', { className: 'ss-qc-lbl' }, 'Save query')),
+        saving.open && h('div', { className: 'ss-anchor-pop ss-anchor-pop--end' }, h(QuerySaveForm, { names: names, onSave: saveQuery }))),
+      h('div', { className: 'ss-anchor', ref: history.ref },
+        h(Button, { icon: 'history', active: history.open, 'aria-haspopup': 'dialog', 'aria-expanded': history.open, title: 'History', onClick: function () { saving.set(false); history.set(!history.open); } }, h('span', { className: 'ss-qc-lbl' }, 'History')),
+        history.open && h('div', { className: 'ss-anchor-pop ss-anchor-pop--end' }, h(QueryHistory, { saved: saved, recent: recent, onPick: load }))));
+
+    // ---- the top: the Builder or the SQL
+    var runButton = h(Button, { variant: 'primary', icon: 'play', disabled: running || (mode === 'sql' && !sql.trim()), kbd: ['⌘', '⏎'], onClick: run }, running ? 'Running…' : 'Run');
+    var status = null;
+    if (fmtError) status = h('span', { className: 'ss-qc-status is-error' }, h(Icon, { name: 'alert', size: 13 }), fmtError);
+    else if (cleared !== null) status = h('span', { className: 'ss-qc-status' }, 'Editor cleared.', h('a', { onClick: function () { setSql(cleared); setCleared(null); } }, 'Undo'));
+    else if (running) status = h('span', { className: 'ss-qc-status' }, 'Running…');
+    else if (ran && result && result.ok) status = h('span', { className: 'ss-qc-status' }, 'Ran in ' + ran.ms + ' ms');
+    else if (ran && result) status = h('span', { className: 'ss-qc-status is-error' }, h(Icon, { name: 'alert', size: 13 }), 'Failed', h('a', { onClick: function () { setTab('messages'); } }, 'Show messages'));
+    var top = mode === 'builder'
+      ? h(FilterBuilder, { tables: tables, value: spec, showErrors: tried, onChange: function (s) { setSpec(s); }, onEditSql: function (text) { setSql(text); sqlEdited.current = true; setMode('sql'); }, actions: runButton })
+      : h('div', { className: 'ss-qc-sql' },
+        h('div', { className: 'ss-qc-tools' },
+          runButton,
+          h(Button, { icon: 'code', disabled: !sql.trim(), onClick: format }, 'Format'),
+          h(Button, { variant: 'ghost', icon: 'x', disabled: !sql.length, onClick: function () { setCleared(sql); setSql(''); setFmtError(null); sqlEdited.current = true; } }, 'Clear'),
+          h('span', { className: 'ss-spacer' }), status),
+        h(SqlEditor, { value: sql, onChange: function (v) { setSql(v); sqlEdited.current = true; setCleared(null); setFmtError(null); }, label: 'SQL query', placeholder: 'SELECT * FROM users LIMIT 100;', errorLine: result && !result.ok && result.line && ran && ran.sql === sql ? result.line : null, style: { height: 'auto', flex: '1 1 0', minHeight: 0 } }));
+
+    // ---- the bottom
+    var ok = !!result && result.ok;
+    var meta = running ? 'Running…' : ok ? countText(result.shown, 'row', 'rows') + ' · ' + ran.ms + ' ms' : null;
+    var items = messageItems();
+    var resHead = h('div', { className: 'ss-qc-rhead' },
+      h('div', { className: 'ss-tabs', role: 'tablist', 'aria-label': 'Query output' }, QUERY_TABS.map(function (x, i) {
+        var on = tab === x.value;
+        return h('button', {
+          key: x.value, type: 'button', role: 'tab', 'aria-selected': on, tabIndex: on ? 0 : -1, className: cx('ss-tab', on && 'is-active'), onClick: function () { setTab(x.value); },
+          onKeyDown: function (e) {
+            var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+            if (!d) return;
+            e.preventDefault(); var n = QUERY_TABS[(i + d + QUERY_TABS.length) % QUERY_TABS.length].value; setTab(n);
+            var el = e.currentTarget.parentNode.querySelector('[data-tab="' + n + '"]'); if (el) el.focus();
+          }, 'data-tab': x.value
+        }, x.label,
+          x.value === 'results' && ok && !running && h('span', { className: 'ss-tab-count' }, result.shown),
+          x.value === 'messages' && items.length > 0 && h('span', { className: cx('ss-tab-count', result && !result.ok && 'is-error') }, items.length));
+      })),
+      h('span', { className: 'ss-spacer' }),
+      meta && h('span', { className: 'ss-qc-meta' }, meta),
+      h('div', { className: 'ss-anchor', ref: exporting.ref },
+        h(Button, { size: 'sm', icon: 'download', active: exporting.open, disabled: !ok || running || !result.shown, 'aria-haspopup': 'menu', 'aria-expanded': exporting.open, onClick: function () { exporting.set(!exporting.open); } }, 'Export'),
+        exporting.open && h('div', { className: 'ss-anchor-pop ss-anchor-pop--end' }, h(ContextMenu, {
+          label: 'Export ' + countText(ok ? result.shown : 0, 'row', 'rows'), onClose: function () { exporting.set(false); },
+          items: [{ icon: 'download', label: 'CSV', shortcut: '.csv', onSelect: function () { exportAs('csv'); } }, { icon: 'download', label: 'JSON', shortcut: '.json', onSelect: function () { exportAs('json'); } }, '-', { icon: 'copy', label: 'Copy as JSON', onSelect: function () { exportAs('copy'); } }]
+        }))));
+
+    function resultsBody() {
+      if (running) return h(DataGrid, { columns: table.columns, rows: [], loading: true, selectable: false, label: 'Results' });
+      if (!result) return h(EmptyState, { compact: true, title: 'No results yet.', description: 'Run the query to see its rows here.', actions: h(Button, { variant: 'primary', icon: 'play', kbd: ['⌘', '⏎'], onClick: run }, 'Run') });
+      if (!result.ok) return h(EmptyState, { compact: true, title: 'The query did not run.', description: 'No rows were read. Messages says what went wrong.', actions: h(Button, { onClick: function () { setTab('messages'); } }, 'Show messages') });
+      return h(DataGrid, {
+        columns: result.columns, rows: result.rows, selectable: false, label: 'Results', activeCell: act, onActiveCell: setAct, onOpenRow: openRow,
+        empty: result.rows.length ? false : h(EmptyState, { compact: true, title: 'No rows match the query.', description: result.all.toLocaleString('en-US') + (result.all === 1 ? ' row was' : ' rows were') + ' read from ' + result.table.name + '.', actions: null })
+      });
+    }
+    function messageItems() {
+      var list = [];
+      if (!result) return list;
+      if (!result.ok) {
+        list.push(h(Alert, {
+          key: 'err', tone: 'error', title: result.message,
+          action: mode === 'sql' && result.line && ran && ran.sql === sql ? h(Button, { size: 'sm', variant: 'ghost', onClick: function () { gotoLine(result.line); } }, 'Go to line') : undefined
+        }, result.line ? h('span', { className: 'ss-mono' }, 'Line ' + result.line) : null));
+      } else {
+        list.push(h('div', { key: 'ok', className: 'ss-qc-msg is-ok' }, h(Icon, { name: 'check-circle', size: 14 }), h('span', null, 'Query returned ' + countText(result.shown, 'row', 'rows') + ' in ' + ran.ms + ' ms.')));
+        if (result.capped) list.push(h('div', { key: 'cap', className: 'ss-qc-msg' }, h(Icon, { name: 'info', size: 14 }), h('span', null, 'Showing the first ' + QUERY_MAX_ROWS.toLocaleString('en-US') + ' of ' + countText(result.total, 'row', 'rows') + '.')));
+        else if (result.query.limit != null && result.total > result.shown) list.push(h('div', { key: 'lim', className: 'ss-qc-msg' }, h(Icon, { name: 'info', size: 14 }), h('span', null, countText(result.total, 'row', 'rows') + ' matched. Showing the first ' + result.shown.toLocaleString('en-US') + ' (LIMIT ' + result.query.limit + ').')));
+      }
+      notes.forEach(function (n, i) { list.push(h('div', { key: 'n' + i, className: 'ss-qc-msg' }, h(Icon, { name: 'info', size: 14 }), h('span', null, n.text))); });
+      return list;
+    }
+    function messagesBody() {
+      if (!result) return h('div', { className: 'ss-qc-pane' }, h('div', { className: 'ss-pane-none' }, 'No messages yet. Run a query.'));
+      return h('div', { className: 'ss-qc-pane' }, items);
+    }
+    function planBody() {
+      if (!result) return h('div', { className: 'ss-qc-pane' }, h('div', { className: 'ss-pane-none' }, 'No plan yet. Run a query.'));
+      if (!result.ok) return h('div', { className: 'ss-qc-pane' }, h('div', { className: 'ss-pane-none' }, 'There is no plan for a query that did not run.'));
+      return h('div', { className: 'ss-qc-pane' }, h('pre', { className: 'ss-qc-plan', 'aria-label': 'Query plan' }, queryPlan(result, ran.ms).join('\n')));
+    }
+    var body = tab === 'messages' ? messagesBody() : tab === 'plan' ? planBody() : resultsBody();
+
+    var editTable = result && result.ok ? result.table : null;
+    var editor = edit && editTable && h(RecordEditor, {
+      key: edit.id, table: editTable, tables: tables, data: data, record: edit.source, width: editWidth, onWidth: setEditWidth, onSave: saveRecord,
+      onDirty: function (d, changed) { setEditDirty(d); setEditChanged(changed); }, onClose: function () { setEdit(null); setEditDirty(false); }
+    });
+    var discarding = pending && editTable && h(ConfirmDialog, {
+      title: 'Discard changes to ' + recordLabel(editTable, edit.source) + '?', danger: true, confirmLabel: 'Discard changes', cancelLabel: 'Keep editing',
+      onCancel: function () { setPending(null); }, onConfirm: function () { var next = pending.run; setPending(null); next(); }
+    }, h('div', { style: { color: 'var(--ink-2)' } }, editChanged.length ? h(Fragment, null, countText(editChanged.length, 'changed column', 'changed columns') + ' will be lost: ', h(Mono, null, editChanged.join(', ')), '.') : 'The edited JSON will be lost.'));
+
+    return h('div', { className: 'ss-qc', ref: root },
+      h('div', { className: 'ss-qc-col', onKeyDown: onKey },
+        header,
+        h('div', { className: 'ss-qc-top' }, top),
+        h('section', { className: 'ss-qc-res', style: { height: height }, 'aria-label': 'Query output' },
+          h(ResizeHandle, { label: 'Resize results', edge: 'top', width: height, min: 120, max: 640, onResize: setHeight, onReset: function () { setHeight(QUERY_RESULTS_H); } }),
+          resHead,
+          h('div', { className: 'ss-qc-body', role: 'tabpanel', 'aria-label': QUERY_TABS.find(function (x) { return x.value === tab; }).label }, body))),
+      editor, discarding);
+  }
+
   function VersionList(p) {
     return h('div', { className: 'ss-vlist', role: 'listbox', 'aria-label': 'Versions' }, (p.versions || SAMPLE_VERSIONS).map(function (v) {
       return h('button', { key: v.version, type: 'button', role: 'option', 'aria-selected': p.selected === v.version, className: cx('ss-ver', v.current && 'is-current', p.selected === v.version && 'is-selected'), onClick: function () { p.onSelect && p.onSelect(v.version); } },
@@ -3171,10 +3974,11 @@
     TableNode: TableNode, ERCanvas: ERCanvas, Inspector: Inspector, TypeSelect: TypeSelect, ContextMenu: ContextMenu,
     Modal: Modal, ConfirmDialog: ConfirmDialog, DropZone: DropZone, SqlEditor: SqlEditor, ParseStatus: ParseStatus,
     ImportSchemaDialog: ImportSchemaDialog, ExportDialog: ExportDialog,
-    Toast: Toast, Alert: Alert, DataTable: DataTable, TableList: TableList, DataGrid: DataGrid, TableHeader: TableHeader, TableStructure: TableStructure, TableRelationships: TableRelationships, DataToolbar: DataToolbar, FilterChips: FilterChips, SelectionBar: SelectionBar, Pagination: Pagination, RecordEditor: RecordEditor, ResizeHandle: ResizeHandle, Stepper: Stepper, Progress: Progress, ImportRecordsDialog: ImportRecordsDialog, VersionList: VersionList, DiffList: DiffList, DiffRow: DiffRow, DdlDiff: DdlDiff,
+    Toast: Toast, Alert: Alert, DataTable: DataTable, TableList: TableList, DataGrid: DataGrid, TableHeader: TableHeader, TableStructure: TableStructure, TableRelationships: TableRelationships, DataToolbar: DataToolbar, FilterChips: FilterChips, SelectionBar: SelectionBar, Pagination: Pagination, RecordEditor: RecordEditor, ResizeHandle: ResizeHandle, Stepper: Stepper, Progress: Progress, ImportRecordsDialog: ImportRecordsDialog, FilterBuilder: FilterBuilder, QueryConsole: QueryConsole, VersionList: VersionList, DiffList: DiffList, DiffRow: DiffRow, DdlDiff: DdlDiff,
     EmptyState: EmptyState, Workspace: Workspace,
     highlightSql: highlightSql, highlightJson: highlightJson, validateColumns: validateColumns, relationsOf: relationsOf, parseJson: parseJson, validateRecord: validateRecord, recordLabel: recordLabel, completeRecord: completeRecord,
     parseCsv: parseCsv, readRecordsFile: readRecordsFile, matchColumns: matchColumns, analyzeImport: analyzeImport, runImport: runImport, importReport: importReport, importSummary: importSummary,
-    sample: { tables: SAMPLE_TABLES, positions: SAMPLE_POSITIONS, schemas: SAMPLE_SCHEMAS, versions: SAMPLE_VERSIONS, diff: SAMPLE_DIFF, sql: SAMPLE_SQL, pasteSql: PASTE_SQL, badSql: BAD_SQL, types: TYPE_OPTIONS, records: SAMPLE_RECORDS, csv: SAMPLE_CSV }
+    defaultQuery: defaultQuery, queryOps: queryOps, queryProblems: queryProblems, buildQuery: buildQuery, parseQuery: parseQuery, formatQuery: formatQuery, runQuery: runQuery, queryPlan: queryPlan,
+    sample: { tables: SAMPLE_TABLES, positions: SAMPLE_POSITIONS, schemas: SAMPLE_SCHEMAS, versions: SAMPLE_VERSIONS, diff: SAMPLE_DIFF, sql: SAMPLE_SQL, pasteSql: PASTE_SQL, badSql: BAD_SQL, types: TYPE_OPTIONS, records: SAMPLE_RECORDS, csv: SAMPLE_CSV, query: { sql: QUERY_SAMPLE, badSql: QUERY_SAMPLE_BAD, spec: QUERY_SAMPLE_SPEC, saved: QUERY_SAVED, recent: QUERY_RECENT } }
   };
 })();
