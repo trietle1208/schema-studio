@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"SchemaStudio","components":[{"name":"Icon"},{"name":"Logo"},{"name":"Button"},{"name":"Badge"},{"name":"Input"},{"name":"Select"},{"name":"Checkbox"},{"name":"SegmentedControl"},{"name":"Sidebar"},{"name":"Toolbar"},{"name":"StatusBar"},{"name":"TableNode"},{"name":"ERCanvas"},{"name":"Inspector"},{"name":"TypeSelect"},{"name":"ContextMenu"},{"name":"Modal"},{"name":"DropZone"},{"name":"SqlEditor"},{"name":"ImportSchemaDialog"},{"name":"ExportDialog"},{"name":"Toast"},{"name":"DataTable"},{"name":"TableList"},{"name":"DataGrid"},{"name":"VersionList"},{"name":"DiffList"},{"name":"DdlDiff"},{"name":"EmptyState"},{"name":"Workspace"}]} */
+/* @ds-bundle: {"format":4,"namespace":"SchemaStudio","components":[{"name":"Icon"},{"name":"Logo"},{"name":"Button"},{"name":"Badge"},{"name":"Input"},{"name":"Select"},{"name":"Checkbox"},{"name":"SegmentedControl"},{"name":"Sidebar"},{"name":"Toolbar"},{"name":"StatusBar"},{"name":"TableNode"},{"name":"ERCanvas"},{"name":"Inspector"},{"name":"TypeSelect"},{"name":"ContextMenu"},{"name":"Modal"},{"name":"DropZone"},{"name":"SqlEditor"},{"name":"ImportSchemaDialog"},{"name":"ExportDialog"},{"name":"Toast"},{"name":"DataTable"},{"name":"TableList"},{"name":"DataGrid"},{"name":"TableHeader"},{"name":"TableStructure"},{"name":"TableRelationships"},{"name":"DataToolbar"},{"name":"FilterChips"},{"name":"SelectionBar"},{"name":"Pagination"},{"name":"RecordEditor"},{"name":"Stepper"},{"name":"Progress"},{"name":"ImportRecordsDialog"},{"name":"VersionList"},{"name":"DiffList"},{"name":"DdlDiff"},{"name":"EmptyState"},{"name":"Workspace"}]} */
 (function () {
   var React = window.React;
   var h = React.createElement;
@@ -28,6 +28,7 @@
     keyboard: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M10.5 10h.01M14 10h.01M17 10h.01M8 14h8"/>',
     'chevron-down': '<path d="M6 9l6 6 6-6"/>',
     'chevron-right': '<path d="M9 6l6 6-6 6"/>',
+    'chevron-left': '<path d="M15 6l-6 6 6 6"/>',
     'chevron-up': '<path d="M6 15l6-6 6 6"/>',
     'chevrons-ud': '<path d="M8 9l4-4 4 4M8 15l4 4 4-4"/>',
     'arrow-up': '<path d="M12 19V5M6 11l6-6 6 6"/>',
@@ -156,7 +157,7 @@
   }
 
   function Checkbox(p) {
-    return h('label', { className: cx('ss-check', p.radio && 'ss-check--radio', p.className) },
+    return h('label', { className: cx('ss-check', p.radio && 'ss-check--radio', p.disabled && 'is-disabled', p.className) },
       h('input', { type: p.radio ? 'radio' : 'checkbox', name: p.name, checked: !!p.checked, disabled: p.disabled, onChange: function (e) { p.onChange && p.onChange(e.target.checked); } }),
       h('span', { className: 'ss-check-box' }, !p.radio && p.checked && h(Icon, { name: 'check', size: 11, strokeWidth: 3 })),
       h('span', null, p.label, p.description && h('span', { className: 'ss-check-desc' }, p.description)));
@@ -350,6 +351,20 @@
       out += '<span class="ss-tok-' + cls + '">' + esc(m[0]) + '</span>';
       last = m.index + m[0].length;
       if (m[0].length === 0) TOKEN_RE.lastIndex++;
+    }
+    return out + esc(src.slice(last));
+  }
+  // JSON: keys are types, strings strings, numbers numbers and true / false / null keywords. Only wraps text, so a textarea laid over it stays aligned.
+  var JSON_TOKEN_RE = /("(?:[^"\\\n]|\\.)*"?)(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+  function highlightJson(src) {
+    var out = '', last = 0, m;
+    JSON_TOKEN_RE.lastIndex = 0;
+    while ((m = JSON_TOKEN_RE.exec(src))) {
+      out += esc(src.slice(last, m.index));
+      if (m[1] !== undefined) out += '<span class="ss-tok-' + (m[2] ? 'ty' : 'str') + '">' + esc(m[1]) + '</span>' + (m[2] ? esc(m[2]) : '');
+      else out += '<span class="ss-tok-' + (m[3] ? 'kw' : 'num') + '">' + esc(m[0]) + '</span>';
+      last = m.index + m[0].length;
+      if (m[0].length === 0) JSON_TOKEN_RE.lastIndex++;
     }
     return out + esc(src.slice(last));
   }
@@ -871,29 +886,33 @@
   function DropZone(p) {
     var _o = useState(false), over = _o[0], setOver = _o[1];
     var inputRef = useRef(null);
+    // `onFile` gets `{name, meta, raw}`; `raw` is the File itself, for a host that reads it.
+    function pick(f) { if (f && p.onFile) p.onFile({ name: f.name, meta: Math.max(1, Math.round(f.size / 1024)) + ' KB', raw: f }); }
+    var input = h('input', { ref: inputRef, type: 'file', accept: p.accept || '.sql,.ddl,.txt', hidden: true, onChange: function (e) { pick(e.target.files[0]); e.target.value = ''; } });
     if (p.file) {
       return h('div', { className: 'ss-file' },
-        h('span', { className: 'ss-file-icon' }, h(Icon, { name: 'file-code', size: 16 })),
+        h('span', { className: 'ss-file-icon' }, h(Icon, { name: p.fileIcon || 'file-code', size: 16 })),
         h('div', { style: { flex: 1, minWidth: 0 } }, h('div', { className: 'ss-file-name' }, p.file.name), h('div', { className: 'ss-file-meta' }, p.file.meta || p.file.size)),
         h(Button, { variant: 'ghost', size: 'sm', onClick: function () { inputRef.current && inputRef.current.click(); } }, 'Replace'),
         h(IconButton, { icon: 'x', size: 'sm', label: 'Remove file', onClick: function () { p.onFile && p.onFile(null); } }),
-        h('input', { ref: inputRef, type: 'file', accept: '.sql,.ddl,.txt', hidden: true }));
+        input);
     }
     return h('div', {
       className: cx('ss-drop', (over || p.over) && 'is-over'), role: 'button', tabIndex: 0, style: p.style,
       onDragOver: function (e) { e.preventDefault(); setOver(true); }, onDragLeave: function () { setOver(false); },
-      onDrop: function (e) { e.preventDefault(); setOver(false); var f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f && p.onFile) p.onFile({ name: f.name, meta: Math.max(1, Math.round(f.size / 1024)) + ' KB' }); },
+      onDrop: function (e) { e.preventDefault(); setOver(false); pick(e.dataTransfer.files && e.dataTransfer.files[0]); },
       onClick: function () { inputRef.current && inputRef.current.click(); }
     },
       h('span', { className: 'ss-drop-icon' }, h(Icon, { name: 'upload', size: 16 })),
-      h('div', { className: 'ss-drop-title' }, 'Drop SQL file here or ', h('u', null, 'click to browse')),
+      h('div', { className: 'ss-drop-title' }, 'Drop ' + (p.noun || 'SQL') + ' file here or ', h('u', null, 'click to browse')),
       h('div', { className: 'ss-drop-sub' }, p.hint || '.sql or .ddl · up to 10 MB · pg_dump --schema-only output works'),
-      h('input', { ref: inputRef, type: 'file', accept: '.sql,.ddl,.txt', hidden: true, onChange: function (e) { var f = e.target.files[0]; if (f && p.onFile) p.onFile({ name: f.name, meta: Math.max(1, Math.round(f.size / 1024)) + ' KB' }); } }));
+      input);
   }
 
   function SqlEditor(p) {
     var _v = useState(p.defaultValue != null ? p.defaultValue : (p.value || '')), inner = _v[0], setInner = _v[1];
     var value = p.value != null && p.onChange ? p.value : inner;
+    var json = p.language === 'json', plain = p.language === 'text';
     var lines = value.split('\n');
     var maxLen = lines.reduce(function (m, l) { return Math.max(m, l.length); }, 0);
     return h('div', { className: cx('ss-editor', p.errorLine && 'is-error'), style: assign({ height: p.height || 220 }, p.style) },
@@ -901,8 +920,8 @@
         h('div', { className: 'ss-editor-gutter' }, lines.map(function (_, i) { var n = i + (p.firstLine || 1); return h('div', { key: i, className: n === p.errorLine ? 'is-error' : null }, n); })),
         h('div', { className: 'ss-editor-code', style: { minWidth: (maxLen + 4) + 'ch' } },
           p.errorLine && h('div', { className: 'ss-editor-errline', style: { top: 8 + (p.errorLine - (p.firstLine || 1)) * 18 } }),
-          h('pre', { dangerouslySetInnerHTML: { __html: highlightSql(value) + '\n' } }),
-          h('textarea', { value: value, spellCheck: false, 'aria-label': p.label || 'SQL', placeholder: p.placeholder, readOnly: p.readOnly, onChange: function (e) { if (p.onChange) p.onChange(e.target.value); else setInner(e.target.value); } }))));
+          h('pre', { dangerouslySetInnerHTML: { __html: (json ? highlightJson : plain ? esc : highlightSql)(value) + '\n' } }),
+          h('textarea', { value: value, spellCheck: false, 'aria-label': p.label || (json ? 'JSON' : plain ? 'Text' : 'SQL'), placeholder: p.placeholder, readOnly: p.readOnly, onChange: function (e) { if (p.onChange) p.onChange(e.target.value); else setInner(e.target.value); } }))));
   }
 
   function ParseStatus(p) {
@@ -1116,7 +1135,7 @@
     var t = String(type || '').toUpperCase();
     if (/^(BIG|SMALL|MEDIUM|TINY)?(INT|INTEGER|SERIAL)\d?\b|^(DECIMAL|NUMERIC|REAL|DOUBLE|FLOAT|MONEY)/.test(t)) return 'number';
     if (/^BOOL/.test(t)) return 'boolean';
-    if (/^(TIMESTAMP|DATETIME|DATE|TIME)\b/.test(t)) return 'time';
+    if (/^(TIMESTAMP|DATETIME|DATE|TIME)(TZ)?\b/.test(t)) return 'time';
     return 'text';
   }
   function gridCell(value, c, kind) {
@@ -1129,31 +1148,63 @@
     if (kind === 'time') return (value instanceof Date ? value.toISOString() : String(value)).replace(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}).*$/, '$1 $2');
     return String(value);
   }
+  // The menu of a row. `onRowAction(action, row)` gets the action; the same keys run it from the grid.
+  var ROW_ACTIONS = [
+    { action: 'view', icon: 'eye', label: 'View', shortcut: '⏎' },
+    { action: 'edit', icon: 'pencil', label: 'Edit record', shortcut: 'F2' },
+    { action: 'duplicate', icon: 'copy', label: 'Duplicate', shortcut: '⌘D' },
+    { action: 'copy', icon: 'code', label: 'Copy as JSON', shortcut: '⇧⌘C' },
+    '-',
+    { action: 'delete', icon: 'trash', label: 'Delete', shortcut: '⌫', danger: true }
+  ];
   var GRID_WIDTH = { number: 112, boolean: 96, time: 176, text: 220 };
   var SKELETON_WIDTH = [58, 82, 46, 70, 54, 76];
 
   function DataGrid(p) {
     var cols = p.columns || [], rows = p.rows || [], selected = p.selected || [], modified = p.modified || [], active = p.activeCell || null;
     var kinds = cols.map(function (c) { return cellKind(c.type); });
-    // A column is as wide as its kind asks, and never narrower than its header: glyphs, name and type.
+    // A column is as wide as its kind asks, and never narrower than its header: glyphs, name, type and the sort arrow.
     var widths = cols.map(function (c, i) {
-      var head = Math.ceil(c.name.length * 7.3 + c.type.length * 6.7 + 6 + ((c.pk ? 1 : 0) + (c.fk ? 1 : 0)) * 18 + 26);
+      var head = Math.ceil(c.name.length * 7.3 + c.type.length * 6.7 + 6 + ((c.pk ? 1 : 0) + (c.fk ? 1 : 0) + (p.sort && p.sort.column === c.name ? 1 : 0)) * 18 + 26);
       return c.width || Math.max(GRID_WIDTH[kinds[i]], head);
     });
     var width = 56 + widths.reduce(function (a, b) { return a + b; }, 0);
     var ref = useRef(null);
     var allOn = rows.length > 0 && selected.length === rows.length;
+    var selectable = p.selectable !== false;
+    var _m = useState(null), menu = _m[0], setMenu = _m[1];
+    // The row menu closes on a press outside it, on Esc, on scroll and when the window changes size.
+    useEffect(function () {
+      if (!menu) return;
+      var el = ref.current;
+      function close() { setMenu(null); }
+      function key(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+      window.addEventListener('pointerdown', close); window.addEventListener('keydown', key, true); window.addEventListener('resize', close);
+      if (el) el.addEventListener('scroll', close);
+      return function () {
+        window.removeEventListener('pointerdown', close); window.removeEventListener('keydown', key, true); window.removeEventListener('resize', close);
+        if (el) el.removeEventListener('scroll', close);
+      };
+    }, [menu]);
 
     function isModified(r, name) { return modified.some(function (m) { return m.row === r && m.column === name; }); }
+    function badAt(r, name) { return (p.invalid || []).find(function (m) { return m.row === r && m.column === name; }); }
     function toggle(r) {
       var next = selected.indexOf(r) >= 0 ? selected.filter(function (x) { return x !== r; }) : selected.concat([r]).sort(function (a, b) { return a - b; });
       p.onSelect && p.onSelect(next);
     }
     function activate(r, name) { p.onActiveCell && p.onActiveCell({ row: r, column: name }); }
+    function openMenu(e, r, name) {
+      if (!p.onRowAction) return;
+      e.preventDefault();
+      if (name) activate(r, name);
+      setMenu({ row: r, x: Math.max(8, Math.min(e.clientX, window.innerWidth - 236)), y: Math.max(8, Math.min(e.clientY, window.innerHeight - 208)) });
+    }
     function onKey(e) {
-      if (!rows.length || !cols.length || e.target.tagName === 'INPUT') return;
+      if (!rows.length || !cols.length || e.target.tagName === 'INPUT' || e.target.closest('.ss-grid-menu')) return;
       var r = active ? active.row : 0, c = active ? cols.findIndex(function (x) { return x.name === active.column; }) : 0;
       if (c < 0) c = 0;
+      var mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
       var d = { ArrowDown: [1, 0], ArrowUp: [-1, 0], ArrowRight: [0, 1], ArrowLeft: [0, -1] }[e.key];
       if (d) {
         e.preventDefault();
@@ -1161,6 +1212,11 @@
         activate(r, cols[c].name);
       } else if (active && e.key === 'Enter') { e.preventDefault(); p.onOpenRow && p.onOpenRow(r); }
       else if (active && e.key === ' ') { e.preventDefault(); toggle(r); }
+      else if (e.key === 'Escape' && selected.length) { e.preventDefault(); p.onSelect && p.onSelect([]); }
+      else if (active && p.onRowAction) {
+        var action = e.key === 'F2' ? 'edit' : mod && !e.shiftKey && k === 'd' ? 'duplicate' : mod && e.shiftKey && k === 'c' ? 'copy' : e.key === 'Backspace' || e.key === 'Delete' ? 'delete' : null;
+        if (action) { e.preventDefault(); p.onRowAction(action, r); }
+      }
     }
     useEffect(function () {
       var el = ref.current && ref.current.querySelector('td.is-active');
@@ -1168,12 +1224,17 @@
     }, [active && active.row, active && active.column]);
 
     function head(c, i) {
-      return h('th', { key: c.name, scope: 'col', className: cx(kinds[i] === 'number' && 'is-num', i === 0 && 'is-first'), title: c.name + ' ' + c.type },
+      var sorted = !!p.sort && p.sort.column === c.name;
+      return h('th', {
+        key: c.name, scope: 'col', className: cx(kinds[i] === 'number' && 'is-num', i === 0 && 'is-first'), title: c.name + ' ' + c.type,
+        'aria-sort': sorted ? (p.sort.dir === 'asc' ? 'ascending' : 'descending') : undefined
+      },
         h('span', { className: 'ss-grid-hc' },
           c.pk && h(Icon, { name: 'key', size: 12, className: 'ss-grid-key is-pk', label: 'Primary key' }),
           c.fk && h(Icon, { name: 'link', size: 12, className: 'ss-grid-key is-fk', label: 'Foreign key' }),
           h('span', { className: 'ss-grid-name' }, c.name),
-          h('span', { className: 'ss-grid-type' }, c.type)));
+          h('span', { className: 'ss-grid-type' }, c.type),
+          sorted && h(Icon, { name: p.sort.dir === 'asc' ? 'arrow-up' : 'arrow-down', size: 12, className: 'ss-grid-sort', label: p.sort.dir === 'asc' ? 'Sorted ascending' : 'Sorted descending' })));
     }
     function body() {
       if (p.loading) {
@@ -1189,36 +1250,1715 @@
       return rows.map(function (row, r) {
         var on = selected.indexOf(r) >= 0;
         return h('tr', { key: r, className: cx(on && 'is-selected'), 'aria-selected': on, 'aria-rowindex': r + 2, onDoubleClick: function () { p.onOpenRow && p.onOpenRow(r); } },
-          h('td', { className: 'ss-grid-gutter' },
+          h('td', { className: 'ss-grid-gutter', onContextMenu: function (e) { openMenu(e, r); } },
             h('span', { className: 'ss-grid-n' }, r + 1),
-            h('label', { className: 'ss-check' },
+            selectable && h('label', { className: 'ss-check' },
               h('input', { type: 'checkbox', checked: on, 'aria-label': 'Select row ' + (r + 1), onChange: function () { toggle(r); } }),
               h('span', { className: 'ss-check-box' }, on && h(Icon, { name: 'check', size: 11, strokeWidth: 3 })))),
           cols.map(function (c, i) {
             var v = row[c.name], text = v == null ? null : gridCell(v, c, kinds[i]);
-            var isActive = !!active && active.row === r && active.column === c.name;
+            var isActive = !!active && active.row === r && active.column === c.name, bad = badAt(r, c.name);
+            var shown = v == null ? gridCell(v, c, kinds[i]) : text;
             return h('td', {
-              key: c.name, role: 'gridcell', title: text != null && kinds[i] === 'text' ? text : undefined,
-              className: cx(kinds[i] === 'number' && 'is-num', kinds[i] === 'time' && 'is-time', kinds[i] === 'boolean' && 'is-bool', i === 0 && 'is-first', isActive && 'is-active', isModified(r, c.name) && 'is-modified'),
-              onClick: function () { activate(r, c.name); }
-            }, v == null ? gridCell(v, c, kinds[i]) : text);
+              key: c.name, role: 'gridcell', title: bad ? (bad.message || 'Invalid value.') + (text != null ? ' ' + text : '') : text != null && kinds[i] === 'text' ? text : undefined, 'aria-invalid': bad ? true : undefined,
+              className: cx(kinds[i] === 'number' && 'is-num', kinds[i] === 'time' && 'is-time', kinds[i] === 'boolean' && 'is-bool', i === 0 && 'is-first', isActive && 'is-active', isModified(r, c.name) && 'is-modified', bad && 'is-invalid'),
+              onClick: function () { activate(r, c.name); if (p.openOnClick && p.onOpenRow) p.onOpenRow(r); }, onContextMenu: function (e) { openMenu(e, r, c.name); }
+            }, bad ? h('span', { className: 'ss-grid-bad' }, h('span', { className: 'ss-grid-bad-v' }, shown), h(Icon, { name: 'alert', size: 12, label: bad.message || 'Invalid value' })) : shown);
           }));
       });
     }
 
-    return h('div', { ref: ref, className: cx('ss-grid', p.density === 'compact' && 'ss-grid--compact'), role: 'grid', tabIndex: 0, 'aria-label': p.label || 'Records', 'aria-busy': p.loading || undefined, 'aria-rowcount': rows.length + 1, 'aria-colcount': cols.length + 1, onKeyDown: onKey },
+    var grid = h('div', { ref: ref, className: cx('ss-grid', p.density === 'compact' && 'ss-grid--compact', !selectable && 'ss-grid--plain'), role: 'grid', tabIndex: 0, 'aria-label': p.label || 'Records', 'aria-busy': p.loading || undefined, 'aria-rowcount': rows.length + 1, 'aria-colcount': cols.length + 1, onKeyDown: onKey },
       h('table', { className: 'ss-grid-table', style: { width: width } },
         h('colgroup', null, h('col', { style: { width: 56 } }), cols.map(function (c, i) { return h('col', { key: c.name, style: { width: widths[i] } }); })),
         h('thead', null, h('tr', null,
-          h('th', { className: 'ss-grid-gutter', scope: 'col' }, h('label', { className: 'ss-check' },
+          h('th', { className: 'ss-grid-gutter', scope: 'col' }, selectable && h('label', { className: 'ss-check' },
             h('input', { type: 'checkbox', checked: allOn, disabled: !rows.length || !!p.loading, 'aria-label': 'Select all rows', onChange: function () { p.onSelect && p.onSelect(allOn ? [] : rows.map(function (_, r) { return r; })); } }),
             h('span', { className: 'ss-check-box' }, allOn && h(Icon, { name: 'check', size: 11, strokeWidth: 3 })))),
           cols.map(head))),
         h('tbody', null, body())),
       p.empty && !p.loading && h('div', { className: 'ss-grid-empty' },
         p.empty === true
-          ? h(Fragment, null, h('div', { className: 'ss-grid-empty-title' }, 'No records'), h('div', null, 'Add a record, or use Import Records to fill this table.'))
+          ? h(Fragment, null, h('div', { className: 'ss-grid-empty-title' }, 'This table has no rows.'), h('div', null, 'Add a record, or use Import Records to fill this table.'))
           : p.empty));
+    if (!menu) return grid;
+    var items = ROW_ACTIONS.map(function (a) {
+      return a === '-' ? a : { icon: a.icon, label: a.label, shortcut: a.shortcut, danger: a.danger, onSelect: function () { p.onRowAction(a.action, menu.row); } };
+    });
+    return h(Fragment, null, grid,
+      h('div', { className: 'ss-grid-menu', style: { left: menu.x, top: menu.y } },
+        h(ContextMenu, { label: (p.label || 'row') + ' · row ' + (menu.row + 1), items: items, onClose: function () { setMenu(null); } })));
+  }
+
+  // ------------------------------------------------------------------ records: table header, tools, filters, pages
+  // A popover that closes on Esc and on a press outside it.
+  function usePopover(initialOpen) {
+    var _o = useState(!!initialOpen), open = _o[0], setOpen = _o[1];
+    var ref = useRef(null);
+    useEffect(function () {
+      if (!open) return;
+      function down(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+      function key(e) { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); } }
+      window.addEventListener('pointerdown', down); window.addEventListener('keydown', key, true);
+      return function () { window.removeEventListener('pointerdown', down); window.removeEventListener('keydown', key, true); };
+    }, [open]);
+    return { open: open, set: setOpen, ref: ref };
+  }
+
+  function countText(n, one, many) { return n.toLocaleString('en-US') + ' ' + (n === 1 ? one : many); }
+
+  // The foreign keys of a table that leave it (`out`) and the ones of other tables that point at it (`inn`).
+  function relationsOf(table, tables) {
+    var out = [], inn = [];
+    table.columns.forEach(function (c) {
+      if (c.fk) out.push({ key: 'out:' + c.name, table: c.fk.table, from: table.name + '.' + c.name, to: c.fk.table + '.' + c.fk.column, onDelete: c.fk.onDelete || 'NO ACTION' });
+    });
+    (tables || []).forEach(function (o) {
+      o.columns.forEach(function (c) {
+        if (c.fk && c.fk.table === table.name) inn.push({ key: 'in:' + o.name + '.' + c.name, table: o.name, from: o.name + '.' + c.name, to: table.name + '.' + c.fk.column, onDelete: c.fk.onDelete || 'NO ACTION' });
+      });
+    });
+    return { out: out, inn: inn };
+  }
+
+  var TABLE_TABS = [{ value: 'data', label: 'Data' }, { value: 'structure', label: 'Structure' }, { value: 'relationships', label: 'Relationships' }];
+  var TABLE_MENU = [
+    { icon: 'layers', label: 'Open in Diagram' },
+    { icon: 'copy', label: 'Copy table name' },
+    { icon: 'code', label: 'Copy CREATE TABLE' }
+  ];
+
+  function TableHeader(p) {
+    var t = p.table, tab = p.tab || 'data', more = usePopover();
+    var counts = { structure: t.columns.length, relationships: p.relationships };
+    var meta = (p.rows != null ? countText(p.rows, 'row', 'rows') + ' · ' : '') + countText(t.columns.length, 'column', 'columns');
+    function onTabKey(e, i) {
+      var step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      var n = (i + step + TABLE_TABS.length) % TABLE_TABS.length;
+      e.currentTarget.parentNode.children[n].focus();
+      p.onTab && p.onTab(TABLE_TABS[n].value);
+    }
+    return h('header', { className: 'ss-tbh' },
+      h('nav', { className: 'ss-tbh-crumb', 'aria-label': 'Breadcrumb' },
+        [p.schema, t.schema || 'public', t.name].filter(Boolean).map(function (part, i, all) {
+          return h(Fragment, { key: i }, i > 0 && h('span', { 'aria-hidden': true }, '/'), h('span', { className: i === all.length - 1 ? 'is-last' : null }, part));
+        })),
+      h('div', { className: 'ss-tbh-row' },
+        h('h2', { className: 'ss-tbh-name' }, t.name),
+        p.engine && h(Badge, { dot: true, title: 'Database engine' }, p.engine),
+        h('span', { className: 'ss-tbh-meta' }, meta),
+        h('span', { className: 'ss-spacer' }),
+        h(IconButton, { icon: 'refresh', label: 'Refresh table', disabled: p.loading, onClick: p.onRefresh }),
+        h('div', { className: 'ss-anchor', ref: more.ref },
+          h(IconButton, { icon: 'more', label: 'More actions', active: more.open, 'aria-haspopup': 'menu', 'aria-expanded': more.open, onClick: function () { more.set(!more.open); } }),
+          more.open && h('div', { className: 'ss-anchor-pop ss-anchor-pop--end' }, h(ContextMenu, { items: p.menuItems || TABLE_MENU, onClose: function () { more.set(false); } }))),
+        h(Button, { icon: 'upload', onClick: p.onImport }, 'Import Records'),
+        h(Button, { icon: 'download', onClick: p.onExport }, 'Export'),
+        h(Button, { variant: 'primary', icon: 'plus', kbd: ['⌘', '⏎'], onClick: p.onAdd }, 'Add record')),
+      h('div', { className: 'ss-tabs', role: 'tablist', 'aria-label': 'Table views' }, TABLE_TABS.map(function (x, i) {
+        var on = tab === x.value, n = counts[x.value];
+        return h('button', {
+          key: x.value, type: 'button', role: 'tab', 'aria-selected': on, tabIndex: on ? 0 : -1, className: cx('ss-tab', on && 'is-active'),
+          onClick: function () { p.onTab && p.onTab(x.value); }, onKeyDown: function (e) { onTabKey(e, i); }
+        }, x.label, n != null && h('span', { className: 'ss-tab-count' }, n));
+      })));
+  }
+
+  function TableStructure(p) {
+    var t = p.table;
+    var rows = t.columns.map(function (c, i) { return assign(c, { n: i + 1 }); });
+    return h('div', { className: 'ss-pane' },
+      t.comment && h('div', { className: 'ss-pane-note' }, t.comment),
+      h('div', { className: 'ss-pane-card' }, h(DataTable, {
+        rowKey: 'name', rows: rows, columns: [
+          { key: 'n', label: '#', width: 56, numeric: true, align: 'right', sortable: false },
+          { key: 'name', label: 'Column', sortable: false, render: function (c) {
+            return h('span', { className: 'ss-pane-name' },
+              h('span', { className: 'ss-pane-key' }, c.pk && h(Icon, { name: 'key', size: 14, className: 'ss-grid-key is-pk', label: 'Primary key' }), !c.pk && c.fk && h(Icon, { name: 'link', size: 14, className: 'ss-grid-key is-fk', label: 'Foreign key' })),
+              h('span', { className: 'ss-mono', style: { fontWeight: 500 } }, c.name));
+          } },
+          { key: 'type', label: 'Type', sortable: false, render: function (c) { return h('span', { className: 'ss-mono', style: { fontSize: 12, color: 'var(--ink-2)' } }, c.type); } },
+          { key: 'nullable', label: 'Nullable', sortable: false, render: function (c) { return h('span', { className: 'ss-mono', style: { fontSize: 12, color: 'var(--ink-2)' } }, c.nullable ? 'NULL' : 'NOT NULL'); } },
+          { key: 'default', label: 'Default', sortable: false, render: function (c) { return c.default ? h('span', { className: 'ss-mono', style: { fontSize: 12 } }, c.default) : h('span', { className: 'ss-faint' }, '—'); } },
+          { key: 'keys', label: 'Keys', sortable: false, render: function (c) {
+            return h('span', { className: 'ss-row', style: { gap: 4 } },
+              c.pk && h(Badge, { tone: 'pk' }, 'PK'), c.unique && h(Badge, null, 'UQ'),
+              c.fk && h(Badge, { tone: 'fk', icon: 'link', title: 'References ' + c.fk.table + '.' + c.fk.column }, c.fk.table + '.' + c.fk.column));
+          } }
+        ]
+      })));
+  }
+
+  function TableRelationships(p) {
+    var t = p.table, rel = relationsOf(t, p.tables);
+    function group(title, list, none) {
+      return h('section', { className: 'ss-pane-group', 'aria-label': title },
+        h('div', { className: 'ss-row' }, h('span', { className: 'ss-caption' }, title), h('span', { className: 'ss-tl-count' }, list.length)),
+        list.length
+          ? h('div', { className: 'ss-pane-card' }, h(DataTable, {
+            rowKey: 'key', rows: list, columns: [
+              { key: 'from', label: 'Relationship', sortable: false, render: function (r) {
+                return h('span', { className: 'ss-mono', style: { fontSize: 12 } }, r.from, h('span', { className: 'ss-faint' }, ' → '), r.to);
+              } },
+              { key: 'onDelete', label: 'On delete', width: 160, sortable: false, render: function (r) { return h('span', { className: 'ss-mono', style: { fontSize: 12, color: 'var(--ink-2)' } }, r.onDelete); } },
+              { key: 'open', label: '', width: 148, sortable: false, align: 'right', render: function (r) {
+                return h(Button, { variant: 'ghost', size: 'sm', iconRight: 'arrow-right', 'aria-label': 'Open ' + r.table + ' in Data', onClick: function () { p.onOpen && p.onOpen(r.table); } }, 'Open in Data');
+              } }
+            ]
+          }))
+          : h('div', { className: 'ss-pane-none' }, none));
+    }
+    return h('div', { className: 'ss-pane' },
+      group('References', rel.out, t.name + ' has no foreign keys.'),
+      group('Referenced by', rel.inn, 'No table references ' + t.name + '.'));
+  }
+
+  var FILTER_OPS = ['=', '!=', '>', '>=', '<', '<=', 'LIKE', 'IS NULL', 'IS NOT NULL'];
+  var PAGE_SIZES = [25, 50, 100, 200];
+  var DENSITIES = [{ value: 'regular', label: 'Regular' }, { value: 'compact', label: 'Compact' }];
+
+  // A value as SQL writes it: strings quoted, NULL bare.
+  function sqlLiteral(v) {
+    if (v == null) return 'NULL';
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    return "'" + String(v).replace(/'/g, "''") + "'";
+  }
+  function filterText(f) { return f.column + ' ' + f.op + (f.value !== undefined ? ' ' + sqlLiteral(f.value) : ''); }
+
+  function FilterForm(p) {
+    var cols = p.columns;
+    var _c = useState(cols[0] ? cols[0].name : ''), column = _c[0], setColumn = _c[1];
+    var _o = useState('='), op = _o[0], setOp = _o[1];
+    var _v = useState(''), value = _v[0], setValue = _v[1];
+    var _e = useState(null), error = _e[0], setError = _e[1];
+    var input = useRef(null);
+    useEffect(function () { if (input.current) input.current.focus(); }, []);
+    var col = cols.find(function (c) { return c.name === column; }) || cols[0];
+    var kind = col ? cellKind(col.type) : 'text';
+    var bare = op === 'IS NULL' || op === 'IS NOT NULL';
+    function submit() {
+      if (!col) return;
+      if (bare) { p.onAdd({ column: col.name, op: op }); return; }
+      var v = value;
+      if (v === '') { setError('Value cannot be empty.'); return; }
+      if (kind === 'number') { v = Number(v); if (isNaN(v)) { setError('Value must be a number.'); return; } }
+      else if (kind === 'boolean') { if (v !== 'true' && v !== 'false') { setError('Value must be true or false.'); return; } v = v === 'true'; }
+      p.onAdd({ column: col.name, op: op, value: v });
+    }
+    return h('div', { className: 'ss-menu ss-dt-pop ss-dt-pop--filter', role: 'dialog', 'aria-label': 'Add filter', onKeyDown: function (e) { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); submit(); } } },
+      h('div', { className: 'ss-menu-label' }, 'Add filter'),
+      h('div', { className: 'ss-dt-form' },
+        h('div', { className: 'ss-dt-form-row' },
+          h(Select, { mono: true, size: 'sm', label: 'Column', value: column, onChange: function (v) { setColumn(v); setError(null); }, options: cols.map(function (c) { return c.name; }) }),
+          h(Select, { mono: true, size: 'sm', label: 'Operator', value: op, onChange: function (v) { setOp(v); setError(null); }, options: FILTER_OPS })),
+        !bare && h(Field, { error: error }, h(Input, { mono: true, size: 'sm', placeholder: kind === 'time' ? 'YYYY-MM-DD HH:mm:ss' : 'Value', 'aria-label': 'Value', error: !!error, value: value, inputRef: input, onChange: function (e) { setValue(e.target.value); setError(null); } })),
+        h('div', { className: 'ss-dt-form-foot' }, h(Button, { variant: 'primary', size: 'sm', kbd: '⏎', onClick: submit }, 'Add filter'))));
+  }
+
+  function sortItems(cols, sort, onSort) {
+    var items = cols.map(function (c) {
+      var on = !!sort && sort.column === c.name;
+      return {
+        icon: on ? (sort.dir === 'asc' ? 'arrow-up' : 'arrow-down') : undefined, label: h('span', { className: 'ss-mono', style: { fontSize: 12 } }, c.name), active: on, shortcut: on ? sort.dir.toUpperCase() : undefined,
+        onSelect: function () { onSort && onSort(!on ? { column: c.name, dir: 'asc' } : sort.dir === 'asc' ? { column: c.name, dir: 'desc' } : null); }
+      };
+    });
+    return sort ? items.concat(['-', { icon: 'x', label: 'Clear sort', onSelect: function () { onSort && onSort(null); } }]) : items;
+  }
+
+  function ColumnsMenu(p) {
+    var hidden = p.hidden, shown = p.columns.length - hidden.length;
+    function toggle(name, on) { p.onHidden && p.onHidden(on ? hidden.filter(function (x) { return x !== name; }) : hidden.concat([name])); }
+    return h('div', { className: 'ss-menu ss-dt-pop', role: 'group', 'aria-label': 'Columns' },
+      h('div', { className: 'ss-menu-label' }, shown + ' of ' + p.columns.length + ' columns'),
+      p.columns.map(function (c) {
+        var on = hidden.indexOf(c.name) < 0;
+        return h('div', { key: c.name, className: 'ss-dt-col' },
+          h(Checkbox, { checked: on, disabled: on && shown === 1, onChange: function (v) { toggle(c.name, v); }, label: h('span', { className: 'ss-mono', style: { fontSize: 12 } }, c.name) }),
+          h('span', { className: 'ss-dt-col-type' }, c.type));
+      }),
+      h('div', { className: 'ss-menu-sep', role: 'separator' }),
+      h('div', { className: 'ss-dt-form-foot' }, h(Button, { variant: 'ghost', size: 'sm', disabled: !hidden.length, onClick: function () { p.onHidden && p.onHidden([]); } }, 'Show all')));
+  }
+
+  function DataToolbar(p) {
+    var cols = p.columns || [], filters = p.filters || [], hidden = p.hidden || [], sort = p.sort || null;
+    var filter = usePopover(), order = usePopover(), shown = usePopover();
+    var size = p.pageSize || 50;
+    function toggle(pop) { return function () { pop.set(!pop.open); }; }
+    return h('div', { className: 'ss-dt', role: 'toolbar', 'aria-label': 'Record tools' },
+      h('div', { className: 'ss-dt-search' }, h(Input, { icon: 'search', placeholder: 'Search records…', 'aria-label': 'Search records', value: p.search || '', onChange: function (e) { p.onSearch && p.onSearch(e.target.value); }, readOnly: !p.onSearch })),
+      h('div', { className: 'ss-anchor', ref: filter.ref },
+        h(Button, { icon: 'filter', active: filter.open, 'aria-haspopup': 'dialog', 'aria-expanded': filter.open, onClick: toggle(filter) }, 'Filter', filters.length > 0 && h(Badge, { tone: 'accent', title: countText(filters.length, 'filter', 'filters') }, filters.length)),
+        filter.open && h('div', { className: 'ss-anchor-pop' }, h(FilterForm, { columns: cols, onAdd: function (f) { p.onAddFilter && p.onAddFilter(f); filter.set(false); } }))),
+      h('div', { className: 'ss-anchor', ref: order.ref },
+        h(Button, { icon: 'chevrons-ud', active: order.open, 'aria-haspopup': 'menu', 'aria-expanded': order.open, onClick: toggle(order) }, 'Sort', sort && h(Badge, { tone: 'accent' }, sort.column + (sort.dir === 'asc' ? ' ↑' : ' ↓'))),
+        order.open && h('div', { className: 'ss-anchor-pop' }, h(ContextMenu, { label: 'Sort by', items: sortItems(cols, sort, p.onSort), onClose: function () { order.set(false); } }))),
+      h('div', { className: 'ss-anchor', ref: shown.ref },
+        h(Button, { icon: 'columns', active: shown.open, 'aria-haspopup': 'dialog', 'aria-expanded': shown.open, onClick: toggle(shown) }, 'Columns', hidden.length > 0 && h(Badge, { tone: 'accent' }, hidden.length + ' hidden')),
+        shown.open && h('div', { className: 'ss-anchor-pop' }, h(ColumnsMenu, { columns: cols, hidden: hidden, onHidden: p.onHidden }))),
+      h('div', { className: 'ss-dt-end' },
+        h(SegmentedControl, { options: DENSITIES, value: p.density || 'regular', onChange: p.onDensity }),
+        h('div', { className: 'ss-dt-size' }, h(Select, { label: 'Rows per page', value: String(size), onChange: function (v) { p.onPageSize && p.onPageSize(Number(v)); }, options: PAGE_SIZES.map(function (n) { return { value: String(n), label: n + ' rows' }; }) })),
+        h(IconButton, { icon: 'refresh', label: 'Refresh records', disabled: p.loading, onClick: p.onRefresh })));
+  }
+
+  function FilterChips(p) {
+    var filters = p.filters || [];
+    if (!filters.length) return null;
+    return h('div', { className: 'ss-fchips', role: 'group', 'aria-label': 'Active filters' },
+      filters.map(function (f, i) {
+        return h('span', { key: i, className: 'ss-fchip', title: filterText(f) },
+          h('span', { className: 'ss-fchip-text' },
+            h('span', null, f.column), ' ', h('span', { className: /^[A-Z]/.test(f.op) ? 'ss-fchip-kw' : 'ss-fchip-op' }, f.op),
+            f.value !== undefined && h(Fragment, null, ' ', h('span', { className: typeof f.value === 'string' ? 'ss-fchip-str' : 'ss-fchip-num' }, sqlLiteral(f.value)))),
+          h('button', { type: 'button', className: 'ss-fchip-x', 'aria-label': 'Remove filter ' + filterText(f), onClick: function () { p.onRemove && p.onRemove(i); } }, h(Icon, { name: 'x', size: 12 })));
+      }),
+      h(Button, { variant: 'ghost', size: 'sm', onClick: p.onClear }, 'Clear all'));
+  }
+
+  function SelectionBar(p) {
+    var n = p.count || 0;
+    return h('div', { className: 'ss-selbar', role: 'status' },
+      h('span', { className: 'ss-selbar-count' }, countText(n, 'row', 'rows') + ' selected'),
+      h(Button, { size: 'sm', icon: 'code', onClick: p.onCopy }, 'Copy as JSON'),
+      h(Button, { size: 'sm', icon: 'download', onClick: p.onExport }, 'Export selected'),
+      h(Button, { size: 'sm', variant: 'danger-ghost', icon: 'trash', kbd: '⌫', onClick: p.onDelete }, 'Delete selected'),
+      h('span', { className: 'ss-spacer' }),
+      h(IconButton, { icon: 'x', size: 'sm', label: 'Clear selection (Esc)', onClick: p.onClear }));
+  }
+
+  function Pagination(p) {
+    var size = p.pageSize || 50, total = p.total || 0, pages = Math.max(1, Math.ceil(total / size));
+    var page = Math.min(Math.max(1, p.page || 1), pages);
+    var from = total ? (page - 1) * size + 1 : 0, to = Math.min(total, page * size);
+    var _d = useState(null), draft = _d[0], setDraft = _d[1];
+    function go(n) { n = Math.min(pages, Math.max(1, Math.round(n))); if (n !== page) p.onPage && p.onPage(n); }
+    function commit() { if (draft != null && draft.trim() !== '' && !isNaN(Number(draft))) go(Number(draft)); setDraft(null); }
+    var range = p.loading ? 'Loading…' : total ? from.toLocaleString('en-US') + '–' + to.toLocaleString('en-US') + ' of ' + countText(total, 'row', 'rows') : '0 rows';
+    return h('div', { className: 'ss-pager', role: 'navigation', 'aria-label': 'Pagination' },
+      h('span', { className: 'ss-pager-range' }, range),
+      h('span', { className: 'ss-spacer' }),
+      h(IconButton, { icon: 'chevron-left', size: 'sm', label: 'Previous page', disabled: p.loading || page <= 1, onClick: function () { go(page - 1); } }),
+      h('span', { className: 'ss-pager-page' }, 'Page',
+        h('input', {
+          className: 'ss-input ss-input--mono ss-input--sm ss-pager-input', inputMode: 'numeric', 'aria-label': 'Page number', disabled: p.loading || pages === 1,
+          value: draft != null ? draft : String(page), onFocus: function (e) { e.target.select(); }, onChange: function (e) { setDraft(e.target.value); }, onBlur: commit,
+          onKeyDown: function (e) { if (e.key === 'Enter') e.target.blur(); else if (e.key === 'Escape') { e.stopPropagation(); setDraft(null); } }
+        }),
+        'of ' + pages.toLocaleString('en-US')),
+      h(IconButton, { icon: 'chevron-right', size: 'sm', label: 'Next page', disabled: p.loading || page >= pages, onClick: function () { go(page + 1); } }));
+  }
+
+  // ------------------------------------------------------------------ records: the editor of one record
+  var RECORD_W = 520, RECORD_MIN = 480, RECORD_MAX = 720, NO_ROWS = [], NO_DATA = {};
+
+  // The line between a panel and what is next to it, dragged to make the panel wider or narrower. It takes no room in its row.
+  function ResizeHandle(p) {
+    var _d = useState(false), dragging = _d[0], setDragging = _d[1];
+    var drag = useRef(null);
+    var grows = p.edge === 'right' ? 1 : -1;
+    function end() { drag.current = null; setDragging(false); }
+    function want(w) { p.onResize && p.onResize(Math.round(Math.max(p.min, Math.min(p.max, w)))); }
+    return h('div', {
+      className: cx('ss-resize', 'ss-resize--' + p.edge, dragging && 'is-dragging'), role: 'separator', 'aria-orientation': 'vertical', 'aria-label': p.label,
+      'aria-valuenow': p.width, 'aria-valuemin': p.min, 'aria-valuemax': p.max, tabIndex: 0, title: p.onReset ? 'Drag to resize. Double-click to reset.' : 'Drag to resize.',
+      onPointerDown: function (e) { if (e.button !== 0) return; e.preventDefault(); drag.current = { x: e.clientX, width: p.width }; setDragging(true); e.currentTarget.setPointerCapture(e.pointerId); },
+      onPointerMove: function (e) { var d = drag.current; if (d) want(d.width + grows * (e.clientX - d.x)); },
+      onPointerUp: end, onLostPointerCapture: end, onDoubleClick: p.onReset,
+      onKeyDown: function (e) {
+        var next = e.key === 'ArrowLeft' ? p.width - grows * 16 : e.key === 'ArrowRight' ? p.width + grows * 16 : e.key === 'Home' ? p.min : e.key === 'End' ? p.max : null;
+        if (next === null) return;
+        e.preventDefault(); want(next);
+      }
+    });
+  }
+
+  // JSON read by hand, so that where reading stops is the same in every browser: `line` is the line of the token it stops at.
+  var JSON_ESCAPES = { '"': '"', '\\': '\\', '/': '/', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t' };
+  var JSON_NUMBER = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
+  function parseJson(text) {
+    var i = 0, len = text.length;
+    function bad() { throw { at: i }; }
+    function ws() { while (i < len && (text[i] === ' ' || text[i] === '\t' || text[i] === '\n' || text[i] === '\r')) i++; }
+    function word(w, v) { if (text.substr(i, w.length) !== w) bad(); i += w.length; return v; }
+    function put(o, k, v) { Object.defineProperty(o, k, { value: v, enumerable: true, writable: true, configurable: true }); }
+    function str() {
+      var out = ''; i++;
+      for (;;) {
+        if (i >= len) bad();
+        var c = text[i];
+        if (c === '"') { i++; return out; }
+        if (c < ' ') bad();
+        if (c !== '\\') { out += c; i++; continue; }
+        var e = text[i + 1];
+        if (e === 'u') {
+          var hex = text.substr(i + 2, 4);
+          if (!/^[0-9a-fA-F]{4}$/.test(hex)) { i += 2; bad(); }
+          out += String.fromCharCode(parseInt(hex, 16)); i += 6;
+        } else {
+          if (JSON_ESCAPES[e] === undefined) { i++; bad(); }
+          out += JSON_ESCAPES[e]; i += 2;
+        }
+      }
+    }
+    function value(depth) {
+      if (depth > 200) bad();
+      ws();
+      var c = text[i];
+      if (c === '{') {
+        var o = {}; i++; ws();
+        if (text[i] === '}') { i++; return o; }
+        for (;;) {
+          ws(); if (text[i] !== '"') bad();
+          var k = str(); ws(); if (text[i] !== ':') bad(); i++;
+          put(o, k, value(depth + 1)); ws();
+          if (text[i] === ',') { i++; continue; }
+          if (text[i] === '}') { i++; return o; }
+          bad();
+        }
+      }
+      if (c === '[') {
+        var a = []; i++; ws();
+        if (text[i] === ']') { i++; return a; }
+        for (;;) {
+          a.push(value(depth + 1)); ws();
+          if (text[i] === ',') { i++; continue; }
+          if (text[i] === ']') { i++; return a; }
+          bad();
+        }
+      }
+      if (c === '"') return str();
+      if (c === 't') return word('true', true);
+      if (c === 'f') return word('false', false);
+      if (c === 'n') return word('null', null);
+      JSON_NUMBER.lastIndex = i;
+      var m = JSON_NUMBER.exec(text);
+      if (!m) bad();
+      i += m[0].length;
+      return Number(m[0]);
+    }
+    try {
+      var v = value(0); ws();
+      if (i < len) bad();
+      return { ok: true, value: v };
+    } catch (e) {
+      var at = e && typeof e.at === 'number' ? e.at : i;
+      return { ok: false, line: text.slice(0, Math.min(at, len)).split('\n').length };
+    }
+  }
+  function isObject(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
+  function kv(k, v) { var o = {}; o[k] = v; return o; }
+
+  // --- what a column holds, and what the editor makes of it
+  var MOMENTS = {
+    timestamp: { text: 'YYYY-MM-DD HH:mm:ss', word: 'timestamp', picker: 'datetime-local', re: /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/ },
+    date: { text: 'YYYY-MM-DD', word: 'date', picker: 'date', re: /^(\d{4})-(\d{2})-(\d{2})$/ },
+    time: { text: 'HH:mm:ss', word: 'time', picker: 'time', re: /^(\d{2}):(\d{2}):(\d{2})$/ }
+  };
+  function momentKind(type) { var t = String(type).toUpperCase(); return /^DATE\b/.test(t) ? 'date' : /^TIME(?!STAMP)/.test(t) ? 'time' : 'timestamp'; }
+  function validMoment(kind, s) {
+    var m = MOMENTS[kind].re.exec(s);
+    if (!m) return false;
+    var n = m.slice(1).map(Number);
+    if (kind === 'time') return n[0] < 24 && n[1] < 60 && n[2] < 60;
+    var d = new Date(Date.UTC(n[0], n[1] - 1, n[2], n[3] || 0, n[4] || 0, n[5] || 0));
+    return d.getUTCFullYear() === n[0] && d.getUTCMonth() === n[1] - 1 && d.getUTCDate() === n[2] && (kind === 'date' || (n[3] < 24 && n[4] < 60 && n[5] < 60));
+  }
+  function formatMoment(ms) { return new Date(ms).toISOString().slice(0, 19).replace('T', ' '); }
+
+  // The counter of the database fills these in: a serial type or an identity.
+  function isGenerated(c) { return /SERIAL|AUTO_INCREMENT|IDENTITY/i.test(c.type || '') || /^nextval\(|AUTO_INCREMENT|GENERATED/i.test(c.default || ''); }
+  function isIntegerType(t) { return /^(BIG|SMALL|MEDIUM|TINY)?(INT|INTEGER|SERIAL)\d?\b/i.test(t); }
+  function typeLength(t) { var m = /^(?:N?VAR)?CHAR(?:ACTER)?(?:\s+VARYING)?\s*\(\s*(\d+)\s*\)/i.exec(t); return m ? Number(m[1]) : null; }
+  function typeScale(t) { var m = /\(\s*\d+\s*,\s*(\d+)\s*\)/.exec(t); return m ? Number(m[1]) : null; }
+  // The value of a default that is a literal (`'pending'`, `1`, `true`); undefined for `now()` and other expressions.
+  function literalDefault(c) {
+    var d = String(c.default || '').trim().replace(/::[\w\s]+(?:\([^)]*\))?$/, '');
+    if (!d) return undefined;
+    if (/^'(?:[^']|'')*'$/.test(d)) return d.slice(1, -1).replace(/''/g, "'");
+    if (/^-?\d+(?:\.\d+)?$/.test(d)) return Number(d);
+    if (/^(true|false)$/i.test(d)) return d.toLowerCase() === 'true';
+    if (/^NULL$/i.test(d)) return null;
+    return undefined;
+  }
+  // `ENUM('a','b')` offers its values. A text column called status (or state, stage) offers what the table already holds in it.
+  var ENUM_NAME = /status|(^|_)state$|stage/;
+  function enumOptions(c, rows) {
+    var m = /^ENUM\s*\((.*)\)\s*$/i.exec(c.type || '');
+    if (m) {
+      var fixed = [], re = /'((?:[^']|'')*)'/g, x;
+      while ((x = re.exec(m[1]))) fixed.push(x[1].replace(/''/g, "'"));
+      return fixed.length ? { values: fixed, fixed: true } : null;
+    }
+    if (!ENUM_NAME.test(c.name.toLowerCase()) || c.fk || cellKind(c.type) !== 'text') return null;
+    var seen = [], i, v;
+    for (i = 0; i < (rows || []).length; i++) {
+      v = rows[i][c.name];
+      if (typeof v === 'string' && v !== '' && seen.indexOf(v) < 0) { seen.push(v); if (seen.length > 12) return null; }
+    }
+    var d = literalDefault(c);
+    if (typeof d === 'string' && seen.indexOf(d) < 0) seen.push(d);
+    return seen.length ? { values: seen, fixed: false } : null;
+  }
+  // How the editor sets a column: generated (read-only), json, boolean, time, reference (a foreign key to a table that has rows), enum, number, longtext, or text.
+  function fieldMeta(c, rows, data) {
+    var t = String(c.type || '').toUpperCase();
+    if (isGenerated(c)) return { kind: 'generated' };
+    if (/^JSONB?\b/.test(t)) return { kind: 'json' };
+    var base = cellKind(c.type);
+    if (base === 'boolean') return { kind: 'boolean' };
+    if (base === 'time') return { kind: 'time', moment: momentKind(t) };
+    if (c.fk && data && Array.isArray(data[c.fk.table])) return { kind: 'reference' };
+    var en = enumOptions(c, rows);
+    if (en) return { kind: 'enum', options: en.values, fixed: en.fixed };
+    if (base === 'number') return { kind: 'number' };
+    if (/TEXT$/.test(t)) return { kind: 'longtext' };
+    return { kind: 'text' };
+  }
+  function isTextKind(meta) { return meta.kind === 'text' || meta.kind === 'longtext'; }
+  // The value a draft stands for: empty is NULL except in a text column, and a number typed in a number column is a number.
+  function canon(c, meta, v) {
+    if (v === undefined || v === null) return v;
+    if (typeof v === 'string' && !isTextKind(meta) && v.trim() === '') return null;
+    if (typeof v === 'string' && cellKind(c.type) === 'number' && meta.kind !== 'text' && v.trim() !== '' && isFinite(Number(v))) return Number(v);
+    return v;
+  }
+
+  function uniqueKeys(table, c) {
+    var pk = table.columns.filter(function (x) { return x.pk; });
+    return !!c.unique || (c.pk && pk.length === 1) || (table.indexes || []).some(function (ix) { return ix.type !== 'INDEX' && ix.columns.length === 1 && ix.columns[0] === c.name; });
+  }
+  var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  function cannotBeEmpty(name) { return 'Column "' + name + '" cannot be empty.'; }
+
+  // The first thing wrong with a value, in the words of the form; null when it is fine.
+  function columnProblem(table, c, meta, raw, ctx) {
+    var v = canon(c, meta, raw), name = c.name, nullable = !!c.nullable && !c.pk;
+    if (raw === undefined && ctx.mode === 'new') return nullable || c.default ? null : cannotBeEmpty(name);
+    if (v === null || v === undefined) return nullable ? null : cannotBeEmpty(name);
+    if (v === '') return nullable ? null : cannotBeEmpty(name);
+    var text = String(v), max;
+    if (meta.kind === 'number' || (meta.kind === 'reference' && cellKind(c.type) === 'number')) {
+      if (typeof v !== 'number') return 'Value must be a number.';
+      if (isIntegerType(c.type) && !Number.isInteger(v)) return 'Value must be a whole number.';
+      var scale = typeScale(c.type);
+      if (scale != null && (text.split('.')[1] || '').length > scale) return 'Value has more than ' + scale + ' decimal places.';
+    } else if (meta.kind === 'boolean') {
+      if (typeof v !== 'boolean') return 'Value must be true or false.';
+    } else if (meta.kind === 'time') {
+      if (!validMoment(meta.moment, text)) return 'Invalid ' + MOMENTS[meta.moment].word + ' format.';
+    } else if (meta.kind === 'enum') {
+      if (meta.fixed && meta.options.indexOf(text) < 0) return 'Value must be one of ' + meta.options.join(', ') + '.';
+      max = typeLength(c.type);
+      if (max != null && text.length > max) return 'Value is longer than ' + max + ' characters.';
+    } else if (meta.kind === 'json') {
+      var r = parseJson(text);
+      if (!r.ok) return 'Invalid JSON near line ' + r.line + '.';
+    } else if (isTextKind(meta)) {
+      max = typeLength(c.type);
+      if (max != null && text.length > max) return 'Value is longer than ' + max + ' characters.';
+      if (/(^|_)email$/i.test(name) && !EMAIL_RE.test(text)) return 'Invalid email format.';
+    }
+    if (c.fk && ctx.data && Array.isArray(ctx.data[c.fk.table]) && !ctx.data[c.fk.table].some(function (x) { return x[c.fk.column] != null && String(x[c.fk.column]) === text; })) {
+      return 'No row in ' + c.fk.table + ' has ' + c.fk.column + ' ' + text + '.';
+    }
+    if (uniqueKeys(table, c) && (ctx.rows || []).some(function (x) { return x !== ctx.record && x[name] != null && String(x[name]) === text; })) {
+      return 'A row with ' + name + ' "' + text + '" already exists.';
+    }
+    return null;
+  }
+  // What is wrong with the values of a record, by column name. `ctx`: `mode` ('edit' or 'new'), `rows` of the table, `record` (the row being edited, which does not clash with itself), `data` (the rows of every table, for foreign keys).
+  function validateRecord(table, values, ctx) {
+    ctx = ctx || {};
+    var rows = ctx.rows || (ctx.data && ctx.data[table.name]) || [], errs = {};
+    var metas = ctx.metas || table.columns.map(function (c) { return fieldMeta(c, rows, ctx.data); });
+    var full = assign(ctx, { rows: rows });
+    table.columns.forEach(function (c, i) {
+      if (metas[i].kind === 'generated') return;
+      var msg = columnProblem(table, c, metas[i], values[c.name], full);
+      if (msg) errs[c.name] = msg;
+    });
+    return errs;
+  }
+  // `users · id = 101`: what a record is called.
+  function recordLabel(table, row) {
+    var keys = table.columns.filter(function (c) { return c.pk; });
+    if (!keys.length) keys = table.columns.slice(0, 1);
+    return table.name + ' · ' + keys.map(function (k) { return k.name + ' = ' + (row[k.name] == null ? 'NULL' : row[k.name]); }).join(', ');
+  }
+  // A new record starts with the literal defaults filled in and NULL where a column may be empty; the rest is left to the database.
+  function initialValues(table, metas) {
+    var out = {};
+    table.columns.forEach(function (c, i) {
+      if (metas[i].kind === 'generated') return;
+      var d = literalDefault(c);
+      if (d !== undefined) out[c.name] = d;
+      else if (c.nullable && !c.pk && !c.default) out[c.name] = null;
+    });
+    return out;
+  }
+  // The row a new record becomes: what the database fills in (the next number of a counter, `now()`) is filled in the way it would be.
+  function completeRecord(table, rows, values, now) {
+    var out = {};
+    table.columns.forEach(function (c) {
+      var meta = fieldMeta(c, rows), v = values[c.name];
+      if (v === undefined) {
+        var d = literalDefault(c);
+        if (meta.kind === 'generated') v = rows.reduce(function (m, r) { return typeof r[c.name] === 'number' && r[c.name] > m ? r[c.name] : m; }, 0) + 1;
+        else if (d !== undefined) v = d;
+        else if (/^(now\(\)|current_timestamp|localtimestamp|current_date|current_time)/i.test(c.default || '')) {
+          var stamp = formatMoment(now == null ? Date.now() : now);
+          v = meta.kind === 'time' && meta.moment === 'date' ? stamp.slice(0, 10) : meta.kind === 'time' && meta.moment === 'time' ? stamp.slice(11) : stamp;
+        } else v = null;
+      }
+      out[c.name] = canon(c, meta, v);
+    });
+    return out;
+  }
+  function toRecord(table, metas, draft) {
+    var out = {};
+    table.columns.forEach(function (c, i) { if (draft[c.name] !== undefined) out[c.name] = canon(c, metas[i], draft[c.name]); });
+    return out;
+  }
+  // The record as a JSON object; a JSON column holds its text, which is written as the JSON it is.
+  function recordJson(table, metas, draft) {
+    var o = {};
+    table.columns.forEach(function (c, i) {
+      var v = draft[c.name];
+      if (v === undefined) return;
+      v = canon(c, metas[i], v);
+      if (metas[i].kind === 'json' && typeof v === 'string') { var r = parseJson(v); if (r.ok) v = r.value; }
+      o[c.name] = v;
+    });
+    return JSON.stringify(o, null, 2);
+  }
+  // The draft after the JSON was edited: a column left out of it keeps its value, one that is generated or does not exist is not changed.
+  function fromJson(table, metas, current, obj) {
+    var next = assign(current);
+    table.columns.forEach(function (c, i) {
+      if (!Object.prototype.hasOwnProperty.call(obj, c.name) || metas[i].kind === 'generated') return;
+      var v = obj[c.name];
+      if (v !== null && typeof v === 'object') {
+        var cur = current[c.name], was = typeof cur === 'string' ? parseJson(cur) : null;
+        v = metas[i].kind === 'json' && was && was.ok && JSON.stringify(was.value) === JSON.stringify(v) ? cur : JSON.stringify(v);
+      } else if (metas[i].kind === 'json' && v !== null && typeof v !== 'string') v = JSON.stringify(v);
+      next[c.name] = v;
+    });
+    return next;
+  }
+  function jsonNotes(table, metas, current, obj) {
+    var notes = [];
+    Object.keys(obj).forEach(function (k) {
+      var i = table.columns.findIndex(function (c) { return c.name === k; });
+      if (i < 0) notes.push('Column "' + k + '" does not exist in ' + table.name + ' and is ignored.');
+      else if (metas[i].kind === 'generated' && current[k] !== undefined && String(obj[k]) !== String(current[k])) notes.push('Column "' + k + '" is generated by the database and is not changed.');
+    });
+    return notes;
+  }
+  function typeLine(c) {
+    var parts = [c.type];
+    if (c.pk) parts.push('Primary key');
+    if (c.fk) parts.push('Foreign key');
+    if (c.unique && !c.pk) parts.push('Unique');
+    if (!c.nullable && !c.pk) parts.push('Required');
+    if (c.default) parts.push('Default ' + c.default);
+    return parts.join(' · ');
+  }
+
+  // The records that point at this one (`inn`) and the ones it points at (`out`), with their rows.
+  function relatedOf(table, record, tables, data) {
+    var rel = relationsOf(table, tables), byName = {};
+    (tables || []).forEach(function (t) { byName[t.name] = t; });
+    function withRows(dir) {
+      return function (r) {
+        var other = byName[r.table], list = data[r.table];
+        if (!other || !list) return null;
+        var fromCol = r.from.split('.')[1], toCol = r.to.split('.')[1];
+        var key = dir === 'in' ? record[toCol] : record[fromCol], col = dir === 'in' ? fromCol : toCol;
+        return assign(r, { dir: dir, columns: other.columns, rows: key == null ? [] : list.filter(function (x) { return x[col] != null && String(x[col]) === String(key); }) });
+      };
+    }
+    return { out: rel.out.map(withRows('out')).filter(Boolean), inn: rel.inn.map(withRows('in')).filter(Boolean) };
+  }
+  // What names a row of a table in a list: its email, name, title… or the first text column that is not a key.
+  var LABEL_NAMES = ['email', 'name', 'title', 'sku', 'slug', 'code', 'label', 'username'];
+  function labelColumn(t) {
+    for (var i = 0; i < LABEL_NAMES.length; i++) {
+      var c = t.columns.find(function (x) { return x.name === LABEL_NAMES[i] && !x.pk; });
+      if (c) return c.name;
+    }
+    var any = t.columns.find(function (x) { return !x.pk && !x.fk && cellKind(x.type) === 'text' && !/^JSONB?\b/i.test(x.type); });
+    return any ? any.name : null;
+  }
+  function copyText(text) { try { if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function () { }); } catch (e) { /* no clipboard here */ } }
+
+  // A date and time typed in the format SQL writes, with the picker of the browser behind the clock.
+  function MomentInput(p) {
+    var f = MOMENTS[p.kind], pick = useRef(null);
+    var text = p.value == null ? '' : String(p.value);
+    var native = text && validMoment(p.kind, text) ? (p.kind === 'timestamp' ? text.replace(' ', 'T') : text) : '';
+    function open() { var el = pick.current; if (!el) return; try { el.showPicker(); } catch (e) { el.focus(); } }
+    function chosen(v) {
+      if (!v) return;
+      if (p.kind === 'timestamp') v = v.replace('T', ' ');
+      if (/(^|[ T])\d{2}:\d{2}$/.test(v)) v += ':00';
+      p.onChange(v);
+    }
+    return h('div', { className: 'ss-moment' },
+      h(Input, {
+        mono: true, value: text, placeholder: p.placeholder || f.text, error: p.error, spellCheck: false, 'aria-label': p.column.name,
+        onChange: function (e) { p.onChange(e.target.value); }, suffix: h(IconButton, { icon: 'clock', size: 'sm', label: 'Pick ' + f.word, onClick: open })
+      }),
+      h('input', { ref: pick, type: f.picker, step: 1, value: native, tabIndex: -1, 'aria-hidden': true, className: 'ss-moment-native', onChange: function (e) { chosen(e.target.value); } }));
+  }
+
+  // A foreign key is set by choosing a row of the table it points at: searched by its key or by what names it.
+  function FkPicker(p) {
+    var c = p.column, fk = c.fk, key = fk.column, rows = p.rows || [], label = p.table ? labelColumn(p.table) : null;
+    var pop = usePopover(p.defaultOpen);
+    var _q = useState(p.query || ''), q = _q[0], setQ = _q[1];
+    var _a = useState(0), active = _a[0], setActive = _a[1];
+    var listRef = useRef(null);
+    var has = p.value !== undefined && p.value !== null && p.value !== '';
+    var found = has ? rows.find(function (r) { return String(r[key]) === String(p.value); }) : null;
+    var needle = q.trim().toLowerCase();
+    var matches = needle ? rows.filter(function (r) { return String(r[key]).toLowerCase().indexOf(needle) >= 0 || (label && r[label] != null && String(r[label]).toLowerCase().indexOf(needle) >= 0); }) : rows;
+    var list = matches.slice(0, 50);
+    useEffect(function () { var el = listRef.current && listRef.current.querySelector('.is-active'); if (el) el.scrollIntoView({ block: 'nearest' }); }, [active, pop.open]);
+    function pickRow(r) { p.onChange(r[key]); pop.set(false); setQ(''); }
+    function onKey(e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(list.length - 1, active + 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(0, active - 1)); }
+      else if (e.key === 'Enter' && !(e.metaKey || e.ctrlKey)) { e.preventDefault(); if (list[active]) pickRow(list[active]); }
+      else if (e.key === 'Tab') pop.set(false);
+    }
+    return h('div', { className: 'ss-fkpick', ref: pop.ref },
+      h('button', {
+        type: 'button', className: cx('ss-fkpick-btn', p.error && 'is-error', pop.open && 'is-open'), 'aria-haspopup': 'listbox', 'aria-expanded': pop.open, 'aria-label': c.name,
+        onClick: function () { if (!pop.open) { setQ(''); setActive(0); } pop.set(!pop.open); }
+      },
+        has
+          ? h(Fragment, null, h('span', { className: 'ss-fkpick-key' }, fk.table + '.' + key + ' = ' + p.value), found && label && found[label] != null && h('span', { className: 'ss-fkpick-label' }, ' · ' + found[label]))
+          : h('span', { className: 'ss-fkpick-ph' }, p.value === null ? 'NULL' : 'Choose a row in ' + fk.table),
+        h(Icon, { name: 'chevrons-ud', size: 13 })),
+      pop.open && h('div', { className: 'ss-pop ss-fkpick-pop' },
+        h('div', { className: 'ss-fkpick-search' }, h(Input, { icon: 'search', size: 'sm', placeholder: 'Search ' + fk.table + '…', 'aria-label': 'Search ' + fk.table, value: q, autoFocus: true, onChange: function (e) { setQ(e.target.value); setActive(0); }, onKeyDown: onKey })),
+        list.length
+          ? h('div', { role: 'listbox', 'aria-label': fk.table, ref: listRef }, list.map(function (r, i) {
+            return h('div', {
+              key: i, role: 'option', 'aria-selected': has && String(r[key]) === String(p.value), className: cx('ss-pop-item', i === active && 'is-active'),
+              onMouseEnter: function () { setActive(i); }, onMouseDown: function (e) { e.preventDefault(); pickRow(r); }
+            }, h('span', null, String(r[key])), label && r[label] != null && h('small', null, String(r[label])));
+          }))
+          : h('div', { className: 'ss-fkpick-none' }, 'No row in ' + fk.table + ' matches "' + q.trim() + '".'),
+        matches.length > list.length && h('div', { className: 'ss-fkpick-foot' }, list.length + ' of ' + countText(matches.length, 'row', 'rows'))));
+  }
+
+  var RECORD_TABS = [{ value: 'form', label: 'Form' }, { value: 'json', label: 'JSON' }, { value: 'related', label: 'Related records' }];
+
+  function RecordEditor(p) {
+    var table = p.table, tables = p.tables || NO_ROWS, data = p.data || NO_DATA, rows = data[table.name] || NO_ROWS;
+    var mode = p.record ? 'edit' : 'new';
+    var metas = useMemo(function () { return table.columns.map(function (c) { return fieldMeta(c, rows, data); }); }, [table, rows, data]);
+    var base = useMemo(function () { return p.record || initialValues(table, metas); }, [p.record, table, metas]);
+    var _d = useState(function () { return assign(base, p.draft); }), draft = _d[0], setDraft = _d[1];
+    var _tab = useState(p.tab === 'related' && mode === 'new' ? 'form' : (p.tab || 'form')), tab = _tab[0], setTab = _tab[1];
+    var _json = useState(function () { return p.jsonText != null ? p.jsonText : recordJson(table, metas, assign(base, p.draft)); }), jsonText = _json[0], setJsonText = _json[1];
+    var _touched = useState({}), touched = _touched[0], setTouched = _touched[1];
+    var _tried = useState(!!p.attempted), tried = _tried[0], setTried = _tried[1];
+    var _rep = useState(!!p.validated), reportOn = _rep[0], setReportOn = _rep[1];
+    var _conf = useState(!!p.confirmDiscard), confirm = _conf[0], setConfirm = _conf[1];
+    var _w = useState(p.width || RECORD_W), width = _w[0], setWidth = _w[1];
+    var _rel = useState(p.related || null), related = _rel[0], setRelated = _rel[1];
+    var _cp = useState(null), copied = _cp[0], setCopied = _cp[1];
+    var root = useRef(null);
+
+    var changed = table.columns.filter(function (c, i) {
+      return JSON.stringify(canon(c, metas[i], draft[c.name])) !== JSON.stringify(canon(c, metas[i], base[c.name]));
+    }).map(function (c) { return c.name; });
+    var parsed = tab === 'json' ? parseJson(jsonText) : null;
+    var jsonOk = !parsed || (parsed.ok && isObject(parsed.value));
+    var dirty = changed.length > 0 || !jsonOk;
+    var errors = useMemo(function () { return validateRecord(table, draft, { rows: rows, record: p.record, data: data, mode: mode, metas: metas }); }, [table, draft, rows, data, mode, metas, p.record]);
+    function visible(name) { return !!errors[name] && (mode === 'edit' || tried || touched[name] || changed.indexOf(name) >= 0); }
+    var problems = table.columns.filter(function (c) { return visible(c.name); }).length;
+    var rels = useMemo(function () { return mode === 'edit' ? relatedOf(table, p.record, tables, data) : { out: [], inn: [] }; }, [mode, table, p.record, tables, data]);
+    var relTotal = rels.out.concat(rels.inn).reduce(function (n, r) { return n + r.rows.length; }, 0);
+    var label = mode === 'edit' ? recordLabel(table, p.record) : table.name + ' · new';
+
+    useEffect(function () { p.onDirty && p.onDirty(dirty, changed); }, [dirty, changed.join(',')]);
+    useEffect(function () { return function () { p.onDirty && p.onDirty(false, []); }; }, []);
+    useEffect(function () { if (p.autoFocus) focusField(null); }, []);
+
+    function field(name) { return root.current && root.current.querySelector('[data-field="' + name + '"]'); }
+    function focusField(name) {
+      var scope = name ? field(name) : root.current && root.current.querySelector('.ss-rf:not(.is-generated)');
+      var el = scope && scope.querySelector('.ss-input:not([readonly]), textarea, .ss-fkpick-btn, select, .ss-switch input');
+      if (el) { el.focus(); if (el.scrollIntoView) el.scrollIntoView({ block: 'nearest' }); }
+    }
+    function change(name, v) { setDraft(assign(draft, kv(name, v))); setTouched(assign(touched, kv(name, true))); setReportOn(false); }
+    function editJson(text) {
+      setJsonText(text); setReportOn(false);
+      var r = parseJson(text);
+      if (r.ok && isObject(r.value)) setDraft(fromJson(table, metas, draft, r.value));
+    }
+    function gotoLine(n) {
+      var ta = root.current && root.current.querySelector('.ss-rec-editor textarea');
+      if (!ta) return;
+      var at = 0, k;
+      for (k = 1; k < n; k++) { var nl = jsonText.indexOf('\n', at); if (nl < 0) break; at = nl + 1; }
+      ta.focus(); ta.setSelectionRange(at, at);
+    }
+    function goTab(t) {
+      if (t === tab) return;
+      if (tab === 'json' && !jsonOk) { gotoLine(parsed.ok ? 1 : parsed.line); return; }
+      if (t === 'json') setJsonText(recordJson(table, metas, draft));
+      setTab(t);
+    }
+    function onTabKey(e, i) {
+      var step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      var n = (i + step + RECORD_TABS.length) % RECORD_TABS.length;
+      e.currentTarget.parentNode.children[n].focus();
+    }
+    function requestClose() { if (dirty) setConfirm(true); else p.onClose && p.onClose(); }
+    function discard() { setConfirm(false); p.onClose && p.onClose(); }
+    function save() {
+      if (confirm) return;
+      if (tab === 'json' && !jsonOk) { gotoLine(parsed.ok ? 1 : parsed.line); return; }
+      var bad = table.columns.filter(function (c) { return errors[c.name]; });
+      if (bad.length) {
+        setTried(true);
+        if (tab === 'json') setReportOn(true); else if (tab === 'form') focusField(bad[0].name); else setTab('form');
+        return;
+      }
+      if (mode === 'edit' && !dirty) return;
+      p.onSave && p.onSave(toRecord(table, metas, draft));
+    }
+    function onKey(e) {
+      var mod = e.metaKey || e.ctrlKey;
+      if (confirm) { if (mod && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); discard(); } return; }
+      if (mod && ((e.key.toLowerCase() === 's' && mode === 'edit') || e.key === 'Enter')) { e.preventDefault(); e.stopPropagation(); save(); }
+      else if (e.key === 'Escape') { e.stopPropagation(); requestClose(); }
+    }
+    function copy(name, text) {
+      copyText(text); setCopied(name);
+      setTimeout(function () { setCopied(function (c) { return c === name ? null : c; }); }, 1200);
+    }
+    function resize(w) { setWidth(w); p.onWidth && p.onWidth(w); }
+
+    // ---- the form
+    function renderField(c, i) {
+      var meta = metas[i], kind = meta.kind, v = draft[c.name], err = visible(c.name) ? errors[c.name] : null, generated = kind === 'generated';
+      var nullOn = canon(c, meta, v) === null, isChanged = changed.indexOf(c.name) >= 0, ctl;
+      var ph = v === null ? 'NULL' : v === undefined ? (c.default || '') : '';
+      var scale = typeScale(c.type), shown = v == null ? '' : typeof v === 'number' && scale != null ? v.toFixed(scale) : String(v);
+      function set(x) { change(c.name, x); }
+      if (generated) ctl = h(Input, { mono: true, icon: 'lock', readOnly: true, value: v == null ? '' : String(v), placeholder: 'DEFAULT', 'aria-label': c.name });
+      else if (kind === 'boolean') ctl = h(Switch, { checked: v === true, ariaLabel: c.name, onChange: set, label: h('span', { className: cx('ss-mono', v == null && 'ss-faint'), style: { fontSize: 12 } }, v == null ? (v === null ? 'NULL' : 'DEFAULT') : String(v)) });
+      else if (kind === 'time') ctl = h(MomentInput, { column: c, kind: meta.moment, value: v, placeholder: ph, error: !!err, onChange: set });
+      else if (kind === 'enum') {
+        var cur = v == null ? '' : String(v), opts = meta.options.map(function (o) { return { value: o, label: o }; });
+        if (cur !== '' && meta.options.indexOf(cur) < 0) opts.push({ value: cur, label: cur });
+        if (cur === '') opts.unshift({ value: '', label: v === null ? 'NULL' : v === undefined && c.default ? c.default : 'Choose a value' });
+        ctl = h('div', { className: cx(err && 'ss-rf-err') }, h(Select, { mono: true, value: cur, label: c.name, options: opts, onChange: set }));
+      } else if (kind === 'json') {
+        var jr = v == null || v === '' ? null : parseJson(String(v));
+        ctl = h(SqlEditor, { language: 'json', value: v == null ? '' : String(v), onChange: set, height: 120, errorLine: err && jr && !jr.ok ? jr.line : null, label: c.name, placeholder: v === null ? 'NULL' : '' });
+      } else if (kind === 'reference') {
+        ctl = h(FkPicker, { column: c, value: v, rows: data[c.fk.table], table: tables.find(function (t) { return t.name === c.fk.table; }), error: !!err, defaultOpen: p.picking === c.name, query: p.picking === c.name ? p.pickQuery : undefined, onChange: set });
+      } else if (kind === 'longtext') {
+        ctl = h('textarea', { className: cx('ss-input ss-input--mono', err && 'ss-input--error'), rows: 3, spellCheck: false, value: v == null ? '' : String(v), placeholder: ph, 'aria-label': c.name, 'aria-invalid': err ? true : undefined, onChange: function (e) { set(e.target.value); } });
+      } else {
+        ctl = h(Input, { mono: true, value: shown, placeholder: ph, error: !!err, spellCheck: false, 'aria-label': c.name, inputMode: kind === 'number' ? (isIntegerType(c.type) ? 'numeric' : 'decimal') : undefined, onChange: function (e) { set(e.target.value); } });
+      }
+      function toggleNull() {
+        if (!nullOn) set(null);
+        else if (isTextKind(meta)) set('');
+        else if (kind === 'boolean') set(false);
+        else if (kind === 'enum') set(meta.options[0]);
+        else focusField(c.name);
+      }
+      var nullBtn = c.nullable && !c.pk && !generated && h(Button, { size: 'sm', active: nullOn, 'aria-pressed': nullOn, title: 'Set to NULL', onClick: toggleNull }, 'NULL');
+      var glyph = c.pk ? h(Icon, { name: 'key', size: 12, className: 'ss-grid-key is-pk', label: 'Primary key' }) : c.fk ? h(Icon, { name: 'link', size: 12, className: 'ss-grid-key is-fk', label: 'Foreign key' }) : null;
+      var isCopied = copied === c.name;
+      var copyBtn = h(IconButton, { className: cx('ss-rf-copy', isCopied && 'is-copied'), icon: isCopied ? 'check' : 'copy', size: 'sm', label: isCopied ? 'Copied' : 'Copy value', disabled: v == null || v === '', onClick: function () { copy(c.name, String(v)); } });
+      return h('div', { key: c.name, className: cx('ss-rf', generated && 'is-generated'), 'data-field': c.name },
+        h(Field, { label: h('span', { className: 'ss-rf-name' }, glyph, c.name, isChanged && h('span', { className: 'ss-dirty-dot', title: 'Changed' })), error: err, hint: generated ? 'Generated by the database' : undefined },
+          h('div', { className: 'ss-rf-type' }, typeLine(c)),
+          h('div', { className: cx('ss-rf-row', (kind === 'json' || kind === 'longtext') && 'ss-rf-row--top') }, h('div', { className: 'ss-rf-grow' }, ctl), nullBtn)),
+        copyBtn);
+    }
+
+    // ---- the JSON
+    function jsonBody() {
+      var obj = parsed && parsed.ok && isObject(parsed.value) ? parsed.value : null;
+      var notes = obj ? jsonNotes(table, metas, draft, obj) : [];
+      var bad = Object.keys(errors);
+      return h('div', { className: 'ss-rec-json' },
+        h('div', { className: 'ss-rec-tools' },
+          h(Button, { size: 'sm', icon: 'code', disabled: !jsonOk, onClick: function () { setJsonText(JSON.stringify(parsed.value, null, 2)); } }, 'Format'),
+          h(Button, { size: 'sm', icon: copied === '__json' ? 'check' : 'copy', onClick: function () { copy('__json', jsonText); } }, copied === '__json' ? 'Copied' : 'Copy'),
+          h(Button, { size: 'sm', icon: 'check-circle', onClick: function () { setReportOn(true); } }, 'Validate')),
+        h('div', { className: 'ss-rec-editor' }, h(SqlEditor, { language: 'json', value: jsonText, onChange: editJson, label: 'Record as JSON', errorLine: parsed && !parsed.ok ? parsed.line : null, style: { height: 'auto', flex: '1 1 0', minHeight: 0 } })),
+        parsed && !parsed.ok && h('div', { className: 'ss-parse is-error', role: 'alert' }, h(Icon, { name: 'alert', size: 16 }), h('span', null, 'Invalid JSON near line ' + parsed.line + '.'), h('a', { onClick: function () { gotoLine(parsed.line); } }, 'Go to line')),
+        parsed && parsed.ok && !obj && h('div', { className: 'ss-parse is-error', role: 'alert' }, h(Icon, { name: 'alert', size: 16 }), h('span', null, 'A record must be a JSON object.')),
+        notes.map(function (n, i) { return h('div', { key: 'n' + i, className: 'ss-parse ss-parse--warn' }, h(Icon, { name: 'warning', size: 16 }), h('span', null, n)); }),
+        reportOn && obj && (bad.length
+          ? h(Alert, { tone: 'error', title: countText(bad.length, 'problem', 'problems') }, bad.map(function (n) { return h('div', { key: n }, h('code', null, n), ' ' + errors[n]); }))
+          : h(Alert, { tone: 'success', title: 'No problems' }, 'All ' + countText(table.columns.length, 'column', 'columns') + ' are valid.')));
+    }
+
+    // ---- the related records
+    function relItem(r) {
+      var open = related === r.key, n = r.rows.length;
+      return h('div', { key: r.key, className: cx('ss-rel', open && 'is-open') },
+        h('button', { type: 'button', className: 'ss-rel-head', 'aria-expanded': open, disabled: !n, onClick: function () { setRelated(open ? null : r.key); } },
+          h(Icon, { name: 'chevron-down', size: 14 }),
+          h('span', { className: 'ss-rel-name' }, r.dir === 'in' ? r.from : h(Fragment, null, r.from, h('span', { className: 'ss-faint' }, ' → '), r.to), h('span', { className: 'ss-faint' }, ' · ' + countText(n, 'row', 'rows')))),
+        open && h('div', { className: 'ss-rel-body' },
+          h(DataGrid, { columns: r.columns, rows: r.rows.slice(0, 50), density: 'compact', selectable: false, label: r.table }),
+          n > 50 && h('div', { className: 'ss-rel-foot' }, '50 of ' + countText(n, 'row', 'rows'))));
+    }
+    function relGroup(title, list, none) {
+      return h('section', { key: title, className: 'ss-pane-group', 'aria-label': title },
+        h('div', { className: 'ss-row' }, h('span', { className: 'ss-caption' }, title), h('span', { className: 'ss-tl-count' }, list.length)),
+        list.length ? h('div', { className: 'ss-rel-list' }, list.map(relItem)) : h('div', { className: 'ss-pane-none' }, none));
+    }
+
+    var body = tab === 'json' ? jsonBody()
+      : tab === 'related' ? h(Fragment, null, relGroup('References', rels.out, table.name + ' has no foreign keys.'), relGroup('Referenced by', rels.inn, 'No table references ' + table.name + '.'))
+        : table.columns.map(renderField);
+
+    return h(Fragment, null,
+      h(ResizeHandle, { label: 'Resize record editor', edge: 'left', width: width, min: RECORD_MIN, max: RECORD_MAX, onResize: resize, onReset: function () { resize(RECORD_W); } }),
+      h('aside', { ref: root, className: 'ss-recedit', 'aria-label': 'Record editor', style: { width: width }, onKeyDown: onKey },
+        h('div', { className: 'ss-tbh ss-rec-head' },
+          h('div', { className: 'ss-tbh-row' },
+            h('div', { className: 'ss-rec-titles' }, h('h2', { className: 'ss-rec-title' }, mode === 'edit' ? 'Edit record' : 'New record'), h('div', { className: 'ss-rec-sub', title: label }, label)),
+            h('span', { className: 'ss-spacer' }),
+            dirty && h(SaveStatus, { state: 'dirty' }),
+            h(IconButton, { icon: 'x', label: 'Close (Esc)', onClick: requestClose })),
+          h('div', { className: 'ss-tabs', role: 'tablist', 'aria-label': 'Record views' }, RECORD_TABS.map(function (x, i) {
+            var on = tab === x.value, off = x.value === 'related' && mode === 'new';
+            return h('button', {
+              key: x.value, type: 'button', role: 'tab', 'aria-selected': on, tabIndex: on ? 0 : -1, disabled: off, title: off ? 'A new record has no related records yet.' : undefined, className: cx('ss-tab', on && 'is-active'),
+              onClick: function () { goTab(x.value); }, onKeyDown: function (e) { onTabKey(e, i); }
+            }, x.label, x.value === 'related' && mode === 'edit' && h('span', { className: 'ss-tab-count' }, relTotal));
+          }))),
+        h('div', { className: cx('ss-rec-body', tab === 'json' && 'is-json'), role: 'tabpanel', 'aria-label': RECORD_TABS.find(function (x) { return x.value === tab; }).label }, body),
+        h('div', { className: 'ss-modal-foot ss-rec-foot' },
+          problems > 0 && h('span', { className: 'ss-rec-problems' }, countText(problems, 'problem', 'problems')),
+          h('span', { className: 'ss-spacer' }),
+          h(Button, { onClick: requestClose, kbd: 'Esc' }, 'Cancel'),
+          h(Button, { variant: 'primary', disabled: mode === 'edit' && !dirty, kbd: mode === 'edit' ? ['⌘', 'S'] : ['⌘', '⏎'], onClick: save }, mode === 'edit' ? 'Save changes' : 'Create record')),
+        confirm && h(ConfirmDialog, {
+          title: mode === 'edit' ? 'Discard changes to ' + label + '?' : 'Discard the new record in "' + table.name + '"?', danger: true, confirmLabel: 'Discard changes', cancelLabel: 'Keep editing',
+          onCancel: function () { setConfirm(false); }, onConfirm: discard
+        },
+          h('div', { style: { color: 'var(--ink-2)' } }, changed.length
+            ? h(Fragment, null, countText(changed.length, 'changed column', 'changed columns') + ' will be lost: ', h('code', { className: 'ss-mono', style: { color: 'var(--ink-1)' } }, changed.join(', ')), '.')
+            : 'The edited JSON will be lost.'))));
+  }
+
+  // ------------------------------------------------------------------ records: import
+  // Everything Import Records does with data is in this section and none of it needs React: it reads a CSV or JSON file, matches
+  // the columns of the file to the columns of a table, converts and checks each row the way the database would, and plays the
+  // import. The dialog below only shows it. Exported for the port and its tests: parseCsv, readRecordsFile, matchColumns,
+  // analyzeImport, runImport, importReport.
+  var IMPORT_MAX = 50 * 1024 * 1024;
+  var DELIMITERS = [{ value: ',', label: 'Comma' }, { value: ';', label: 'Semicolon' }, { value: '\t', label: 'Tab' }, { value: '|', label: 'Pipe' }];
+  var DELIMITER_NAME = { ',': 'comma', ';': 'semicolon', '\t': 'tab', '|': 'pipe' };
+  // `mode`: insert | upsert | skip. `key`: the unique column an upsert goes by (the first one that is filled when empty).
+  var IMPORT_DEFAULTS = { mode: 'insert', key: '', emptyNull: true, skipInvalid: true, checkFk: true, stopOnError: false, oneTx: true };
+  var IMPORT_STEPS = ['Source', 'Map columns', 'Settings', 'Review & import'];
+  var IMPORT_KEYS = ['source', 'map', 'settings', 'review'];
+
+  // --- the file
+  // CSV as RFC 4180 reads it: a quoted cell may hold the delimiter, quotes ("") and line breaks; blank lines are skipped.
+  // `lines[i]` is the line of the file where row i begins; `unclosed` is the line of a quote that never closes (0 when none).
+  function parseCsv(text, delimiter) {
+    var d = delimiter || ',', rows = [], lines = [], row = [], cell = '', quoted = false, line = 1, start = 1, i = text.charCodeAt(0) === 0xFEFF ? 1 : 0;
+    function endRow() {
+      row.push(cell); cell = '';
+      if (row.length > 1 || row[0] !== '') { rows.push(row); lines.push(start); }
+      row = [];
+    }
+    for (; i < text.length; i++) {
+      var ch = text[i];
+      if (quoted) {
+        if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else quoted = false; }
+        else { if (ch === '\n') line++; cell += ch; }
+      } else if (ch === '"' && cell === '') quoted = true;
+      else if (ch === d) { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        endRow(); line++; start = line;
+      } else cell += ch;
+    }
+    var unclosed = quoted ? start : 0;
+    if (cell !== '' || row.length) endRow();
+    return { rows: rows, lines: lines, unclosed: unclosed };
+  }
+  // The delimiter that splits the first lines into the same number of cells, most of them.
+  function sniffDelimiter(text) {
+    var sample = text.replace(/^﻿/, '').split(/\r\n|\n|\r/).filter(function (l) { return l.trim() !== ''; }).slice(0, 6);
+    var best = ',', top = 0;
+    DELIMITERS.forEach(function (d) {
+      var low = Math.min.apply(null, sample.map(function (l) { return l.split(d.value).length - 1; }).concat([Infinity]));
+      if (low !== Infinity && low > top) { top = low; best = d.value; }
+    });
+    return best;
+  }
+  // A first row of names: every cell filled, different from the others, and not a number, a date or an address.
+  function looksLikeHeader(row) {
+    var seen = {};
+    return row.length > 0 && row.every(function (c) {
+      var t = c.trim().toLowerCase();
+      if (!t || seen[t] || /^[-+]?[\d.,]+$/.test(t) || /^\d{4}-\d{2}-\d{2}/.test(t) || t.indexOf('@') >= 0) return false;
+      seen[t] = true; return true;
+    });
+  }
+  function uniqueNames(names) {
+    var seen = {};
+    return names.map(function (n, i) {
+      var name = n.trim() || 'column_' + (i + 1), k = name, c = 2;
+      while (seen[k]) k = name + '_' + c++;
+      seen[k] = true; return k;
+    });
+  }
+  // A CSV or JSON text as `{ format, delimiter, header, columns, rows, at, unit, error }`. A row is an array of cells in the order of
+  // the columns: strings for CSV; for JSON a number or boolean keeps its type, null stays null and an object becomes JSON text.
+  // `at[i]` is where row i is in the file (its line for CSV, its place in the array for JSON; `unit` says which).
+  // `o.delimiter` and `o.header` override what is found. When the text cannot be read `error` says why and there are no rows.
+  function readRecordsFile(text, o) {
+    o = o || {};
+    var none = { format: 'csv', delimiter: ',', header: true, columns: [], rows: [], at: [], unit: 'line', error: null };
+    if (!text || !text.trim()) return assign(none, { error: 'The file is empty.' });
+    if (/^\s*[\[{]/.test(text)) {
+      var j = assign(none, { format: 'json', delimiter: null, unit: 'row' }), r = parseJson(text);
+      if (!r.ok) return assign(j, { error: 'Unable to parse JSON near line ' + r.line + '.' });
+      var list = Array.isArray(r.value) ? r.value : isObject(r.value) ? [r.value] : null;
+      if (!list || !list.length || !list.every(isObject)) return assign(j, { error: 'Expected an array of objects.' });
+      var names = [];
+      list.forEach(function (item) { Object.keys(item).forEach(function (k) { if (names.indexOf(k) < 0) names.push(k); }); });
+      var jrows = list.map(function (item) {
+        return names.map(function (k) { var v = item[k]; return v === undefined ? null : isObject(v) || Array.isArray(v) ? JSON.stringify(v) : v; });
+      });
+      return assign(j, { columns: names, rows: jrows, at: jrows.map(function (_, i) { return i + 1; }) });
+    }
+    var delimiter = o.delimiter || sniffDelimiter(text), parsed = parseCsv(text, delimiter);
+    if (parsed.unclosed) return assign(none, { delimiter: delimiter, error: 'Unable to parse CSV near line ' + parsed.unclosed + '.' });
+    if (!parsed.rows.length) return assign(none, { delimiter: delimiter, error: 'The file is empty.' });
+    var header = o.header == null ? looksLikeHeader(parsed.rows[0]) : !!o.header;
+    var width = parsed.rows.reduce(function (m, r2) { return Math.max(m, r2.length); }, 0);
+    var first = header ? parsed.rows[0] : [];
+    var columns = uniqueNames(Array.from({ length: width }, function (_, i) { return i < first.length ? first[i] : ''; }));
+    var body = parsed.rows.slice(header ? 1 : 0);
+    return {
+      format: 'csv', delimiter: delimiter, header: header, columns: columns, unit: 'line', error: null,
+      rows: body.map(function (r2) { return columns.map(function (_, i) { return i < r2.length ? r2[i] : ''; }); }), at: parsed.lines.slice(header ? 1 : 0)
+    };
+  }
+  // `CSV · UTF-8 · comma · 1,000 rows · header row`
+  function describeSource(src) {
+    var rows = countText(src.rows.length, 'row', 'rows');
+    return src.format === 'json' ? 'JSON · UTF-8 · ' + rows + ' · ' + countText(src.columns.length, 'key', 'keys')
+      : 'CSV · UTF-8 · ' + DELIMITER_NAME[src.delimiter] + ' · ' + rows + ' · ' + (src.header ? 'header row' : 'no header row');
+  }
+  function formatBytes(n) { return n < 1024 ? n + ' B' : n < 1048576 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
+  function sampleCells(src, k, n) {
+    var out = [];
+    for (var i = 0; i < src.rows.length && out.length < n; i++) {
+      var v = src.rows[i][k];
+      if (v !== null && v !== undefined && String(v).trim() !== '') out.push(v);
+    }
+    return out;
+  }
+
+  // --- one cell as the value of a column
+  function pad2(s) { return ('0' + s).slice(-2); }
+  // A date, a time or a timestamp as SQL writes it; null when the text is not one. `2026-03-14` is a timestamp at midnight, a time zone is dropped.
+  function importMoment(kind, text) {
+    var s = String(text).trim(), m;
+    if (kind === 'time') {
+      m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(s);
+      var t = m && pad2(m[1]) + ':' + m[2] + ':' + (m[3] || '00');
+      return t && validMoment('time', t) ? t : null;
+    }
+    m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?)?$/.exec(s);
+    if (!m) return null;
+    var day = m[1] + '-' + m[2] + '-' + m[3];
+    if (kind === 'date') return validMoment('date', day) ? day : null;
+    var stamp = day + ' ' + (m[4] || '00') + ':' + (m[5] || '00') + ':' + (m[6] || '00');
+    return validMoment('timestamp', stamp) ? stamp : null;
+  }
+  function looksLikeDates(src, k, kind) {
+    var cells = sampleCells(src, k, 50);
+    return cells.length > 0 && cells.filter(function (v) { return importMoment(kind, v) !== null; }).length >= cells.length * 0.9;
+  }
+  var TRUE_WORDS = ['true', 't', 'yes', 'y', '1'], FALSE_WORDS = ['false', 'f', 'no', 'n', '0'];
+  function bad(kind, message) { return { kind: kind, message: message }; }
+  // One cell of the file as the value of column `c`: `{ value, problem }`. `value` is undefined where the default of the column fills in.
+  // `problem.kind` is what the review groups by: required, type or date. `o.emptyNull`: an empty cell is NULL (in a text column it is otherwise '').
+  function importCell(c, meta, raw, o) {
+    var textual = isTextKind(meta) || meta.kind === 'enum' || (meta.kind === 'reference' && cellKind(c.type) === 'text');
+    var blank = raw === null || raw === undefined || (typeof raw === 'string' && raw.trim() === '' && (o.emptyNull || !textual));
+    if (blank) {
+      if (c.nullable && !c.pk) return { value: null };
+      if (c.default) return { value: undefined };
+      return { value: null, problem: bad('required', 'Column "' + c.name + '" cannot be NULL.') };
+    }
+    var text = typeof raw === 'string' ? raw : typeof raw === 'object' ? JSON.stringify(raw) : String(raw), max, w;
+    if (meta.kind === 'number' || (meta.kind === 'reference' && cellKind(c.type) === 'number')) {
+      var s = text.trim();
+      if (typeof raw !== 'number' && !/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(s)) return { value: raw, problem: bad('type', 'Value must be a number.') };
+      var n = typeof raw === 'number' ? raw : Number(s);
+      if (!isFinite(n)) return { value: raw, problem: bad('type', 'Value must be a number.') };
+      if (isIntegerType(c.type) && !Number.isInteger(n)) return { value: raw, problem: bad('type', 'Value must be a whole number.') };
+      var scale = typeScale(c.type);
+      if (scale != null && (s.split('.')[1] || '').length > scale) return { value: raw, problem: bad('type', 'Value has more than ' + scale + ' decimal places.') };
+      return { value: n };
+    }
+    if (meta.kind === 'boolean') {
+      if (typeof raw === 'boolean') return { value: raw };
+      w = text.trim().toLowerCase();
+      if (TRUE_WORDS.indexOf(w) >= 0) return { value: true };
+      if (FALSE_WORDS.indexOf(w) >= 0) return { value: false };
+      return { value: raw, problem: bad('type', 'Value must be true or false.') };
+    }
+    if (meta.kind === 'time') {
+      var moment = importMoment(meta.moment, text);
+      return moment ? { value: moment } : { value: raw, problem: bad('date', 'Invalid ' + MOMENTS[meta.moment].word + ' format.') };
+    }
+    if (meta.kind === 'json') {
+      var parsed = parseJson(text);
+      return parsed.ok ? { value: text } : { value: raw, problem: bad('type', 'Invalid JSON near line ' + parsed.line + '.') };
+    }
+    if (meta.kind === 'enum' && meta.fixed && meta.options.indexOf(text) < 0) return { value: raw, problem: bad('type', 'Value must be one of ' + meta.options.join(', ') + '.') };
+    max = typeLength(c.type);
+    if (max != null && text.length > max) return { value: raw, problem: bad('type', 'Value is longer than ' + max + ' characters.') };
+    return { value: text };
+  }
+
+  // --- which column of the file fills which column of the table
+  function words(name) { return String(name).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean); }
+  // The mapping the dialog starts from, `{ [column of the table]: { from, by, why } }`. `from` is a column of the file, '' (ignore) or '=' (a constant,
+  // kept in `value`). A column the database generates is never filled. Matched, in this order: the same name; a name that holds the name
+  // (`full_name` for `name`); the one date column of the file for the one date column of the table (`signup_date` for `created_at`).
+  function matchColumns(table, src, data) {
+    var rows = (data && data[table.name]) || [], used = {}, out = {}, names = src.columns;
+    table.columns.forEach(function (c) { out[c.name] = { from: '', by: 'auto' }; });
+    var open = table.columns.filter(function (c) { return !isGenerated(c); });
+    function take(c, i, why) { out[c.name] = { from: names[i], by: 'auto', why: why }; used[i] = true; }
+    open.forEach(function (c) {
+      var i = names.findIndex(function (n, k) { return !used[k] && words(n).join('') === words(c.name).join(''); });
+      if (i >= 0) take(c, i, 'Same name');
+    });
+    open.forEach(function (c) {
+      if (out[c.name].from) return;
+      var cw = words(c.name), i = names.findIndex(function (n, k) { var w = words(n); return !used[k] && cw.every(function (x) { return w.indexOf(x) >= 0; }); });
+      if (i >= 0) take(c, i, 'Similar name');
+    });
+    var dates = open.filter(function (c) { return !out[c.name].from && fieldMeta(c, rows, data).kind === 'time'; });
+    if (dates.length === 1) {
+      var kind = fieldMeta(dates[0], rows, data).moment;
+      var like = names.map(function (_, k) { return k; }).filter(function (k) { return !used[k] && looksLikeDates(src, k, kind); });
+      if (like.length === 1) take(dates[0], like[0], 'Same type');
+    }
+    return out;
+  }
+
+  // --- the rows, checked
+  // What the import would do with each row of the file, as the database would take it. `mapping` is the one of matchColumns; `settings` has the
+  // keys of IMPORT_DEFAULTS; `data` holds the rows of every table (the unique keys and foreign keys are checked against them).
+  // Returns `{ rows, groups, counts, filled, missing, keys, key }`:
+  //  - rows[i] = { line, index, kind, values, problems, conflict, match }. `kind` is insert, update, skip (a duplicate left out on purpose),
+  //    conflict (a duplicate that insert-only cannot take: a warning) or invalid (an error). `values` has what is written; a column left out
+  //    of it takes its default.
+  //  - groups = { required, duplicate, type, fk, date }: the problems of each kind as { line, column, value, message }.
+  //  - counts = { total, valid (insert + update), insert, update, skip, warnings, errors }.
+  //  - filled: the columns that get a value from the file or a constant. missing: required columns nothing fills (an error on every row).
+  function analyzeImport(table, src, mapping, settings, data) {
+    var set = assign(IMPORT_DEFAULTS, settings), existing = (data && data[table.name]) || [], cols = table.columns;
+    var metas = cols.map(function (c) { return fieldMeta(c, existing, data); });
+    var feeds = cols.map(function (c) {
+      var m = mapping[c.name];
+      if (isGenerated(c) || !m || !m.from) return null;
+      if (m.from === '=') return { constant: m.value == null ? '' : m.value };
+      var at = src.columns.indexOf(m.from);
+      return at < 0 ? null : { at: at };
+    });
+    var keyIdx = [], filled = [], missing = [];
+    cols.forEach(function (c, i) {
+      if (feeds[i]) { filled.push(c.name); if (uniqueKeys(table, c)) keyIdx.push(i); }
+      else if (!isGenerated(c) && !c.nullable && !c.default) missing.push(c.name);
+    });
+    var keys = keyIdx.map(function (i) { return cols[i].name; });
+    var key = keys.indexOf(set.key) >= 0 ? set.key : keys[0] || '';
+    var known = {}, seen = {}, fkSets = {};
+    keys.forEach(function (name) {
+      known[name] = {}; seen[name] = {};
+      existing.forEach(function (r) { if (r[name] != null) known[name][String(r[name])] = r; });
+    });
+    function fkHas(c, v) {
+      var id = c.name;
+      if (!fkSets[id]) { fkSets[id] = {}; data[c.fk.table].forEach(function (r) { if (r[c.fk.column] != null) fkSets[id][String(r[c.fk.column])] = true; }); }
+      return !!fkSets[id][String(v)];
+    }
+    var groups = { required: [], duplicate: [], type: [], fk: [], date: [] };
+    var counts = { total: src.rows.length, valid: 0, insert: 0, update: 0, skip: 0, warnings: 0, errors: 0 };
+    var rows = src.rows.map(function (cells, k) {
+      var line = src.at[k], values = {}, problems = [], conflict = null, kind, match = null;
+      cols.forEach(function (c, i) {
+        if (isGenerated(c)) return;
+        var f = feeds[i];
+        if (!f) {
+          if (!c.nullable && !c.default) problems.push({ column: c.name, kind: 'required', value: null, message: 'Column "' + c.name + '" cannot be NULL.' });
+          return;
+        }
+        var raw = f.constant !== undefined ? f.constant : cells[f.at], res = importCell(c, metas[i], raw, set);
+        if (res.problem) { problems.push({ column: c.name, kind: res.problem.kind, value: res.problem.kind === 'required' ? null : raw, message: res.problem.message }); return; }
+        if (res.value !== undefined) values[c.name] = res.value;
+        if (res.value != null && c.fk && set.checkFk && data && Array.isArray(data[c.fk.table]) && !fkHas(c, res.value)) {
+          problems.push({ column: c.name, kind: 'fk', value: res.value, message: 'No row in ' + c.fk.table + ' has ' + c.fk.column + ' ' + res.value + '.' });
+        }
+      });
+      if (!problems.length) {
+        keys.forEach(function (name) {
+          var v = values[name];
+          if (v == null || conflict) return;
+          var id = String(v);
+          if (seen[name][id] != null) conflict = { column: name, repeat: true, message: 'A row with ' + name + ' "' + id + '" appears on line ' + seen[name][id] + '.' };
+          else if (known[name][id]) conflict = { column: name, row: known[name][id], message: 'A row with ' + name + ' "' + id + '" already exists.' };
+        });
+      }
+      if (problems.length) kind = 'invalid';
+      else if (conflict) kind = set.mode === 'skip' ? 'skip' : set.mode === 'upsert' && conflict.row && conflict.column === key ? 'update' : 'conflict';
+      else kind = 'insert';
+      if (kind === 'update') match = conflict.row;
+      if (kind === 'insert' || kind === 'update') keys.forEach(function (name) { if (values[name] != null) seen[name][String(values[name])] = line; });
+      problems.forEach(function (pr) { groups[pr.kind].push({ line: line, column: pr.column, value: pr.value, message: pr.message }); });
+      if (conflict && !problems.length) groups.duplicate.push({ line: line, column: conflict.column, value: values[conflict.column], message: conflict.message, kind: kind });
+      if (kind === 'insert' || kind === 'update' || kind === 'skip') counts[kind]++;
+      else if (kind === 'conflict') counts.warnings++;
+      else counts.errors++;
+      return { line: line, index: k, kind: kind, values: values, problems: problems, conflict: conflict, match: match };
+    });
+    counts.valid = counts.insert + counts.update;
+    return { rows: rows, groups: groups, counts: counts, filled: filled, missing: missing, keys: keys, key: key };
+  }
+  // The rows a group touches, once each.
+  function groupRows(items) { var seenLine = {}, n = 0; items.forEach(function (it) { if (!seenLine[it.line]) { seenLine[it.line] = true; n++; } }); return n; }
+  // `1,000 rows · 985 valid · 10 warnings · 5 errors`
+  function importSummary(c) {
+    var parts = [countText(c.total, 'row', 'rows'), c.valid.toLocaleString('en-US') + ' valid', countText(c.warnings, 'warning', 'warnings'), countText(c.errors, 'error', 'errors')];
+    if (c.skip) parts.push(c.skip.toLocaleString('en-US') + ' skipped');
+    return parts.join(' · ');
+  }
+  // Plays the import over the rows of analyzeImport for the first `limit` rows (all when it is left out). `fail = { line, message }` makes the
+  // database refuse that row (a clash that appeared after the check). A transaction (or stopping on the first error) ends the run there; a
+  // transaction that ended on an error writes nothing. `cancelled` ends the run where it is, with the same rule for a transaction.
+  // Returns { processed, inserted, updated, skipped, failed, error, stopped, rolledBack, insert, update }; insert and update list what was written.
+  function runImport(analysis, settings, fail, limit, cancelled) {
+    var set = assign(IMPORT_DEFAULTS, settings), stop = set.oneTx || set.stopOnError;
+    var out = { processed: 0, inserted: 0, updated: 0, skipped: 0, failed: 0, error: null, stopped: false, rolledBack: false, insert: [], update: [] };
+    var rows = analysis.rows, max = limit == null ? rows.length : Math.min(limit, rows.length);
+    for (var i = 0; i < max; i++) {
+      var r = rows[i];
+      out.processed++;
+      if (r.kind !== 'insert' && r.kind !== 'update') { out.skipped++; continue; }
+      if (fail && r.line === fail.line) {
+        out.failed++; out.error = fail;
+        if (stop) { out.stopped = true; break; }
+        continue;
+      }
+      if (r.kind === 'insert') { out.inserted++; out.insert.push(r.values); } else { out.updated++; out.update.push({ match: r.match, values: r.values }); }
+    }
+    if (set.oneTx && (out.stopped || cancelled)) {
+      out.rolledBack = out.inserted + out.updated > 0;
+      out.inserted = 0; out.updated = 0; out.insert = []; out.update = [];
+    }
+    return out;
+  }
+  function csvCell(v) { var s = v == null ? '' : String(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+  // The error report: a CSV of every row that was left out or refused, with its line, the column and the reason. English, like any file the app writes.
+  function importReport(analysis, outcome) {
+    var lines = ['line,column,value,reason'], items = [];
+    ['required', 'duplicate', 'type', 'fk', 'date'].forEach(function (k) { analysis.groups[k].forEach(function (it) { items.push(it); }); });
+    if (outcome && outcome.error) items.push({ line: outcome.error.line, column: '', value: '', message: outcome.error.message });
+    items.sort(function (a, b) { return a.line - b.line; });
+    items.forEach(function (it) { lines.push([it.line, it.column, it.value, it.message].map(csvCell).join(',')); });
+    return lines.join('\n') + '\n';
+  }
+  function saveText(name, text, type) {
+    try {
+      var url = URL.createObjectURL(new Blob([text], { type: type || 'text/csv' })), a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    } catch (e) { /* no download here */ }
+  }
+
+  // --- users_import.csv: 1,000 rows made on the spot, the same every time. Against the users of the sample: 2 empty emails, 2 impossible dates and
+  // 1 name over 255 characters (5 errors), and 10 emails that already belong to a user (10 duplicates). Row i is line i + 2; line 1 is the header.
+  var SAMPLE_CSV = (function () {
+    var DAY = 86400000;
+    var first = ['An', 'Binh', 'Chi', 'Dung', 'Giang', 'Ha', 'Hieu', 'Khanh', 'Lan', 'Minh', 'Nam', 'Phuong', 'Quang', 'Thao', 'Trang', 'Vy'];
+    var last = ['Nguyen', 'Tran', 'Le', 'Pham', 'Hoang', 'Vo', 'Dang', 'Bui', 'Do', 'Ngo'];
+    var countries = ['VN', 'US', 'DE', 'JP', 'BR', 'FR', 'IN', 'GB', 'SG', 'CA'];
+    var users = SAMPLE_RECORDS.users;
+    var noEmail = { 3: true, 416: true }, badDate = { 7: '2026-02-30', 622: '14/03/2026' }, longName = 789;
+    var clash = { 11: 1, 56: 3, 130: 4, 244: 6, 359: 8, 471: 10, 580: 12, 702: 14, 855: 15, 931: 17 };
+    var out = ['email,full_name,country_code,signup_date'];
+    for (var i = 0; i < 1000; i++) {
+      var f = first[(i * 7) % first.length], l = last[(i * 3 + Math.floor(i / 16)) % last.length], name = f + ' ' + l;
+      var email = f.toLowerCase() + '.' + l.toLowerCase() + (i + 1) + '@example.com';
+      var day = new Date(Date.UTC(2024, 0, 1) + Math.round(i * 0.78) * DAY).toISOString().slice(0, 10);
+      var date = i % 7 === 2 ? day + ' ' + pad2(7 + i % 12) + ':' + pad2((i * 7) % 60) + ':' + pad2((i * 13) % 60) : day;
+      if (noEmail[i]) email = '';
+      if (clash[i] !== undefined) email = users[clash[i]].email;
+      if (badDate[i]) date = badDate[i];
+      if (i === longName) name = (name + ' ').repeat(40).slice(0, 300);
+      out.push([email, name, countries[(i * 5) % countries.length], date].join(','));
+    }
+    return out.join('\n') + '\n';
+  })();
+
+  // ------------------------------------------------------------------ steps and progress
+  // The numbered steps of a dialog that is a path (Import Records). A step that is done can be gone back to (`onStep(i)`); the ones ahead cannot.
+  function Stepper(p) {
+    var steps = p.steps || [], current = p.current || 0;
+    return h('ol', { className: 'ss-steps', 'aria-label': p.label || 'Steps' }, steps.map(function (label, i) {
+      var state = i < current ? 'done' : i === current ? 'current' : 'todo';
+      return h(Fragment, { key: i },
+        i > 0 && h('li', { className: cx('ss-step-line', i <= current && 'is-done'), 'aria-hidden': true }),
+        h('li', { className: cx('ss-step', 'is-' + state), 'aria-current': state === 'current' ? 'step' : undefined },
+          h('button', { type: 'button', className: 'ss-step-btn', disabled: state !== 'done' || !p.onStep, onClick: function () { p.onStep && p.onStep(i); } },
+            h('span', { className: 'ss-step-n' }, state === 'done' ? h(Icon, { name: 'check', size: 12, strokeWidth: 3 }) : i + 1),
+            h('span', { className: 'ss-step-label' }, label))));
+    }));
+  }
+
+  function Progress(p) {
+    var max = p.max || 100, v = Math.max(0, Math.min(max, p.value || 0));
+    return h('div', { className: cx('ss-progress', p.tone && 'is-' + p.tone), role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': max, 'aria-valuenow': v, 'aria-label': p.label || 'Progress' },
+      h('span', { style: { width: (max ? v / max * 100 : 0) + '%' } }));
+  }
+
+  // ------------------------------------------------------------------ import records dialog
+  var IMPORT_GROUPS = [
+    { key: 'required', title: 'Missing required values', tone: 'error' },
+    { key: 'duplicate', title: 'Duplicate keys', tone: 'warn' },
+    { key: 'type', title: 'Invalid types', tone: 'error' },
+    { key: 'fk', title: 'Foreign keys', tone: 'error' },
+    { key: 'date', title: 'Invalid dates', tone: 'error' }
+  ];
+  var IMPORT_MODES = { insert: 'Insert only', upsert: 'Upsert', skip: 'Skip duplicates' };
+
+  function ImportStat(p) {
+    return h('div', { className: cx('ss-imp-stat', p.tone && 'is-' + p.tone) },
+      h('div', { className: 'ss-imp-stat-label' }, p.icon && h(Icon, { name: p.icon, size: 12 }), p.label),
+      h('div', { className: 'ss-imp-stat-n' }, p.value));
+  }
+  function Mono(p) { return h('code', { className: 'ss-mono', style: { color: 'var(--ink-1)' } }, p.children); }
+
+  // Import Records: a file or pasted text becomes rows of one table, in four steps. It keeps its own state; the host gives it the table, the rows that
+  // exist (`data`: unique keys and foreign keys are checked against them) and hears `onImport({ insert, update, counts })` when rows were written.
+  // The other props start it somewhere (a step, a file, a mapping, settings, a phase) for a preview or a test.
+  function ImportRecordsDialog(p) {
+    var table = p.table || SAMPLE_TABLES[0], data = p.data || SAMPLE_RECORDS, schema = p.schema || 'ecommerce';
+    var dest = schema + '.' + (table.schema || 'public') + '.' + table.name, existing = data[table.name] || [];
+    var hasFks = table.columns.some(function (c) { return c.fk; });
+    var _step = useState(p.phase ? 3 : Math.max(0, IMPORT_KEYS.indexOf(p.step || 'source'))), rawStep = _step[0], setStep = _step[1];
+    var _mode = useState(p.source || 'file'), mode = _mode[0], setMode = _mode[1];
+    var _file = useState(p.file || null), file = _file[0], setFile = _file[1];
+    var _ft = useState(p.file && p.text != null ? p.text : ''), fileText = _ft[0], setFileText = _ft[1];
+    var _pt = useState(p.source === 'paste' && p.text != null ? p.text : ''), pasted = _pt[0], setPasted = _pt[1];
+    var _rd = useState(false), reading = _rd[0], setReading = _rd[1];
+    var _re = useState(null), readError = _re[0], setReadError = _re[1];
+    var _dl = useState(null), delim = _dl[0], setDelim = _dl[1];
+    var _hd = useState(null), header = _hd[0], setHeader = _hd[1];
+    var _ed = useState(p.mapping || {}), edits = _ed[0], setEdits = _ed[1];
+    var _set = useState(function () { return assign(IMPORT_DEFAULTS, p.settings); }), settings = _set[0], setSettings = _set[1];
+    var _ph = useState(p.phase || 'review'), phase = _ph[0], setPhase = _ph[1];
+    var _pr = useState(p.progress || 0), processed = _pr[0], setProcessed = _pr[1];
+    var _ca = useState(null), cancelledAt = _ca[0], setCancelledAt = _ca[1];
+    // The import runs on the analysis of the moment it starts: once rows are written the host's `data` holds them, and checking the file against it again would call every row a duplicate.
+    var _sn = useState(null), snap = _sn[0], setSnap = _sn[1];
+    var _el = useState(p.duration != null ? p.duration : 1.2), elapsed = _el[0], setElapsed = _el[1];
+    var _op = useState(p.open || null), openGroups = _op[0], setOpenGroups = _op[1];
+    var t0 = useRef(0), reported = useRef(false);
+
+    var text = mode === 'file' ? fileText : pasted;
+    var src = useMemo(function () { return text ? readRecordsFile(text, { delimiter: delim, header: header }) : null; }, [text, delim, header]);
+    var ok = !!src && !src.error && src.rows.length > 0;
+    var step = ok ? rawStep : 0;
+    var auto = useMemo(function () { return ok ? matchColumns(table, src, data) : {}; }, [ok, src, table, data]);
+    var mapping = useMemo(function () { return assign(auto, edits); }, [auto, edits]);
+    var analysis = useMemo(function () { return ok ? analyzeImport(table, src, mapping, settings, data) : null; }, [ok, src, mapping, settings, table, data]);
+    var ran = snap ? snap.analysis : analysis, ranSet = snap ? snap.settings : settings;
+    var outcome = useMemo(function () { return ran ? runImport(ran, ranSet, p.fail, cancelledAt == null ? undefined : cancelledAt, cancelledAt != null) : null; }, [ran, ranSet, cancelledAt, p.fail]);
+    var metas = useMemo(function () { return table.columns.map(function (c) { return fieldMeta(c, existing, data); }); }, [table, existing, data]);
+    // Which mapped columns convert what the file holds (text into a number, a date into a timestamp).
+    var converts = useMemo(function () {
+      var out = {};
+      if (!ok) return out;
+      table.columns.forEach(function (c, i) {
+        var m = mapping[c.name], k = m && m.from && m.from !== '=' ? src.columns.indexOf(m.from) : -1;
+        if (k < 0) return;
+        out[c.name] = sampleCells(src, k, 40).some(function (raw) {
+          var res = importCell(c, metas[i], raw, settings);
+          return !res.problem && res.value !== undefined && res.value !== null && (typeof res.value !== typeof raw || String(res.value) !== String(raw));
+        });
+      });
+      return out;
+    }, [ok, src, mapping, settings, table, metas]);
+    var preview = useMemo(function () {
+      if (!analysis) return null;
+      var cols = table.columns.filter(function (c) { return analysis.filled.indexOf(c.name) >= 0; }), invalid = [];
+      var rows = analysis.rows.slice(0, 10).map(function (r, ri) {
+        var o = {};
+        cols.forEach(function (c) {
+          var pr = r.problems.find(function (x) { return x.column === c.name; });
+          if (pr) { o[c.name] = pr.value === undefined ? null : pr.value; invalid.push({ row: ri, column: c.name, message: pr.message }); }
+          else o[c.name] = c.name in r.values ? r.values[c.name] : c.default || null;
+        });
+        return o;
+      });
+      return { columns: cols, rows: rows, invalid: invalid };
+    }, [analysis, table]);
+
+    var counts = analysis ? analysis.counts : null, left = counts ? counts.warnings + counts.errors : 0;
+    var blocked = !!analysis && (analysis.missing.length > 0 || analysis.filled.length === 0);
+    var canImport = !!counts && counts.valid > 0 && (settings.skipInvalid || left === 0);
+    var canNext = step === 0 ? ok : step === 1 ? ok && !blocked : step === 2 ? ok : canImport;
+    var bytes = file ? (file.bytes != null ? file.bytes : new Blob([fileText]).size) : 0;
+    var busy = step === 3 && phase === 'importing';
+    var shown = p.progress != null ? p.progress : processed;
+    var live = busy && ran ? runImport(ran, ranSet, p.fail, shown) : null;
+
+    // --- source
+    function forget() { setEdits({}); setCancelledAt(null); }
+    function pickFile(f) {
+      forget(); setDelim(null); setHeader(null); setReadError(null);
+      if (!f) { setFile(null); setFileText(''); return; }
+      var raw = f.raw;
+      if (raw && raw.size > IMPORT_MAX) { setFile({ name: f.name, bytes: raw.size }); setFileText(''); setReadError('File is larger than 50 MB.'); return; }
+      setFile({ name: f.name, bytes: raw ? raw.size : 0 });
+      if (!raw) { setFileText(''); return; }
+      setReading(true);
+      var done = function (t) { setFileText(t); setReading(false); };
+      if (raw.text) raw.text().then(done, function () { setReading(false); setReadError('Unable to read the file.'); });
+      else { var rd = new FileReader(); rd.onload = function () { done(String(rd.result)); }; rd.onerror = function () { setReading(false); setReadError('Unable to read the file.'); }; rd.readAsText(raw); }
+    }
+    function paste(t) { forget(); setDelim(null); setHeader(null); setPasted(t); }
+    function changeDelim(v) { forget(); setDelim(v); }
+    function changeHeader(v) { forget(); setHeader(v); }
+
+    // --- mapping
+    function edit(name, patch) { var o = {}; o[name] = assign(mapping[name], patch, { by: 'manual' }); setEdits(assign(edits, o)); }
+    function setting(patch) { setSettings(assign(settings, patch)); }
+
+    // --- the import
+    function start() {
+      if (!canImport || busy) return;
+      reported.current = false; t0.current = Date.now();
+      setSnap({ analysis: analysis, settings: settings }); setCancelledAt(null); setProcessed(0); setPhase('importing');
+    }
+    function report(o) {
+      if (reported.current) return;
+      reported.current = true;
+      if (p.onImport && o.inserted + o.updated > 0) p.onImport({ table: table.name, insert: o.insert, update: o.update, counts: { processed: o.processed, inserted: o.inserted, updated: o.updated, skipped: o.skipped, failed: o.failed } });
+    }
+    useEffect(function () {
+      if (phase !== 'importing' || p.progress != null || !outcome) return;
+      var last = outcome.processed, size = Math.max(1, Math.ceil(last / 24));
+      var id = setInterval(function () { setProcessed(function (n) { return Math.min(last, n + size); }); }, 45);
+      return function () { clearInterval(id); };
+    }, [phase]);
+    useEffect(function () {
+      if (phase !== 'importing' || p.progress != null || !outcome || processed < outcome.processed) return;
+      setElapsed(Math.max(0.1, (Date.now() - t0.current) / 1000)); setPhase('done'); report(outcome);
+    }, [phase, processed, outcome]);
+    function cancelImport() {
+      var part = runImport(ran, ranSet, p.fail, processed, true);
+      setElapsed(Math.max(0.1, (Date.now() - t0.current) / 1000)); setCancelledAt(processed); setPhase('done'); report(part);
+    }
+    function again() { forget(); setSnap(null); setStep(0); setPhase('review'); setFile(null); setFileText(''); setPasted(''); setDelim(null); setHeader(null); setReadError(null); setProcessed(0); }
+    function viewRows() { p.onViewRows && p.onViewRows(outcome); p.onClose && p.onClose(); }
+    function download() { if (ran) saveText(table.name + '_import_errors.csv', importReport(ran, outcome)); }
+    function primary() {
+      if (busy) return;
+      if (step < 3) { if (canNext) setStep(step + 1); }
+      else if (phase === 'review') start();
+      else if (phase === 'done') viewRows();
+    }
+    useEffect(function () {
+      function key(e) { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); primary(); } }
+      window.addEventListener('keydown', key); return function () { window.removeEventListener('keydown', key); };
+    });
+
+    // --- step 1: source
+    function renderSource() {
+      var meta = file ? formatBytes(bytes) + (src && !src.error ? ' · ' + describeSource(src) : reading ? ' · Reading…' : '') : '';
+      return h(Fragment, null,
+        h(Field, { label: 'Destination' }, h('div', { className: 'ss-imp-dest' }, h(Icon, { name: 'table', size: 14 }), h('span', null, dest), h('span', { className: 'ss-spacer' }), h('span', { className: 'ss-imp-dim' }, countText(existing.length, 'row', 'rows') + ' · ' + countText(table.columns.length, 'column', 'columns')))),
+        h(SegmentedControl, { block: true, value: mode, onChange: function (v) { setMode(v); }, options: [{ value: 'file', label: 'Upload file', icon: 'upload' }, { value: 'paste', label: 'Paste', icon: 'clipboard' }] }),
+        mode === 'file'
+          ? h(DropZone, { file: file ? { name: file.name, meta: meta } : null, onFile: pickFile, accept: '.csv,.tsv,.txt,.json', noun: 'CSV or JSON', fileIcon: 'file', hint: 'CSV, JSON · up to 50 MB' })
+          : h(SqlEditor, { value: pasted, onChange: paste, height: 224, language: 'text', label: 'CSV or JSON', placeholder: 'email,full_name,signup_date\nan@example.com,An Nguyen,2026-03-14' }),
+        readError && h(Alert, { tone: 'error', title: readError }, 'Choose a smaller file, or import it in parts.'),
+        src && src.error && h(Alert, { tone: 'error', title: src.error }, mode === 'paste' ? 'Fix the text, or paste a CSV with one row per line.' : 'Choose another file, or open it and check that it is CSV or a JSON array of objects.'),
+        ok && h(Fragment, null,
+          h('div', { className: 'ss-imp-detect' },
+            h(Badge, { tone: 'outline' }, src.format === 'json' ? 'JSON' : 'CSV'),
+            src.format === 'csv' && h(Fragment, null,
+              h('label', { className: 'ss-imp-opt' }, 'Delimiter', h(Select, { size: 'sm', label: 'Delimiter', value: src.delimiter, options: DELIMITERS, onChange: changeDelim })),
+              h(Checkbox, { label: 'First row contains column names', checked: src.header, onChange: changeHeader })),
+            h('span', { className: 'ss-spacer' }),
+            h('span', { className: 'ss-imp-dim' }, 'UTF-8 · ' + countText(src.rows.length, 'row', 'rows') + ' · ' + countText(src.columns.length, 'column', 'columns'))),
+          h('div', { className: 'ss-imp-sect' }, h('span', { className: 'ss-caption' }, 'First ' + countText(Math.min(8, src.rows.length), 'row', 'rows') + ' of the file')),
+          h('div', { className: 'ss-imp-raw-box' },
+            h('table', { className: 'ss-imp-raw', style: { minWidth: src.columns.length * 144 } },
+              h('thead', null, h('tr', null, src.columns.map(function (n) { return h('th', { key: n, title: n }, n); }))),
+              h('tbody', null, src.rows.slice(0, 8).map(function (r, ri) {
+                return h('tr', { key: ri }, r.map(function (v, ci) { return h('td', { key: ci, title: v == null ? undefined : String(v) }, v == null ? h('span', { className: 'ss-null' }, 'NULL') : String(v)); }));
+              }))))));
+    }
+
+    // --- step 2: map columns
+    function mapAlert() {
+      if (analysis.missing.length) {
+        var name = analysis.missing[0];
+        return h(Alert, { tone: 'error', title: 'Column "' + name + '" cannot be NULL.' }, 'No column of the file fills ', h(Mono, null, name), ', so every row would be refused. Choose a column of the file or give it a constant value.');
+      }
+      var order = ['required', 'type', 'date', 'fk'], kind = order.find(function (k) { return analysis.groups[k].length > 0; });
+      if (!kind) return null;
+      var items = analysis.groups[kind], first = items[0], n = groupRows(items), other = counts.errors - n;
+      var what = kind === 'required' ? ' no value for ' : ' a value that does not fit ';
+      return h(Alert, { tone: 'error', title: first.message },
+        countText(n, 'row', 'rows') + (n === 1 ? ' has' : ' have') + what, h(Mono, null, first.column), ', the first on ' + src.unit + ' ' + first.line + '. ',
+        n === 1 ? 'It cannot' : 'They cannot', ' be imported as ' + (n === 1 ? 'it is' : 'they are') + '.', other > 0 ? ' ' + countText(other, 'other row', 'other rows') + ' ' + (other === 1 ? 'has' : 'have') + ' problems too; Review & import lists them.' : null);
+    }
+    function mapRow(c, i) {
+      var m = mapping[c.name] || { from: '', by: 'auto' }, gen = isGenerated(c), konst = m.from === '=';
+      var opts = gen ? [{ value: '', label: 'Generated' }]
+        : [{ value: '', label: 'Ignore' }].concat(src.columns.map(function (n) { return { value: n, label: n }; })).concat([{ value: '=', label: 'Constant value…' }]);
+      var k = m.from && !konst ? src.columns.indexOf(m.from) : -1, sample = k >= 0 ? sampleCells(src, k, 1)[0] : undefined;
+      var badges;
+      if (gen) badges = [h(Badge, { key: 's', title: 'The database fills this column in.' }, 'Skipped (' + c.name + ' generated)')];
+      else if (!m.from) {
+        var required = !c.nullable && !c.default;
+        badges = [required ? h(Badge, { key: 'r', tone: 'removed', icon: 'alert', title: 'Nothing fills this column and it cannot be NULL.' }, 'Required')
+          : h(Badge, { key: 's', title: c.nullable ? 'Not in the file: NULL.' : 'Not in the file: the default ' + c.default + ' is used.' }, 'Skipped')];
+      } else {
+        badges = [m.by === 'auto' ? h(Badge, { key: 'a', tone: 'added', icon: 'check', title: m.why || 'Same name' }, 'Matched') : h(Badge, { key: 'm', tone: 'outline', icon: 'pencil', title: 'Chosen by you' }, 'Manual')];
+        if (converts[c.name]) badges.push(h(Badge, { key: 'c', tone: 'modified', title: (src.format === 'json' ? 'Value' : 'Text') + ' → ' + c.type }, 'Type conversion'));
+      }
+      return h('div', { key: c.name, className: cx('ss-imp-row', gen && 'is-gen'), role: 'row' },
+        h('div', { role: 'cell' }, h(Select, { size: 'sm', mono: true, label: 'File column for ' + c.name, value: gen ? '' : m.from, options: opts, disabled: gen, onChange: function (v) { edit(c.name, { from: v, value: v === '=' ? m.value || '' : undefined }); } })),
+        h('div', { className: 'ss-imp-sample', role: 'cell', title: sample != null ? String(sample) : undefined },
+          konst ? h(Input, { size: 'sm', mono: true, value: m.value || '', placeholder: 'Value for every row', 'aria-label': 'Constant value for ' + c.name, onChange: function (e) { edit(c.name, { from: '=', value: e.target.value }); } })
+            : sample != null ? String(sample) : h('span', { className: 'ss-imp-dim' }, '—')),
+        h('div', { className: 'ss-imp-arrow', 'aria-hidden': true }, h(Icon, { name: 'arrow-right', size: 14 })),
+        h('div', { className: 'ss-imp-col', role: 'cell' },
+          h('div', { className: 'ss-imp-col-name' }, c.pk && h(Icon, { name: 'key', size: 12, className: 'ss-grid-key is-pk', label: 'Primary key' }), c.fk && h(Icon, { name: 'link', size: 12, className: 'ss-grid-key is-fk', label: 'Foreign key' }), c.name),
+          h('div', { className: 'ss-imp-col-type', title: typeLine(c) }, typeLine(c))),
+        h('div', { className: 'ss-imp-status', role: 'cell' }, badges));
+    }
+    function renderMap() {
+      var used = {};
+      table.columns.forEach(function (c) { var m = mapping[c.name]; if (m && m.from && m.from !== '=') used[m.from] = true; });
+      var unused = src.columns.filter(function (n) { return !used[n]; });
+      var alert = mapAlert();
+      return h(Fragment, null,
+        h('div', { className: 'ss-imp-sect' },
+          h('span', { className: 'ss-caption' }, 'Columns'),
+          unused.length > 0 && h('span', { className: 'ss-imp-dim' }, 'Not imported: ', unused.map(function (n, i) { return h(Fragment, { key: n }, i > 0 && ', ', h('span', { className: 'ss-mono' }, n)); })),
+          h('span', { className: 'ss-spacer' }),
+          h(Button, { size: 'sm', variant: 'ghost', icon: 'restore', disabled: !Object.keys(edits).length, onClick: function () { setEdits({}); } }, 'Reset mapping')),
+        h('div', { className: 'ss-imp-map', role: 'table', 'aria-label': 'Column mapping' },
+          h('div', { className: 'ss-imp-row is-head', role: 'row' }, h('div', { role: 'columnheader' }, 'File column'), h('div', { role: 'columnheader' }, 'Sample'), h('div', { 'aria-hidden': true }), h('div', { role: 'columnheader' }, 'Destination column'), h('div', { role: 'columnheader' }, 'Mapping')),
+          table.columns.map(mapRow)),
+        alert,
+        h('div', { className: 'ss-imp-sect' }, h('span', { className: 'ss-caption' }, 'Preview'), h('span', { className: 'ss-imp-dim' }, 'First ' + countText(preview.rows.length, 'row', 'rows') + ' after conversion')),
+        h('div', { className: 'ss-imp-preview', style: { height: 34 + Math.max(preview.rows.length, 1) * 24 + (preview.columns.length ? 0 : 60) } },
+          preview.columns.length
+            ? h(DataGrid, { columns: preview.columns, rows: preview.rows, invalid: preview.invalid, density: 'compact', selectable: false, label: 'Import preview' })
+            : h('div', { className: 'ss-imp-none' }, 'No column of ' + table.name + ' gets a value yet.')));
+    }
+
+    // --- step 3: settings
+    function renderSettings() {
+      var keys = analysis.keys, key = analysis.key, over = analysis.filled.filter(function (n) { return n !== key; });
+      function radio(value, label, description, disabled) {
+        return h(Radio, { key: value, name: 'import-mode', label: label, description: description, checked: settings.mode === value, disabled: disabled, onChange: function () { setting({ mode: value }); } });
+      }
+      var s = counts, line = importSummary(s);
+      var note = !s.valid ? 'No row can be imported with these settings.'
+        : (settings.mode === 'upsert' && s.update ? countText(s.insert, 'row', 'rows') + ' will be added and ' + countText(s.update, 'existing row', 'existing rows') + ' updated.' : countText(s.valid, 'row', 'rows') + ' will be added.')
+        + (left ? ' ' + countText(left, 'row', 'rows') + (settings.skipInvalid ? ' will be left out and listed in the error report.' : ' ' + (left === 1 ? 'is' : 'are') + ' invalid: the import will not run until they are fixed or skipped.') : '');
+      return h(Fragment, null,
+        h('div', { className: 'ss-imp-cols' },
+          h('div', { className: 'ss-imp-block' },
+            h('div', { className: 'ss-caption' }, 'When a row already exists'),
+            radio('insert', 'Insert only', 'Every row is added as a new row. A row whose unique key exists is a warning and is left out.'),
+            radio('upsert', h(Fragment, null, 'Upsert on ', h('span', { className: 'ss-mono' }, key || 'a unique key')), keys.length ? 'Update the row that has the same key, and add the rows that have none.' : 'Needs a unique column that the file fills, such as email.', !keys.length),
+            settings.mode === 'upsert' && keys.length > 0 && h('div', { className: 'ss-imp-sub' },
+              h('div', { className: 'ss-imp-sub-row' }, h('span', { className: 'ss-imp-dim' }, 'Conflict key'), keys.length > 1 ? h(Select, { size: 'sm', mono: true, label: 'Conflict key', value: key, options: keys, onChange: function (v) { setting({ key: v }); }, style: { width: 168 } }) : h('span', { className: 'ss-mono' }, key)),
+              h('div', { className: 'ss-imp-sub-row' }, h('span', { className: 'ss-imp-dim' }, 'Overwrites'),
+                over.length ? h('span', { className: 'ss-imp-chips' }, over.map(function (n) { return h(Badge, { key: n, tone: 'modified' }, n); })) : h('span', { className: 'ss-imp-dim' }, 'Nothing: only the key is filled.'))),
+            radio('skip', 'Skip duplicates', 'Rows whose unique key exists are left out without a warning.')),
+          h('div', { className: 'ss-imp-block' },
+            h('div', { className: 'ss-caption' }, 'Options'),
+            h(Checkbox, { label: 'Treat empty cells as NULL', description: 'A required column that has a default takes the default instead.', checked: settings.emptyNull, onChange: function (v) { setting({ emptyNull: v }); } }),
+            h(Checkbox, { label: 'Skip invalid rows', description: 'Rows with errors or warnings are left out and listed in the error report.', checked: settings.skipInvalid, onChange: function (v) { setting({ skipInvalid: v }); } }),
+            h(Checkbox, { label: 'Check foreign keys', description: hasFks ? 'Each value must exist in the table it references.' : table.name + ' has no foreign keys.', checked: settings.checkFk, disabled: !hasFks, onChange: function (v) { setting({ checkFk: v }); } }),
+            h(Checkbox, { label: 'Stop on first error', description: settings.oneTx ? 'A transaction always stops at the first error.' : 'Stop at the first row the database refuses.', checked: settings.stopOnError || settings.oneTx, disabled: settings.oneTx, onChange: function (v) { setting({ stopOnError: v }); } }),
+            h(Checkbox, { label: 'Run in one transaction', description: 'If a row fails, nothing is written.', checked: settings.oneTx, onChange: function (v) { setting({ oneTx: v }); } }))),
+        h('div', { className: 'ss-imp-sum', role: 'status' }, h('div', { className: 'ss-caption' }, 'Summary'), h('div', { className: 'ss-imp-sum-line' }, line), h('div', { className: 'ss-imp-sum-note' }, note)));
+    }
+
+    // --- step 4: review
+    function fixText(key, items) {
+      var m = items[0].message;
+      if (key === 'required') return 'Fill in the empty cells, or give the column a constant value.';
+      if (key === 'duplicate') return settings.mode === 'insert' ? 'Choose Skip duplicates to leave these rows out, or Upsert on ' + (analysis.key || 'a unique key') + ' to update the rows that exist.'
+        : settings.mode === 'skip' ? 'These rows are left out because their key is already used.' : 'These rows update the row that has the same ' + analysis.key + '.';
+      if (key === 'type') return /longer/.test(m) ? 'Shorten the value in the file, or widen the column.' : /number|whole|decimal/.test(m) ? 'Use digits only, with a period for decimals.' : /true or false/.test(m) ? 'Use true or false.' : /JSON/.test(m) ? 'Fix the JSON in the file.' : 'Change the value so that it fits the column.';
+      if (key === 'fk') return 'Import the missing rows into the table they belong to first, or leave the cell empty.';
+      return 'Write dates as YYYY-MM-DD and timestamps as YYYY-MM-DD HH:mm:ss.';
+    }
+    function groupTone(g, set) { return g.key !== 'duplicate' ? g.tone : (set || settings).mode === 'insert' ? 'warn' : 'info'; }
+    function renderGroup(g, firstKey) {
+      var items = analysis.groups[g.key], n = items.length ? groupRows(items) : 0, tone = groupTone(g);
+      var open = items.length > 0 && (openGroups ? openGroups.indexOf(g.key) >= 0 : g.key === firstKey);
+      var icon = !items.length ? 'check-circle' : tone === 'error' ? 'alert' : tone === 'warn' ? 'warning' : 'info';
+      var clean = g.key === 'fk' ? (!hasFks ? table.name + ' has no foreign keys.' : settings.checkFk ? 'Every value exists in the table it references.' : 'Not checked.')
+        : g.key === 'required' ? 'Every required column has a value.' : g.key === 'duplicate' ? 'No key is used twice.' : g.key === 'type' ? 'Every value fits its column.' : 'Every date and time can be read.';
+      function toggle() {
+        var cur = openGroups || (firstKey ? [firstKey] : []);
+        setOpenGroups(cur.indexOf(g.key) >= 0 ? cur.filter(function (x) { return x !== g.key; }) : cur.concat([g.key]));
+      }
+      return h('div', { key: g.key, className: cx('ss-imp-group', 'is-' + (items.length ? tone : 'ok')) },
+        h('button', { type: 'button', className: 'ss-imp-group-head', disabled: !items.length, 'aria-expanded': items.length ? open : undefined, onClick: toggle },
+          h(Icon, { name: open ? 'chevron-down' : 'chevron-right', size: 14, className: 'ss-imp-chev' }),
+          h(Icon, { name: icon, size: 14, className: 'ss-imp-gicon' }),
+          h('span', { className: 'ss-imp-gtitle' }, g.title),
+          items.length ? h('span', { className: 'ss-imp-gcount' }, countText(n, 'row', 'rows')) : h('span', { className: 'ss-imp-gclean' }, clean)),
+        open && h('div', { className: 'ss-imp-gbody' },
+          h('div', { className: 'ss-imp-fix' }, fixText(g.key, items)),
+          h('div', { className: 'ss-imp-items' }, items.slice(0, 5).map(function (it, i) {
+            return h('div', { key: i, className: 'ss-imp-item' },
+              h('span', { className: 'ss-imp-dim' }, (src.unit === 'line' ? 'Line ' : 'Row ') + it.line), h('span', null, it.column),
+              h('span', { className: 'ss-imp-item-v', title: it.value == null ? undefined : String(it.value) }, it.value == null || it.value === '' ? h('span', { className: 'ss-null' }, 'NULL') : String(it.value)),
+              h('span', { className: 'ss-imp-item-msg' }, it.message));
+          })),
+          items.length > 5 && h('div', { className: 'ss-imp-dim' }, '+ ' + (items.length - 5).toLocaleString('en-US') + ' more in the error report.')));
+    }
+    function renderReview() {
+      var firstKey = (IMPORT_GROUPS.find(function (g) { return analysis.groups[g.key].length > 0; }) || {}).key;
+      var recap = [IMPORT_MODES[settings.mode] + (settings.mode === 'upsert' && analysis.key ? ' on ' + analysis.key : ''), settings.emptyNull && 'Empty cells are NULL', settings.skipInvalid ? 'Skip invalid rows' : 'Stop at invalid rows', settings.checkFk && hasFks && 'Check foreign keys', settings.oneTx ? 'One transaction' : settings.stopOnError ? 'Stop on first error' : 'No transaction'].filter(Boolean).join(' · ');
+      return h(Fragment, null,
+        h('div', { className: 'ss-imp-stats' },
+          h(ImportStat, { label: 'Rows', value: counts.total.toLocaleString('en-US') }),
+          h(ImportStat, { label: 'Will be imported', value: counts.valid.toLocaleString('en-US'), tone: 'ok', icon: 'check-circle' }),
+          h(ImportStat, { label: 'Warnings', value: counts.warnings.toLocaleString('en-US'), tone: counts.warnings ? 'warn' : null, icon: 'warning' }),
+          h(ImportStat, { label: 'Errors', value: counts.errors.toLocaleString('en-US'), tone: counts.errors ? 'error' : null, icon: 'alert' }),
+          counts.skip > 0 && h(ImportStat, { label: 'Skipped', value: counts.skip.toLocaleString('en-US'), icon: 'info' })),
+        h('div', { className: 'ss-imp-recap' }, h('span', { className: 'ss-imp-dim' }, recap), h('span', { className: 'ss-spacer' }), h(Button, { size: 'sm', variant: 'ghost', icon: 'settings', onClick: function () { setStep(2); } }, 'Edit settings')),
+        !settings.skipInvalid && left > 0 && h(Alert, { tone: 'error', title: countText(left, 'row is', 'rows are') + ' invalid.' }, 'The import does not run while a row has a problem. Turn on Skip invalid rows in Settings, or fix the file.'),
+        h('div', { className: 'ss-imp-groups' }, IMPORT_GROUPS.map(function (g) { return renderGroup(g, firstKey); })));
+    }
+    function renderRunning() {
+      var total = ran.counts.total, o = live;
+      return h(Fragment, null,
+        h('div', { className: 'ss-imp-result' },
+          h('div', { className: 'ss-imp-result-icon' }, h(Icon, { name: 'upload', size: 18 })),
+          h('div', null, h('div', { className: 'ss-imp-result-title' }, 'Importing…'), h('div', { className: 'ss-imp-result-sub' }, h('span', { className: 'ss-mono' }, shown.toLocaleString('en-US') + ' of ' + total.toLocaleString('en-US') + ' rows'), ' into ', h('span', { className: 'ss-mono' }, dest)))),
+        h(Progress, { value: shown, max: total, label: 'Import progress' }),
+        h('div', { className: 'ss-imp-stats' },
+          h(ImportStat, { label: 'Processed', value: o.processed.toLocaleString('en-US') }), h(ImportStat, { label: 'Inserted', value: o.inserted.toLocaleString('en-US'), tone: 'ok' }),
+          ranSet.mode === 'upsert' && h(ImportStat, { label: 'Updated', value: o.updated.toLocaleString('en-US') }),
+          h(ImportStat, { label: 'Skipped', value: o.skipped.toLocaleString('en-US') }), h(ImportStat, { label: 'Failed', value: o.failed.toLocaleString('en-US'), tone: o.failed ? 'error' : null })),
+        ranSet.oneTx && h(Alert, { tone: 'info', title: 'Running in one transaction' }, 'Nothing is written until every row has been processed. If one fails, none is.'));
+    }
+    function renderResult() {
+      var o = outcome, total = ran.counts.total, failed = o.failed > 0, cancelled = cancelledAt != null, tone = cancelled ? 'warn' : failed ? 'error' : 'ok';
+      var secs = elapsed.toFixed(1) + ' s', rolled = o.rolledBack || (ranSet.oneTx && (failed || cancelled)), tally = {};
+      ran.rows.slice(0, o.processed).forEach(function (r) { if (r.kind !== 'insert' && r.kind !== 'update') { var k = r.kind === 'invalid' ? r.problems[0].kind : 'duplicate'; tally[k] = (tally[k] || 0) + 1; } });
+      var title = cancelled ? 'Import cancelled' : failed ? 'Import failed' : 'Import completed';
+      var sub = failed || cancelled ? (rolled ? 'Nothing was written to ' : (o.inserted + o.updated).toLocaleString('en-US') + ' rows were written to ') : countText(o.inserted, 'row was', 'rows were') + ' added to ';
+      return h(Fragment, null,
+        h('div', { className: cx('ss-imp-result', 'is-' + tone) },
+          h('div', { className: 'ss-imp-result-icon' }, h(Icon, { name: tone === 'ok' ? 'check-circle' : tone === 'error' ? 'alert' : 'warning', size: 18 })),
+          h('div', null, h('div', { className: 'ss-imp-result-title' }, title),
+            h('div', { className: 'ss-imp-result-sub' }, sub, h('span', { className: 'ss-mono' }, dest), tone === 'ok' ? ' in ' + secs + (o.updated ? ' and ' + countText(o.updated, 'existing row was', 'existing rows were') + ' updated' : '') + '.' : '.'))),
+        h('div', { className: 'ss-imp-stats' },
+          h(ImportStat, { label: 'Processed', value: o.processed === total ? total.toLocaleString('en-US') : o.processed.toLocaleString('en-US') + ' of ' + total.toLocaleString('en-US') }),
+          h(ImportStat, { label: 'Inserted', value: o.inserted.toLocaleString('en-US'), tone: o.inserted ? 'ok' : null, icon: o.inserted ? 'check-circle' : null }),
+          ranSet.mode === 'upsert' && h(ImportStat, { label: 'Updated', value: o.updated.toLocaleString('en-US'), tone: o.updated ? 'ok' : null }),
+          h(ImportStat, { label: 'Skipped', value: o.skipped.toLocaleString('en-US'), icon: o.skipped ? 'info' : null }),
+          h(ImportStat, { label: 'Failed', value: o.failed.toLocaleString('en-US'), tone: o.failed ? 'error' : null, icon: o.failed ? 'alert' : null })),
+        failed && h(Alert, { tone: 'error', title: rolled ? 'Nothing was written.' : 'Line ' + o.error.line + ' was refused.' },
+          (ranSet.oneTx ? 'The import ran in one transaction and line ' : 'Line ') + o.error.line + ' failed: ' + o.error.message + '. ',
+          ranSet.oneTx ? 'Fix that row and import again, or turn off Run in one transaction to keep the rows that went through.' : (o.stopped ? 'The import stopped there.' : 'The other rows were written.')),
+        cancelled && h(Alert, { tone: 'warn', title: rolled ? 'Nothing was written.' : (o.inserted + o.updated).toLocaleString('en-US') + ' rows were already added.' }, rolled ? 'The import ran in one transaction, so cancelling it undid every row.' : 'They stay in the working copy; ⌘Z removes them.'),
+        !failed && !cancelled && o.skipped > 0 && h(Fragment, null,
+          h('div', { className: 'ss-imp-sect' }, h('span', { className: 'ss-caption' }, 'Skipped rows'), h('span', { className: 'ss-imp-dim' }, 'The error report lists each one with its line and the reason.')),
+          h('div', { className: 'ss-imp-items' }, IMPORT_GROUPS.filter(function (g) { return tally[g.key]; }).map(function (g) {
+            var tone = groupTone(g, ranSet);
+            return h('div', { key: g.key, className: cx('ss-imp-reason', 'is-' + tone) }, h(Icon, { name: tone === 'error' ? 'alert' : tone === 'warn' ? 'warning' : 'info', size: 14 }), h('span', null, g.title), h('span', { className: 'ss-imp-gcount' }, countText(tally[g.key], 'row', 'rows')));
+          }))),
+        o.inserted + o.updated > 0 && h('div', { className: 'ss-imp-recap' }, h(Icon, { name: 'info', size: 14, style: { color: 'var(--ink-3)' } }), h('span', { className: 'ss-imp-dim' }, 'Not saved yet. Press ⌘Z to remove ' + countText(o.inserted + o.updated, 'row', 'rows') + ' again.')));
+    }
+
+    // --- the dialog
+    var body, footerStart, footer;
+    var cancel = h(Button, { key: 'c', onClick: p.onClose }, 'Cancel');
+    var back = h(Button, { key: 'b', icon: 'chevron-left', onClick: function () { setStep(step - 1); } }, 'Back');
+    if (step === 3 && phase === 'importing') {
+      body = renderRunning();
+      footerStart = !ranSet.oneTx && h('span', { className: 'ss-modal-foot-hint' }, 'Rows are written as they are processed.');
+      footer = h(Button, { onClick: cancelImport }, 'Cancel import');
+    } else if (step === 3 && phase === 'done') {
+      body = renderResult();
+      var any = outcome.skipped + outcome.failed > 0;
+      footerStart = h(Fragment, null, any && h(Button, { icon: 'download', onClick: download }, 'Download error report'), h(Button, { variant: 'ghost', onClick: again }, 'Import another file'));
+      footer = h(Fragment, null, h(Button, { onClick: p.onClose, kbd: 'Esc' }, 'Close'), h(Button, { variant: 'primary', icon: 'eye', kbd: ['⌘', '⏎'], disabled: outcome.inserted + outcome.updated === 0, onClick: viewRows }, 'View imported rows'));
+    } else {
+      if (step === 0) {
+        body = renderSource();
+        footerStart = ok ? h(ParseStatus, { state: 'ok', summary: countText(src.rows.length, 'row', 'rows') + ' · ' + countText(src.columns.length, 'column', 'columns') })
+          : src && src.error ? h(ParseStatus, { state: 'error', message: src.error })
+            : readError ? h(ParseStatus, { state: 'error', message: readError })
+              : reading ? h(ParseStatus, { state: 'parsing' }) : h(ParseStatus, { state: 'idle', message: 'Choose a file or paste text — it is read locally before anything is imported.' });
+      } else if (step === 1) {
+        body = renderMap();
+        var probs = analysis.missing.length || counts.errors;
+        var fillable = table.columns.filter(function (c) { return !isGenerated(c); }).length;
+        footerStart = h('span', { className: 'ss-modal-foot-hint' }, analysis.filled.length + ' of ' + fillable + ' columns filled', probs > 0 && h('span', { style: { color: 'var(--removed)' } }, ' · ' + (analysis.missing.length ? 'a required column is empty' : countText(counts.errors, 'row has a problem', 'rows have problems'))));
+      } else if (step === 2) {
+        body = renderSettings();
+        footerStart = h('span', { className: 'ss-modal-foot-hint' }, h(Kbd, { keys: ['⌘', '⏎'] }), 'to review');
+      } else {
+        body = renderReview();
+        footerStart = h('span', { className: 'ss-modal-foot-hint' }, canImport ? countText(counts.valid, 'row', 'rows') + ' will be added to ' + table.name : !settings.skipInvalid && left > 0 ? 'Fix or skip the invalid rows to import.' : 'Nothing to import');
+      }
+      footer = h(Fragment, null, cancel, step > 0 && back,
+        step < 3 ? h(Button, { variant: 'primary', kbd: ['⌘', '⏎'], disabled: !canNext, onClick: primary }, 'Next')
+          : h(Button, { variant: 'primary', icon: 'upload', kbd: ['⌘', '⏎'], disabled: !canImport, onClick: start }, 'Import ' + countText(counts.valid, 'row', 'rows')));
+    }
+    return h(Modal, {
+      title: 'Import Records', subtitle: h(Fragment, null, 'Add rows to ', h('span', { className: 'ss-mono' }, dest), ' from a CSV or JSON file. Nothing is written until you confirm.'), width: 960,
+      onClose: busy ? undefined : p.onClose, bodyStyle: { padding: 0, gap: 0, overflow: 'hidden', height: p.height || 708 }, footerStart: footerStart, footer: footer
+    },
+      h(Stepper, { steps: IMPORT_STEPS, current: step, label: 'Import steps', onStep: busy || (step === 3 && phase === 'done') ? undefined : function (i) { setStep(i); } }),
+      h('div', { className: 'ss-imp-content' }, body));
   }
 
   function VersionList(p) {
@@ -1308,14 +3048,14 @@
       h('path', { className: 'plus', d: 'M286.5 141.5v12M280.5 147.5h12' }));
   }
   function EmptyState(p) {
-    return h('div', { className: 'ss-empty' },
-      h(EmptyArt),
+    return h('div', { className: cx('ss-empty', p.compact && 'ss-empty--compact') },
+      !p.compact && h(EmptyArt),
       h('div', { className: 'ss-empty-title' }, p.title || 'Your database schemas will appear here.'),
-      h('div', { className: 'ss-empty-sub' }, p.description || 'Import DDL from an existing database, or start a blank schema and draw tables on the canvas.'),
-      h('div', { className: 'ss-empty-actions' },
+      (p.description || !p.compact) && h('div', { className: 'ss-empty-sub' }, p.description || 'Import DDL from an existing database, or start a blank schema and draw tables on the canvas.'),
+      (p.actions !== undefined ? p.actions : !p.compact) && h('div', { className: 'ss-empty-actions' }, p.actions !== undefined ? p.actions : h(Fragment, null,
         h(Button, { variant: 'primary', icon: 'upload', onClick: p.onImport, kbd: ['⌘', 'I'] }, 'Import Schema'),
-        h(Button, { icon: 'plus', onClick: p.onCreate, kbd: ['⌘', 'N'] }, 'Create New Schema')),
-      p.hints !== false && h('div', { className: 'ss-empty-keys' },
+        h(Button, { icon: 'plus', onClick: p.onCreate, kbd: ['⌘', 'N'] }, 'Create New Schema'))),
+      p.hints !== false && !p.compact && h('div', { className: 'ss-empty-keys' },
         h('span', null, h(Icon, { name: 'file-code', size: 14 }), 'Accepts pg_dump, mysqldump and plain DDL'),
         h('span', null, h(Kbd, { keys: ['⌘', '/'] }), 'All shortcuts')));
   }
@@ -1431,9 +3171,10 @@
     TableNode: TableNode, ERCanvas: ERCanvas, Inspector: Inspector, TypeSelect: TypeSelect, ContextMenu: ContextMenu,
     Modal: Modal, ConfirmDialog: ConfirmDialog, DropZone: DropZone, SqlEditor: SqlEditor, ParseStatus: ParseStatus,
     ImportSchemaDialog: ImportSchemaDialog, ExportDialog: ExportDialog,
-    Toast: Toast, Alert: Alert, DataTable: DataTable, TableList: TableList, DataGrid: DataGrid, VersionList: VersionList, DiffList: DiffList, DiffRow: DiffRow, DdlDiff: DdlDiff,
+    Toast: Toast, Alert: Alert, DataTable: DataTable, TableList: TableList, DataGrid: DataGrid, TableHeader: TableHeader, TableStructure: TableStructure, TableRelationships: TableRelationships, DataToolbar: DataToolbar, FilterChips: FilterChips, SelectionBar: SelectionBar, Pagination: Pagination, RecordEditor: RecordEditor, ResizeHandle: ResizeHandle, Stepper: Stepper, Progress: Progress, ImportRecordsDialog: ImportRecordsDialog, VersionList: VersionList, DiffList: DiffList, DiffRow: DiffRow, DdlDiff: DdlDiff,
     EmptyState: EmptyState, Workspace: Workspace,
-    highlightSql: highlightSql, validateColumns: validateColumns,
-    sample: { tables: SAMPLE_TABLES, positions: SAMPLE_POSITIONS, schemas: SAMPLE_SCHEMAS, versions: SAMPLE_VERSIONS, diff: SAMPLE_DIFF, sql: SAMPLE_SQL, pasteSql: PASTE_SQL, badSql: BAD_SQL, types: TYPE_OPTIONS, records: SAMPLE_RECORDS }
+    highlightSql: highlightSql, highlightJson: highlightJson, validateColumns: validateColumns, relationsOf: relationsOf, parseJson: parseJson, validateRecord: validateRecord, recordLabel: recordLabel, completeRecord: completeRecord,
+    parseCsv: parseCsv, readRecordsFile: readRecordsFile, matchColumns: matchColumns, analyzeImport: analyzeImport, runImport: runImport, importReport: importReport, importSummary: importSummary,
+    sample: { tables: SAMPLE_TABLES, positions: SAMPLE_POSITIONS, schemas: SAMPLE_SCHEMAS, versions: SAMPLE_VERSIONS, diff: SAMPLE_DIFF, sql: SAMPLE_SQL, pasteSql: PASTE_SQL, badSql: BAD_SQL, types: TYPE_OPTIONS, records: SAMPLE_RECORDS, csv: SAMPLE_CSV }
   };
 })();

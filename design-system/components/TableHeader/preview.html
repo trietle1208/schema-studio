@@ -1,0 +1,21 @@
+<!-- @dsCard group="Records" height=340 width=1000 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>TableHeader — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%} .cap{padding:10px 16px 6px}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+var T = S.sample.tables;
+function Block(p){ return h('div',{style:{background:'var(--bg-1)',borderTop:'1px solid var(--line-1)'}}, h('div',{className:'cap ss-caption',style:{background:'var(--bg-2)'}},p.title), p.children); }
+function App(){
+  var _t = useState('data'), tab = _t[0], setTab = _t[1];
+  return h('div',null,
+    h(Block,{title:'users · tabs switch, the menu opens'}, h(S.TableHeader,{schema:'ecommerce',table:T[0],engine:'PostgreSQL',rows:1248,relationships:1,tab:tab,onTab:setTab})),
+    h(Block,{title:'orders · loading, row count not known yet'}, h(S.TableHeader,{schema:'ecommerce',table:T[1],engine:'PostgreSQL',relationships:3,loading:true})));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

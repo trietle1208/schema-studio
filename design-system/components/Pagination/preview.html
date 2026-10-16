@@ -1,0 +1,23 @@
+<!-- @dsCard group="Records" height=360 width=1000 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Pagination — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%} .cap{padding:10px 12px 6px}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function Block(p){ return h('div',{style:{background:'var(--bg-1)',borderTop:'1px solid var(--line-1)'}}, h('div',{className:'cap ss-caption',style:{background:'var(--bg-2)'}},p.title), p.children); }
+function App(){
+  var _p = useState(1), page = _p[0], setPage = _p[1];
+  return h('div',null,
+    h(Block,{title:'1,248 rows, 50 a page · prev, next, type a page number and press ⏎'}, h(S.Pagination,{page:page,pageSize:50,total:1248,onPage:setPage})),
+    h(Block,{title:'Last page'}, h(S.Pagination,{page:25,pageSize:50,total:1248})),
+    h(Block,{title:'One page, 20 rows'}, h(S.Pagination,{page:1,pageSize:50,total:20})),
+    h(Block,{title:'No rows'}, h(S.Pagination,{page:1,pageSize:50,total:0})),
+    h(Block,{title:'Loading'}, h(S.Pagination,{page:1,pageSize:50,total:0,loading:true})));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

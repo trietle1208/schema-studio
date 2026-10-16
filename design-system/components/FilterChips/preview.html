@@ -1,0 +1,21 @@
+<!-- @dsCard group="Records" height=300 width=1000 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>FilterChips — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%} .cap{padding:10px 12px 6px}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+function Block(p){ return h('div',{style:{background:'var(--bg-1)',borderTop:'1px solid var(--line-1)'}}, h('div',{className:'cap ss-caption',style:{background:'var(--bg-2)'}},p.title), p.children); }
+function App(){
+  var _f = useState([{column:'created_at',op:'>',value:'2026-01-01'},{column:'avatar_url',op:'IS NULL'}]), filters = _f[0], setFilters = _f[1];
+  var kinds = [{column:'status',op:'=',value:'paid'},{column:'total',op:'>=',value:100},{column:'email',op:'LIKE',value:'%@example.com'},{column:'name',op:'IS NOT NULL'},{column:'quantity',op:'!=',value:0},{column:'note',op:'=',value:"it's a very long value that is cut with an ellipsis once it no longer fits on the chip at all"}];
+  return h('div',null,
+    h(Block,{title:'Two filters · remove one, Clear all'}, h(S.FilterChips,{filters:filters,onRemove:function(i){ setFilters(filters.filter(function(_,k){ return k!==i; })); },onClear:function(){ setFilters([]); }}), filters.length===0&&h('div',{className:'ss-faint',style:{padding:'8px 12px',fontSize:12}},'No filters: the row is not drawn.')),
+    h(Block,{title:'Operators and values · text, number, LIKE, NULL tests, a long value'}, h(S.FilterChips,{filters:kinds})));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

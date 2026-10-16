@@ -13,8 +13,8 @@ function App(){
   var _s = useState([1,2]), sel = _s[0], setSel = _s[1];
   var _a = useState({row:3,column:'email'}), act = _a[0], setAct = _a[1];
   return h('div',{style:{display:'flex',flexDirection:'column'}},
-    h(Block,{title:'users · selected rows, active cell, modified cell',height:340},
-      h(S.DataGrid,{columns:users.columns,rows:S.sample.records.users,selected:sel,onSelect:setSel,activeCell:act,onActiveCell:setAct,modified:[{row:3,column:'name'}]})),
+    h(Block,{title:'users · selected rows, active cell, modified cell, sorted column · right-click a row for its menu',height:340},
+      h(S.DataGrid,{columns:users.columns,rows:S.sample.records.users,selected:sel,onSelect:setSel,activeCell:act,onActiveCell:setAct,modified:[{row:3,column:'name'}],sort:{column:'id',dir:'asc'},label:'users',onRowAction:function(){}})),
     h(Block,{title:'orders · compact, loading',height:196}, h(S.DataGrid,{columns:orders.columns,rows:[],loading:true,density:'compact'})),
     h(Block,{title:'payments · empty',height:196}, h(S.DataGrid,{columns:payments.columns,rows:[],empty:true})));
 }

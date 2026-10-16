@@ -1,0 +1,72 @@
+<!-- @dsCard group="Records" height=3900 width=1104 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>RecordEditor — preview</title>
+<style>html,body{margin:0;background:var(--bg-1)} #root{min-height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, Fragment = React.Fragment;
+var T = S.sample.tables, users = T[0], orders = T[1];
+function stamp(ms) { return new Date(ms).toISOString().slice(0, 19).replace('T', ' '); }
+
+// The rows of the sample, plus user 101 with 12 orders and one row of a table with a boolean and a JSON column.
+var settings = { name: 'user_settings', schema: 'public', columns: [
+  { name: 'id', type: 'BIGSERIAL', nullable: false, pk: true },
+  { name: 'user_id', type: 'BIGINT', nullable: false, unique: true, fk: { table: 'users', column: 'id', onDelete: 'CASCADE' } },
+  { name: 'locale', type: 'VARCHAR(8)', nullable: false, default: "'en'" },
+  { name: 'marketing_opt_in', type: 'BOOLEAN', nullable: false, default: 'false' },
+  { name: 'preferences', type: 'JSONB', nullable: true },
+  { name: 'notes', type: 'TEXT', nullable: true }
+] };
+var tables = T.concat([settings]);
+var an = { id: 101, email: 'an@example.com', name: 'An Nguyen', avatar_url: null, created_at: '2026-06-18 07:42:19' };
+var data = (function () {
+  var d = Object.assign({}, S.sample.records);
+  d.users = d.users.concat([an]);
+  var status = ['delivered', 'paid', 'shipped', 'pending', 'delivered', 'cancelled'], total = [129.9, 24.99, 349.5, 59, 89, 39.9, 219, 74.5, 12.5, 119, 168.4, 45];
+  d.orders = d.orders.concat(total.map(function (t, i) {
+    return { id: 21 + i, user_id: 101, status: status[i % status.length], total: t, created_at: stamp(Date.UTC(2026, 5, 19, 9, 5, 0) + i * (3 * 86400000 + 4 * 3600000 + 11 * 60000 + 7000)) };
+  }));
+  d.user_settings = [{ id: 1, user_id: 101, locale: 'vi', marketing_opt_in: true, preferences: '{"theme":"dark","density":"compact","shortcuts":true}', notes: null }];
+  return d;
+})();
+var order = data.orders[20];      // orders · id = 21, of user 101
+
+function Cell(p) {
+  return h('div', { style: { width: 522, display: 'flex', flexDirection: 'column', gap: 8, flex: 'none' } },
+    h('div', { className: 'ss-row' }, h('span', { className: 'ss-caption' }, p.title), p.note && h('span', { className: 'ss-faint', style: { fontSize: 11 } }, p.note)),
+    h('div', { style: { position: 'relative', display: 'flex', height: p.height || 640, border: '1px solid var(--line-1)', borderRadius: 6, overflow: 'hidden', background: 'var(--bg-1)' } }, h('div', { style: { flex: 1 } }), p.children));
+}
+function Editor(p) {
+  return h(S.RecordEditor, Object.assign({ tables: tables, data: data }, p));
+}
+
+var longName = 'An Nguyen '.repeat(30);
+var badJson = '{\n  "id": 101\n  "email": "an@example.com",\n  "name": "An Nguyen",\n  "avatar_url": null,\n  "created_at": "2026-06-18 07:42:19"\n}';
+
+function App() {
+  return h('div', { style: { padding: 20, display: 'grid', gridTemplateColumns: '522px 522px', gap: 20, rowGap: 24 } },
+    h(Cell, { title: 'Edit record', note: 'orders · id = 21' },
+      h(Editor, { table: orders, record: order })),
+    h(Cell, { title: 'Foreign key picker', note: 'search by key or by name' },
+      h(Editor, { table: orders, record: order, picking: 'user_id', pickQuery: 'ma' })),
+    h(Cell, { title: 'New record', note: 'after Create record', height: 720 },
+      h(Editor, { table: users, record: null, attempted: true })),
+    h(Cell, { title: 'Problems: key, number, timestamp', note: 'three problems', height: 720 },
+      h(Editor, { table: orders, record: data.orders[21], draft: { user_id: 999, total: '12.345', created_at: '2026-02-31 10:00:00' } })),
+    h(Cell, { title: 'Problems: text', note: 'email · length', height: 820 },
+      h(Editor, { table: users, record: an, draft: { email: 'an.nguyen@example', name: longName } })),
+    h(Cell, { title: 'Boolean, JSON, long text', note: 'Invalid JSON near line 3.', height: 820 },
+      h(Editor, { table: settings, record: data.user_settings[0], draft: { locale: 'vietnamese-vn', marketing_opt_in: false, preferences: '{\n  "theme": "dark"\n  "density": "compact"\n}', notes: 'Prefers invoices in Vietnamese.' } })),
+    h(Cell, { title: 'Related records', note: 'users · id = 101' },
+      h(Editor, { table: users, record: an, tab: 'related', related: 'in:orders.user_id' })),
+    h(Cell, { title: 'JSON with a syntax error', note: 'Go to line' },
+      h(Editor, { table: users, record: an, tab: 'json', jsonText: badJson })),
+    h(Cell, { title: 'Discard changes', note: 'closing with unsaved changes', height: 720 },
+      h(Editor, { table: users, record: an, draft: { name: 'An Nguyen Thanh', avatar_url: 'https://cdn.example.com/avatars/101.png' }, confirmDiscard: true })));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>
