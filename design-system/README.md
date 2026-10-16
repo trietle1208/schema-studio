@@ -5,8 +5,9 @@ Schema Studio is a desktop-first database schema designer for software engineers
 - **Speak like a database tool.** Use the real terms: table, column, foreign key, index, `NOT NULL`, `ON DELETE CASCADE`, migration, dialect. Never "field", "link" or "entity".
 - **Identifiers are literal.** Table, column, index and constraint names appear exactly as they will in SQL, in the mono face, never title-cased: `order_items`, `users_email_unique`, `orders.user_id → users.id`.
 - **Engines keep their real casing:** PostgreSQL, MySQL, ClickHouse, SQLite.
-- **Sentence case** for labels and menus ("Add foreign key", "Include comments"). Title Case is reserved for the product's named actions: Import Schema, Export Schema, Generate Migration, New Schema, Create New Schema.
-- **Counts in mono, joined by a middle dot:** "24 tables · 31 relationships · 18 indexes".
+- **Sentence case** for labels and menus ("Add foreign key", "Include comments"). Title Case is reserved for the product's named actions: Import Schema, Export Schema, Generate Migration, New Schema, Create New Schema, Import Records.
+- **Counts in mono, joined by a middle dot:** "24 tables · 31 relationships · 18 indexes", "1,248 rows · 5 columns" (thousands separated, "1 row", "1 column").
+- **Records are rows.** Counts say rows; actions name the record: Add record, Edit record, Delete (sentence case), and the named action Import Records. A table has columns, never fields.
 - **Errors say what happened and where, then end with a period:** "Column name cannot be empty.", "Unable to parse SQL near line 42.". Offer the fix next to the message ("Go to line").
 - **Confirmations name the object as a question:** Delete table "orders"? Then state the consequence: "2 foreign keys will be dropped."
 - **No emoji, no exclamation marks, no marketing voice.** Second person only in empty states and hints ("Import DDL from an existing database…").
@@ -36,7 +37,7 @@ Schema Studio is a desktop-first database schema designer for software engineers
 ### Space, shape, depth
 
 - 4px base. Dense rows: 24px canvas rows (`h-row`), 28–30px control rows (`h-control`), 44px toolbar (`h-toolbar`).
-- The shell: `w-sidebar` 248px, `w-inspector` 352px, `w-node` 228px. Optimised for 1440px+; the canvas absorbs the remaining width. These are the widths things start with: the sidebar and the inspector are dragged wider or narrower by the line between them and the canvas, and a table by either of its sides. A handle is the hairline itself, which turns `accent` (2px) when it is pointed at and while it is dragged; a double click gives a panel its width back and fits a table to its text.
+- The shell: `w-sidebar` 248px, `w-inspector` 352px, `w-node` 228px. Optimised for 1440px+; the canvas absorbs the remaining width. These are the widths things start with: the sidebar and the inspector are dragged wider or narrower by the line between them and the canvas, and a table by either of its sides. The record editor is 520px and is dragged between 480 and 720 by its left edge, the same way. A handle is the hairline itself, which turns `accent` (2px) when it is pointed at and while it is dragged; a double click gives a panel its width back and fits a table to its text.
 - Radii stay small: `radius-sm` 4px (badges, toggles), `radius-md` 6px (buttons, inputs, menus), `radius-lg` 8px (nodes, modals). Nothing rounder.
 - Shadows only for things that float: `shadow-node` for table nodes, `shadow-pop` for menus, popovers, toasts and a dragged node, `shadow-modal` for dialogs.
 
@@ -51,7 +52,7 @@ Schema Studio is a desktop-first database schema designer for software engineers
 
 - Hover: `bg-4` fill or `line-3` border. Selected: `bg-5` or `accent-subtle` fill, `accent` outline on nodes.
 - Unsaved: a `modified` dot on the node and "Unsaved changes" plus a Save ⌘S button in the toolbar. Saved: an `added` tick and "Saved", plus a toast naming the new version.
-- Invalid: `removed` border on the input, `removed-subtle` row, a message under the row, and the problem count in the status bar.
+- Invalid: `removed` border on the input, `removed-subtle` row, a message under the row, and the problem count in the status bar. A cell of a grid that will not be accepted (the preview of Import Records) gets the same fill, a `removed` outline and an alert glyph, with the reason as its title.
 - Destructive actions confirm in a `ConfirmDialog` with a `danger` button; reversible ones offer Undo in a toast.
 
 ### Motion
@@ -65,10 +66,23 @@ Schema Studio is a desktop-first database schema designer for software engineers
 - No emoji, no filled or duotone icons, no second icon family.
 - The logo mark (`assets/Logos/schema-studio-mark.svg`, also `Logo`) is two tables and the relation between them, in `accent`.
 
+## Records
+
+Data mode and Query mode show rows. The rows are sample data (a `Sample data` badge in the status bar and the console says so); the bridge reads the catalog, never the data.
+
+- **The grid is dense: 28px rows** (24px compact), a sticky header with the key glyph, name and type, a row-number gutter and a sticky first column; it scrolls both ways. Numbers are mono and right-aligned, timestamps are `YYYY-MM-DD HH:mm:ss`, text is cut with an ellipsis and carries its value as a title.
+- **`NULL` is a token, never an empty cell:** mono in `ink-3` (`.ss-null`). A form says it with a NULL toggle, an import with "Treat empty cells as NULL", a filter with `IS NULL`.
+- **Selection:** a selected row is filled `accent-subtle`, the active cell has a 2px `accent` outline, a changed cell is `modified-subtle`, a cell that will not be accepted is `removed-subtle` with a `removed` outline and an alert glyph. Hover is `bg-4`. A grid that only shows a result (Query, Related records) has no checkboxes.
+- **Deleting rows always confirms**, in a `ConfirmDialog` with a `danger` button that names the rows and the table (`Delete 3 rows from "users"?`) and states what cascades or fails; afterwards a toast offers Undo. Discarding an edited record confirms too.
+- **Import is safe by default:** Insert only, a row that already exists is a warning and is left out, rows with problems are skipped, foreign keys are checked, all in one transaction ("If a row fails, nothing is written."). Nothing is written before the last button, which names the count (`Import 985 rows`); the error report downloads as CSV; the result offers Undo.
+- **Query is read-only:** only a `SELECT` runs. A query that fails never shows a grid: Messages says what the database said and where (`column "countr" does not exist.`, `Line 7`, Go to line) and the line is marked in the editor. Results are cut at 1,000 rows and say so; a query that matches nothing is a result, not an error.
+- **Panels are dragged by their hairline:** the record editor by its left edge (480–720px), the query output by its top edge (120–640px); both turn `accent` when pointed at and go back to their size on a double click.
+- **Keys:** ⏎ opens a row, Space selects it, F2 edits, ⌘D duplicates, ⇧⌘C copies as JSON, ⌫ deletes, Esc clears the selection or closes; in the record editor ⌘S saves; ⌘⏎ adds a record, goes to the next step of Import Records and **runs the query** in Query mode.
+
 ## Keyboard
 
-Every frequent action has a shortcut, and buttons display it with `Kbd`: ⌘K search, ⌘S save, ⌘Z / ⇧⌘Z undo and redo, ⌘I import, ⌘N new schema, ⌘D duplicate, F2 rename, ⌘⏎ add column / confirm, ⌫ delete, Esc close, ⌘/ all shortcuts.
+Every frequent action has a shortcut, and buttons display it with `Kbd`: ⌘K search, ⌘S save (in the record editor: Save changes), ⌘Z / ⇧⌘Z undo and redo, ⌘I import, ⌘N new schema, ⌘D duplicate, F2 rename (a record: edit), ⌘⏎ add column / add record / run the query / confirm (the primary button of a dialog, as Next in Import Records), ⇧⌘C copy (CREATE TABLE; a record: as JSON), ⌫ delete, Esc close, ⌘/ all shortcuts.
 
 ## Using the components
 
-Components live in `components/bundle.js` as `window.SchemaStudio` and expect React 18 on the page; their styles are in `components/bundle.css` and every class is prefixed `ss-`. Wrap a page in an element with `class="ss-root"` (or use `AppShell`). `Workspace` is the fully wired main screen; the `Screen…` previews compose the eight product screens (schema list, workspace, inspector editing, import, version history, diff, export, empty state) and a sheet of interaction states.
+Components live in `components/bundle.js` as `window.SchemaStudio` and expect React 18 on the page; their styles are in `components/bundle.css` and every class is prefixed `ss-`. Wrap a page in an element with `class="ss-root"` (or use `AppShell`). `Workspace` is the fully wired main screen; the `Screen…` previews compose the product screens (schema list, workspace, inspector editing, import, version history, diff, export, empty state, data mode, the record editor as a form and as JSON, Import Records at its source, mapping and result, Query mode as a builder and as SQL with an error) and two sheets of interaction states (diagram, records). `QueryConsole` and `FilterBuilder` have a sheet of their own for the states of the builder and of the output. `ImportRecordsDialog` has a sheet of its own for the states between the steps; its steps use `Stepper` and `Progress`.

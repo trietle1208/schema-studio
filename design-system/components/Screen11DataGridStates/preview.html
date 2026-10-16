@@ -1,0 +1,59 @@
+<!-- @dsCard group="Screens" height=900 width=1440 page subtitle="11 · Records: interaction states" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Screen11DataGridStates — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, Fragment = React.Fragment;
+var T = S.sample.tables, R = S.sample.records;
+var users = T[0], orders = T[1];
+function Cell(p){ return h('div',{style:Object.assign({background:'var(--bg-2)',border:'1px solid var(--line-1)',borderRadius:8,padding:14,display:'flex',flexDirection:'column',gap:10,minWidth:0,position:'relative',overflow:'hidden',flex:'none'},p.style)},
+  h('div',{className:'ss-row'}, h('span',{className:'ss-caption'},p.title), p.note&&h('span',{className:'ss-faint',style:{fontSize:11}},p.note)), p.children); }
+// A slice of the data pane: what the cell is about, between hairlines, on the canvas colour.
+function Pane(p){ return h('div',{className:'ss-data',style:Object.assign({flex:'none',height:p.height==='auto'?undefined:p.height,border:'1px solid var(--line-1)',borderRadius:6,overflow:'hidden',position:'relative'},p.style)}, p.children); }
+
+var f1 = { column: 'created_at', op: '>', value: '2026-01-01' }, f2 = { column: 'avatar_url', op: 'IS NULL' };
+var noAvatar = R.users.filter(function(u){ return u.avatar_url == null; });
+var ordersNone = [{ column: 'status', op: '=', value: 'refunded' }, { column: 'total', op: '>', value: 500 }];
+var noop = function(){};
+
+function App(){
+  var sortDesc = { column: 'created_at', dir: 'desc' };
+  var paymentsCols = S.sample.tables[4].columns;
+  return h('div',{className:'ss-screen ss-root',style:{background:'var(--bg-1)',padding:20,display:'flex',flexDirection:'column',gap:14}},
+    h(Cell,{title:'Active filters',note:'badge on Filter · sort in the button and the header · chips · Clear all'},
+      h(Pane,{height:224},
+        h(S.DataToolbar,{columns:users.columns,filters:[f1,f2],sort:sortDesc}),
+        h(S.FilterChips,{filters:[f1,f2],onRemove:noop,onClear:noop}),
+        h(S.DataGrid,{columns:users.columns,rows:noAvatar,sort:sortDesc,label:'users'}))),
+    h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14,flex:'none'}},
+      h(Cell,{title:'No results',note:'Clear filters'},
+        h(Pane,{height:202},
+          h(S.FilterChips,{filters:ordersNone,onRemove:noop,onClear:noop}),
+          h(S.DataGrid,{columns:orders.columns,rows:[],label:'orders',empty:h(S.EmptyState,{compact:true,title:'No rows match 2 filters.',actions:h(S.Button,{onClick:noop},'Clear filters')})}))),
+      h(Cell,{title:'Empty table',note:'Add record · Import Records'},
+        h(Pane,{height:202},
+          h(S.DataGrid,{columns:paymentsCols,rows:[],label:'payments',empty:h(S.EmptyState,{compact:true,title:'This table has no rows.',actions:h(Fragment,null,h(S.Button,{variant:'primary',icon:'plus',kbd:['⌘','⏎']},'Add record'),h(S.Button,{icon:'upload'},'Import Records'))})}))),
+      h(Cell,{title:'Loading',note:'skeleton rows · no animation'},
+        h(Pane,{height:202},
+          h(S.DataGrid,{columns:orders.columns,rows:[],loading:true,label:'orders'}),
+          h(S.Pagination,{page:1,pageSize:50,total:0,loading:true})))),
+    h('div',{style:{display:'grid',gridTemplateColumns:'1fr 262px 420px',gap:14,flex:'none'}},
+      h(Cell,{title:'3 rows selected',note:'selection bar · active cell'},
+        h(Pane,{height:226},
+          h(S.SelectionBar,{count:3,onCopy:noop,onExport:noop,onDelete:noop,onClear:noop}),
+          h(S.DataGrid,{columns:users.columns,rows:R.users.slice(0,8),selected:[1,2,4],activeCell:{row:3,column:'email'},label:'users'}))),
+      h(Cell,{title:'Row menu',note:'right-click a row'},
+        h(S.ContextMenu,{label:'users · row 4',items:[{icon:'eye',label:'View',shortcut:'⏎'},{icon:'pencil',label:'Edit record',shortcut:'F2'},{icon:'copy',label:'Duplicate',shortcut:'⌘D',active:true},{icon:'code',label:'Copy as JSON',shortcut:'⇧⌘C'},'-',{icon:'trash',label:'Delete',shortcut:'⌫',danger:true}]})),
+      h(Cell,{title:'Delete rows',note:'confirm with the consequence'},
+        h('div',{style:{position:'relative',height:226,margin:'0 -14px -14px',borderTop:'1px solid var(--line-1)'}},
+          h(S.ConfirmDialog,{title:'Delete 3 rows from "users"?',danger:true,width:392,confirmLabel:'Delete 3 rows',onCancel:noop,onConfirm:noop},
+            h('div',{style:{color:'var(--ink-2)'}},'This removes 3 rows from ',h('code',{className:'ss-mono',style:{color:'var(--ink-1)'}},'public.users'),' in the working copy.'),
+            h(S.Alert,{tone:'warn',title:'7 rows in orders will be deleted too'},'orders.user_id is ON DELETE CASCADE.'))))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

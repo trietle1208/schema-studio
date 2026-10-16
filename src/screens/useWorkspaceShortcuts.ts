@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from 'react';
 import { stepZoom, ZOOM_STEP } from '../core/layout';
+import type { WorkspaceMode } from '../core/routes';
 import { matchShortcut, type Shortcut } from '../core/shortcuts';
 import { redo, undo, useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
@@ -16,6 +17,9 @@ const TYPING = 'input:not([type="checkbox"], [type="radio"]), textarea, select, 
 // The browser has a use of its own for these (save the page, its history, a bookmark, the zoom of
 // the page): in the workspace they are the workspace's, also when one of them has nothing to do.
 const TAKEN: Shortcut[] = ['save', 'search', 'duplicate', 'history', 'zoom-in', 'zoom-out', 'zoom-reset'];
+// What works in every mode of the workspace. The rest is about the diagram and its selected table:
+// in the Data mode ⌫, F2, ⌘D and Esc belong to the grid.
+const EVERY_MODE: Shortcut[] = ['save', 'undo', 'redo', 'search', 'history'];
 
 /**
  * Leaves a field that edits its own text, which keeps what was typed in it, as the click on the
@@ -27,9 +31,10 @@ function leave(target: Element | null) {
 
 /**
  * The workspace keyboard shortcuts: ⌘S, ⌘Z, ⇧⌘Z, ⌘K, ⌘⏎, ⌘D, ⇧⌘C, ⌘H, ⌘+, ⌘−, ⌘0, ⇧1, ⇧A, F2, ⌫
- * and Esc (Ctrl in place of ⌘ outside macOS).
+ * and Esc (Ctrl in place of ⌘ outside macOS). Outside the diagram only save, undo, redo, search and
+ * history are the workspace's.
  */
-export function useWorkspaceShortcuts(searchRef: RefObject<HTMLInputElement | null>) {
+export function useWorkspaceShortcuts(searchRef: RefObject<HTMLInputElement | null>, mode: WorkspaceMode = 'diagram') {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const shortcut = matchShortcut(e);
@@ -40,6 +45,7 @@ export function useWorkspaceShortcuts(searchRef: RefObject<HTMLInputElement | nu
       // An open dialog owns the keyboard, Esc included. This listener is added before any dialog's,
       // so it still sees the dialog as open on the key press that closes it.
       if (ui.dialog) return;
+      if (mode !== 'diagram' && !EVERY_MODE.includes(shortcut)) return;
       const target = e.target instanceof Element ? e.target : null;
       const local = !!target?.closest(LOCAL_EDIT);
       const schema = useSchemaStore.getState();
@@ -121,5 +127,5 @@ export function useWorkspaceShortcuts(searchRef: RefObject<HTMLInputElement | nu
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [searchRef]);
+  }, [searchRef, mode]);
 }

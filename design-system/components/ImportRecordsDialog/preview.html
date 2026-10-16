@@ -1,0 +1,41 @@
+<!-- @dsCard group="Import & export" height=5900 width=1080 page subtitle="Every step and the states between" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ImportRecordsDialog — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement;
+var users = S.sample.tables[0], noop = function () { };
+var CSV = { name: 'users_import.csv' }, JSON_TEXT = [
+  '[',
+  '  { "email": "an@example.org", "name": "An Nguyen", "avatar_url": null, "created_at": "2026-05-01T08:30:00Z" },',
+  '  { "email": "binh@example.org", "name": "Binh Tran", "avatar_url": "https://cdn.example.com/avatars/binh.png", "created_at": "2026-05-02T10:12:44Z" },',
+  '  { "email": "chi@example.org", "name": null, "avatar_url": null, "created_at": "2026-05-03T16:45:09Z" }',
+  ']'
+].join('\n');
+var BAD_JSON = '[\n  { "email": "an@example.org", "name": "An Nguyen" },\n  { "email": "binh@example.org" "name": "Binh Tran" }\n]';
+
+// One state: a caption, then the dialog in a frame as tall as it needs.
+function Frame(p) {
+  var props = Object.assign({ table: users, data: S.sample.records, onClose: noop, height: p.height }, p.dialog);
+  return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, flex: 'none' } },
+    h('div', { className: 'ss-row' }, h('span', { className: 'ss-caption' }, p.title), h('span', { className: 'ss-faint', style: { fontSize: 11 } }, p.note)),
+    h('div', { style: { position: 'relative', height: p.height + 210, overflow: 'hidden', border: '1px solid var(--line-1)', borderRadius: 8, background: 'var(--bg-1)' } }, h(S.ImportRecordsDialog, props)));
+}
+function App() {
+  return h('div', { className: 'ss-root', style: { background: 'var(--bg-1)', padding: 20, display: 'flex', flexDirection: 'column', gap: 20, minHeight: '100%' } },
+    h(Frame, { height: 330, title: '1 · Source: nothing chosen yet', note: 'drop zone · Next waits for a file', dialog: {} }),
+    h(Frame, { height: 620, title: '1 · Source: pasted JSON', note: 'format found by the text · no delimiter or header to choose', dialog: { source: 'paste', text: JSON_TEXT } }),
+    h(Frame, { height: 470, title: '1 · Source: text that cannot be read', note: 'the message names the line · Next stays off', dialog: { source: 'paste', text: BAD_JSON } }),
+    h(Frame, { height: 708, title: '2 · Map columns: email left out, a constant for avatar_url', note: 'Required badge · the error blocks Next · Constant value… shows an input', dialog: { step: 'map', file: CSV, text: S.sample.csv, mapping: { email: { from: '', by: 'manual' }, name: { from: 'full_name', by: 'manual' }, avatar_url: { from: '=', value: 'https://cdn.example.com/avatars/default.png', by: 'manual' } } } }),
+    h(Frame, { height: 470, title: '3 · Settings: Upsert on email', note: 'the columns it overwrites · the summary follows the choice', dialog: { step: 'settings', file: CSV, text: S.sample.csv, settings: { mode: 'upsert' } } }),
+    h(Frame, { height: 560, title: '4 · Review: invalid rows are not skipped', note: 'the import is blocked until they are fixed or skipped', dialog: { step: 'review', file: CSV, text: S.sample.csv, settings: { skipInvalid: false }, open: ['required'] } }),
+    h(Frame, { height: 380, title: '4 · Importing', note: 'progress · processed, inserted, skipped, failed · Cancel import', dialog: { step: 'review', phase: 'importing', progress: 620, file: CSV, text: S.sample.csv } }),
+    h(Frame, { height: 470, title: '4 · Failed in one transaction', note: 'a row the database refused: nothing is written', dialog: { step: 'review', phase: 'done', file: CSV, text: S.sample.csv, fail: { line: 618, message: 'duplicate key value violates unique constraint "users_email_unique"' } } }));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

@@ -11,3 +11,10 @@ export function searchTables(tables: Table[], query: string): Table[] {
     (t) => t.name.toLowerCase().includes(needle) || t.columns.some((c) => c.name.toLowerCase().includes(needle)),
   );
 }
+
+/** The tables whose name contains `query`, ignoring case: what the table list of the Data mode looks through. A blank query returns the tables as given. */
+export function searchTableNames<T extends Pick<Table, 'name'>>(tables: readonly T[], query: string): readonly T[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return tables;
+  return tables.filter((t) => t.name.toLowerCase().includes(needle));
+}

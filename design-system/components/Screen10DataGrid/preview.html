@@ -1,0 +1,226 @@
+<!-- @dsCard group="Screens" height=900 width=1440 page subtitle="10 · Data mode: records of a table" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Screen10DataGrid — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState, useMemo = React.useMemo, useRef = React.useRef, useEffect = React.useEffect, Fragment = React.Fragment;
+var TABLES = S.sample.tables;
+
+// 1,248 users: the 20 of the sample first, then more of the same kind up to the sample's "today".
+function stamp(ms) { return new Date(ms).toISOString().slice(0, 19).replace('T', ' '); }
+function manyUsers(n) {
+  var base = S.sample.records.users;
+  return Array.from({ length: n }, function (_, i) {
+    if (i < base.length) return base[i];
+    var b = base[i % base.length], k = Math.floor(i / base.length);
+    return { id: i + 1, email: b.email.replace('@', '.' + k + '@'), name: b.name, avatar_url: b.avatar_url ? 'https://cdn.example.com/avatars/' + (i + 1) + '.png' : null, created_at: stamp(Date.UTC(2026, 4, 3, 9, 14, 7) + (i - base.length) * 11520000) };
+  });
+}
+
+// A throwaway evaluator so the filters, the search and the sort of this preview do something.
+function test(row, f) {
+  var v = row[f.column];
+  if (f.op === 'IS NULL') return v == null;
+  if (f.op === 'IS NOT NULL') return v != null;
+  if (v == null) return false;
+  if (f.op === 'LIKE') return new RegExp('^' + String(f.value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.') + '$', 'i').test(String(v));
+  return f.op === '=' ? v === f.value : f.op === '!=' ? v !== f.value : f.op === '>' ? v > f.value : f.op === '>=' ? v >= f.value : f.op === '<' ? v < f.value : v <= f.value;
+}
+function plural(n, one, many) { return n.toLocaleString('en-US') + ' ' + (n === 1 ? one : many); }
+
+function App() {
+  var _data = useState(function () { var d = Object.assign({}, S.sample.records); d.users = manyUsers(1248); return d; }), data = _data[0], setData = _data[1];
+  var _n = useState('users'), name = _n[0], setName = _n[1];
+  var _t = useState('data'), tab = _t[0], setTab = _t[1];
+  var _sel = useState([1, 2, 4]), sel = _sel[0], setSel = _sel[1];
+  var _a = useState({ row: 3, column: 'email' }), act = _a[0], setAct = _a[1];
+  var _q = useState(''), search = _q[0], setSearch = _q[1];
+  var _f = useState([]), filters = _f[0], setFilters = _f[1];
+  var _s = useState(null), sort = _s[0], setSort = _s[1];
+  var _h = useState([]), hidden = _h[0], setHidden = _h[1];
+  var _d = useState('regular'), density = _d[0], setDensity = _d[1];
+  var _ps = useState(50), pageSize = _ps[0], setPageSize = _ps[1];
+  var _pg = useState(1), page = _pg[0], setPage = _pg[1];
+  var _c = useState(null), confirm = _c[0], setConfirm = _c[1];
+  var _dirty = useState(true), dirty = _dirty[0], setDirty = _dirty[1];
+  var _toast = useState(null), toast = _toast[0], setToast = _toast[1];
+  // The record editor: `{ id, mode: 'edit' | 'new', row, draft, focus }`, whether it holds changes, how wide it is, and the cells that were changed (by primary key).
+  var _edit = useState(null), edit = _edit[0], setEdit = _edit[1];
+  var _ed = useState(false), editDirty = _ed[0], setEditDirty = _ed[1];
+  var _ec = useState([]), editChanged = _ec[0], setEditChanged = _ec[1];
+  var _ew = useState(520), editWidth = _ew[0], setEditWidth = _ew[1];
+  var _pend = useState(null), pending = _pend[0], setPending = _pend[1];
+  // Import Records: 0 is closed, otherwise the number of the time it was opened (a new dialog each time).
+  var _imp = useState(0), importing = _imp[0], setImporting = _imp[1];
+  var _cells = useState([{ table: 'users', key: 4, column: 'name' }]), cells = _cells[0], setCells = _cells[1];
+  var seq = useRef(0), impSeq = useRef(0);
+
+  var table = TABLES.find(function (t) { return t.name === name; });
+  var all = data[name], cols = table.columns;
+  var shown = cols.filter(function (c) { return hidden.indexOf(c.name) < 0; });
+  var q = search.trim().toLowerCase();
+  var rows = useMemo(function () {
+    var r = all.filter(function (row) {
+      return (!q || cols.some(function (c) { return row[c.name] != null && String(row[c.name]).toLowerCase().indexOf(q) >= 0; })) && filters.every(function (f) { return test(row, f); });
+    });
+    if (sort) r = r.slice().sort(function (x, y) { var a = x[sort.column], b = y[sort.column]; var d = a == null ? -1 : b == null ? 1 : a < b ? -1 : a > b ? 1 : 0; return sort.dir === 'asc' ? d : -d; });
+    return r;
+  }, [all, q, filters, sort, name]);
+  var pages = Math.max(1, Math.ceil(rows.length / pageSize)), pg = Math.min(page, pages);
+  var pageRows = rows.slice((pg - 1) * pageSize, pg * pageSize);
+  var relationships = S.relationsOf(table, TABLES);
+  var pk = (cols.find(function (c) { return c.pk; }) || cols[0]).name;
+  var modified = cells.filter(function (m) { return m.table === name; }).map(function (m) {
+    return { row: pageRows.findIndex(function (r) { return r[pk] === m.key; }), column: m.column };
+  }).filter(function (m) { return m.row >= 0 && shown.some(function (c) { return c.name === m.column; }); });
+
+  function reset() { setPage(1); setSel([]); setAct(null); }
+  // Leaving the record that is open: with changes in it, only once they are discarded.
+  // The users table starts with users_import.csv chosen so that the path can be walked without a file at hand; any other table starts empty.
+  function openImport() { leave(function () { setEdit(null); setEditDirty(false); setImporting(++impSeq.current); }); }
+  function leave(run) { if (edit && editDirty) setPending({ run: run }); else run(); }
+  function openRecord(target) {
+    if (target && edit && target.mode === 'edit' && edit.mode === 'edit' && target.row === edit.row) return;
+    leave(function () { setEdit(target ? Object.assign({ id: ++seq.current }, target) : null); setEditDirty(false); });
+  }
+  function pick(n) { leave(function () { setEdit(null); setName(n); setTab('data'); setSearch(''); setFilters([]); setSort(null); setHidden([]); reset(); }); }
+  function changeTab(t) { leave(function () { setEdit(null); setTab(t); }); }
+  function change(set) { return function (v) { set(v); reset(); }; }
+
+  // What the editor hands over becomes part of the working copy, as a delete does, with Undo.
+  function saveRecord(values) {
+    var before = data, beforeCells = cells, next = Object.assign({}, data), saved, title, jump;
+    if (edit.mode === 'edit') {
+      var old = edit.row; saved = Object.assign({}, old, values);
+      next[name] = all.map(function (r) { return r === old ? saved : r; });
+      setCells(cells.concat(cols.filter(function (c) { return old[c.name] !== saved[c.name]; }).map(function (c) { return { table: name, key: old[pk], column: c.name }; })));
+      title = 'Updated ' + S.recordLabel(table, saved);
+    } else {
+      saved = S.completeRecord(table, all, values);
+      next[name] = all.concat([saved]);
+      title = 'Added ' + S.recordLabel(table, saved);
+      jump = !q && !filters.length && !sort;
+    }
+    setData(next); setDirty(true); setEdit(null); setEditDirty(false);
+    if (jump) { setPage(Math.ceil(next[name].length / pageSize)); setSel([]); setAct({ row: (next[name].length - 1) % pageSize, column: cols[0].name }); }
+    setToast({ tone: 'info', title: title, description: 'Not saved yet. Press ⌘Z to ' + (edit.mode === 'edit' ? 'restore the old values.' : 'remove it.'), actions: [{ label: 'Undo', onClick: function () { setData(before); setCells(beforeCells); setToast(null); } }] });
+  }
+  // What Import Records writes joins the working copy: new rows as Add record makes them, updated ones in place.
+  function importRows(result) {
+    var before = data, list = all.slice(), next = Object.assign({}, data);
+    result.update.forEach(function (u) { var i = list.indexOf(u.match); if (i >= 0) list[i] = Object.assign({}, u.match, u.values); });
+    result.insert.forEach(function (v) { list.push(S.completeRecord(table, list, v)); });
+    next[name] = list; setData(next); setDirty(true);
+    var n = result.counts.inserted + result.counts.updated;
+    setToast({ tone: 'info', title: 'Imported ' + plural(n, 'row', 'rows') + ' into ' + name, description: 'Not saved yet. Press ⌘Z to remove ' + (n === 1 ? 'it.' : 'them.'), actions: [{ label: 'Undo', onClick: function () { setData(before); setToast(null); } }] });
+  }
+  // The values of a row that a duplicate starts from: not the ones the database counts.
+  function copyOf(row) { var d = {}; cols.forEach(function (c) { if (!/SERIAL/i.test(c.type)) d[c.name] = row[c.name]; }); return d; }
+
+  useEffect(function () { if (!toast) return; var t = setTimeout(function () { setToast(null); }, 6000); return function () { clearTimeout(t); }; }, [toast]);
+  useEffect(function () {
+    function k(e) {
+      var t = e.target.tagName;
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && t !== 'INPUT' && t !== 'TEXTAREA' && t !== 'SELECT' && tab === 'data' && !confirm && !pending && !importing && !(edit && edit.mode === 'new')) {
+        e.preventDefault(); openRecord({ mode: 'new', focus: true });
+      }
+    }
+    window.addEventListener('keydown', k); return function () { window.removeEventListener('keydown', k); };
+  });
+
+  // What deleting these rows does to the rows that reference them.
+  function effects(deleted) {
+    var out = [];
+    relationships.inn.forEach(function (r) {
+      var fromCol = r.from.split('.')[1], toCol = r.to.split('.')[1];
+      var keys = deleted.map(function (x) { return x[toCol]; });
+      var n = data[r.table].filter(function (x) { return keys.indexOf(x[fromCol]) >= 0; }).length;
+      if (n) out.push({ table: r.table, column: fromCol, n: n, rule: r.onDelete });
+    });
+    return out;
+  }
+  function doDelete() {
+    var gone = confirm.map(function (i) { return pageRows[i]; }), before = data;
+    var next = Object.assign({}, data); next[name] = all.filter(function (r) { return gone.indexOf(r) < 0; });
+    setData(next); setDirty(true); setConfirm(null); setSel([]); setAct(null);
+    if (edit && edit.row && gone.indexOf(edit.row) >= 0) { setEdit(null); setEditDirty(false); }
+    setToast({ tone: 'info', title: 'Deleted ' + plural(gone.length, 'row', 'rows') + ' from ' + name, description: 'Not saved yet. Press ⌘Z to restore ' + (gone.length === 1 ? 'it.' : 'them.'), actions: [{ label: 'Undo', onClick: function () { setData(before); setToast(null); } }] });
+  }
+
+  var emptyNode = null;
+  if (!pageRows.length) {
+    emptyNode = all.length === 0
+      ? h(S.EmptyState, { compact: true, title: 'This table has no rows.', actions: h(Fragment, null, h(S.Button, { variant: 'primary', icon: 'plus', kbd: ['⌘', '⏎'], onClick: function () { openRecord({ mode: 'new', focus: true }); } }, 'Add record'), h(S.Button, { icon: 'upload', onClick: openImport }, 'Import Records')) })
+      : h(S.EmptyState, { compact: true, title: filters.length ? 'No rows match ' + plural(filters.length, 'filter', 'filters') + '.' : 'No rows match "' + search.trim() + '".', actions: h(S.Button, { onClick: function () { setFilters([]); setSearch(''); reset(); } }, filters.length ? 'Clear filters' : 'Clear search') });
+  }
+
+  var deleting = confirm ? confirm.map(function (i) { return pageRows[i]; }) : null;
+  var dialog = deleting && h(S.ConfirmDialog, { title: 'Delete ' + plural(deleting.length, 'row', 'rows') + ' from "' + name + '"?', danger: true, confirmLabel: deleting.length === 1 ? 'Delete row' : 'Delete ' + deleting.length + ' rows', onCancel: function () { setConfirm(null); }, onConfirm: doDelete },
+    h('div', { style: { color: 'var(--ink-2)' } }, 'This removes ', plural(deleting.length, 'row', 'rows'), ' from ', h('code', { className: 'ss-mono', style: { color: 'var(--ink-1)' } }, 'public.' + name), ' in the working copy.'),
+    effects(deleting).map(function (e) {
+      var ref = e.table + '.' + e.column;
+      return e.rule === 'CASCADE' ? h(S.Alert, { key: ref, tone: 'warn', title: plural(e.n, 'row', 'rows') + ' in ' + e.table + ' will be deleted too' }, ref + ' is ON DELETE CASCADE.')
+        : e.rule === 'SET NULL' ? h(S.Alert, { key: ref, tone: 'warn', title: ref + ' will be set to NULL in ' + plural(e.n, 'row', 'rows') }, ref + ' is ON DELETE SET NULL.')
+        : h(S.Alert, { key: ref, tone: 'error', title: plural(e.n, 'row', 'rows') + ' in ' + e.table + ' reference these rows' }, 'The delete will fail: ' + ref + ' is ON DELETE ' + e.rule + '.');
+    }));
+
+  var body;
+  var discarding = pending && h(S.ConfirmDialog, {
+    title: edit && edit.mode === 'edit' ? 'Discard changes to ' + S.recordLabel(table, edit.row) + '?' : 'Discard the new record in "' + name + '"?', danger: true, confirmLabel: 'Discard changes', cancelLabel: 'Keep editing',
+    onCancel: function () { setPending(null); }, onConfirm: function () { var run = pending.run; setPending(null); run(); }
+  }, h('div', { style: { color: 'var(--ink-2)' } }, editChanged.length ? h(Fragment, null, plural(editChanged.length, 'changed column', 'changed columns') + ' will be lost: ', h('code', { className: 'ss-mono', style: { color: 'var(--ink-1)' } }, editChanged.join(', ')), '.') : 'The edited JSON will be lost.'));
+
+  if (tab === 'structure') body = h(S.TableStructure, { table: table });
+  else if (tab === 'relationships') body = h(S.TableRelationships, { table: table, tables: TABLES, onOpen: pick });
+  else body = h(Fragment, null,
+    h(S.DataToolbar, {
+      columns: cols, search: search, onSearch: change(setSearch), filters: filters, onAddFilter: function (f) { setFilters(filters.concat([f])); reset(); },
+      sort: sort, onSort: change(setSort), hidden: hidden, onHidden: setHidden, density: density, onDensity: setDensity, pageSize: pageSize, onPageSize: change(setPageSize)
+    }),
+    h(S.FilterChips, { filters: filters, onRemove: function (i) { setFilters(filters.filter(function (_, k) { return k !== i; })); reset(); }, onClear: function () { setFilters([]); reset(); } }),
+    sel.length > 0 && h(S.SelectionBar, { count: sel.length, onDelete: function () { setConfirm(sel); }, onClear: function () { setSel([]); } }),
+    h(S.DataGrid, {
+      columns: shown, rows: pageRows, selected: sel, onSelect: setSel, activeCell: act, onActiveCell: setAct, sort: sort, density: density, label: name,
+      modified: modified, empty: emptyNode || false, openOnClick: true,
+      onOpenRow: function (r) { openRecord({ mode: 'edit', row: pageRows[r] }); },
+      onRowAction: function (a, r) {
+        if (a === 'delete') setConfirm(sel.indexOf(r) >= 0 ? sel : [r]);
+        else if (a === 'view') openRecord({ mode: 'edit', row: pageRows[r] });
+        else if (a === 'edit') openRecord({ mode: 'edit', row: pageRows[r], focus: true });
+        else if (a === 'duplicate') openRecord({ mode: 'new', draft: copyOf(pageRows[r]), focus: true });
+      }
+    }),
+    h(S.Pagination, { page: pg, pageSize: pageSize, total: rows.length, onPage: function (n) { setPage(n); setSel([]); setAct(null); } }));
+
+  var counts = {}; TABLES.forEach(function (t) { counts[t.name] = data[t.name].length; });
+  var editor = edit && tab === 'data' && h(S.RecordEditor, {
+    key: edit.id, table: table, tables: TABLES, data: data, record: edit.mode === 'edit' ? edit.row : null, draft: edit.draft, autoFocus: !!edit.focus,
+    width: editWidth, onWidth: setEditWidth, onSave: saveRecord, onDirty: function (d, changed) { setEditDirty(d); setEditChanged(changed); }, onClose: function () { setEdit(null); setEditDirty(false); }
+  });
+  var importDialog = importing > 0 && h(S.ImportRecordsDialog, Object.assign({
+    key: importing, table: table, tables: TABLES, data: data, onClose: function () { setImporting(0); }, onImport: importRows,
+    onViewRows: function () { setPage(Math.max(1, Math.ceil(data[name].length / pageSize))); setSel([]); setAct(null); }
+  }, name === 'users' ? { file: { name: 'users_import.csv' }, text: S.sample.csv } : {}));
+  return h('div', { className: 'ss-screen' }, h(S.AppShell, { sidebar: h(S.Sidebar, { activeSchema: 'ecommerce' }), overlay: h(Fragment, null, dialog, discarding, importDialog) }, h(Fragment, null,
+    h(S.Toolbar, { schema: 'ecommerce', version: 'v12', mode: 'data', saveState: dirty ? 'dirty' : 'saved' }),
+    h('div', { className: 'ss-work' },
+      h(S.TableList, { tables: TABLES, counts: counts, selected: name, onSelect: pick }),
+      h('div', { className: 'ss-data' },
+        h(S.TableHeader, { schema: 'ecommerce', table: table, engine: 'PostgreSQL', rows: all.length, relationships: relationships.out.length + relationships.inn.length, tab: tab, onTab: changeTab, onAdd: function () { openRecord({ mode: 'new', focus: true }); }, onImport: openImport }),
+        body),
+      editor),
+    h(S.StatusBar, {
+      left: [h(Fragment, null, h('span', { className: 'ss-status-ok' }), 'Sample data'), 'public.' + name,
+        (rows.length === all.length ? plural(all.length, 'row', 'rows') : rows.length.toLocaleString('en-US') + ' of ' + plural(all.length, 'row', 'rows')) + ' · ' + plural(cols.length, 'column', 'columns'),
+        sel.length ? sel.length + ' selected' : 'Nothing selected'],
+      right: ['PostgreSQL 16', 'UTF-8']
+    }),
+    toast && h('div', { className: 'ss-toasts' }, h(S.Toast, Object.assign({}, toast, { onClose: function () { setToast(null); } }))))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

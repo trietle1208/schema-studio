@@ -1,0 +1,32 @@
+<!-- @dsCard group="Records" height=1950 width=1000 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>FilterBuilder — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+var TABLES = S.sample.tables, users = TABLES[0], orders = TABLES[1];
+function cond(column, op, value, value2) { return { column: column, op: op, value: value || '', value2: value2 || '' }; }
+
+// The builder keeps nothing, so each state holds its own query.
+function Live(p) {
+  var _s = useState(p.value), spec = _s[0], setSpec = _s[1];
+  return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+    h('div', { className: 'ss-row' }, h('span', { className: 'ss-caption' }, p.title), h('span', { className: 'ss-faint', style: { fontSize: 11 } }, p.note)),
+    h('div', { style: { display: 'flex', height: p.height || 380, border: '1px solid var(--line-1)', borderRadius: 8, background: 'var(--bg-1)', overflow: p.open ? 'visible' : 'hidden' } },
+      h(S.FilterBuilder, { tables: TABLES, value: spec, onChange: setSpec, showErrors: p.errors, columnsOpen: p.open, onEditSql: function () { } })));
+}
+function App() {
+  return h('div', { className: 'ss-root', style: { background: 'var(--bg-1)', padding: 20, display: 'flex', flexDirection: 'column', gap: 24, minHeight: '100%' } },
+    h(Live, { title: 'Nothing set', note: 'every row matches · Add condition · Add group', height: 300, value: S.defaultQuery(users) }),
+    h(Live, { title: 'Three conditions and a group', note: 'text, date, number · AND / OR · the group is set in by a hairline', value: S.sample.query.spec }),
+    h(Live, { title: 'orders: status, a number and a date', note: 'the operators follow the column: =, >, <, between · before, after, between', height: 330, value: { table: 'orders', columns: ['id', 'user_id', 'status', 'total'], sort: { column: 'total', dir: 'desc' }, limit: 50, where: { op: 'OR', items: [cond('status', 'eq', 'paid'), cond('total', 'between', '100', '250'), cond('created_at', 'before', '2026-06-15')] } } }),
+    h(Live, { title: 'Values to fix', note: 'each problem sits under its row · the side says how many', height: 330, errors: true, value: { table: 'users', columns: null, sort: null, limit: null, where: { op: 'AND', items: [cond('id', 'gt', 'abc'), cond('created_at', 'after', '2026-02-30'), cond('email', 'starts', '')] } } }),
+    h(Live, { title: 'Columns menu', note: 'which columns the query selects', height: 380, open: true, value: Object.assign({}, S.sample.query.spec, { columns: ['id', 'email', 'created_at'] }) }));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

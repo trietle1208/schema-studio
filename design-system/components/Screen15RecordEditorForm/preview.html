@@ -1,0 +1,49 @@
+<!-- @dsCard group="Screens" height=900 width=1440 page subtitle="15 · Record editor: form" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Screen15RecordEditorForm — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, Fragment = React.Fragment;
+var TABLES = S.sample.tables, users = TABLES[0];
+
+function stamp(ms) { return new Date(ms).toISOString().slice(0, 19).replace('T', ' '); }
+// 1,248 users as in Screen10, but user 101 is An Nguyen; and 12 more orders, all of user 101.
+var DATA = (function () {
+  var base = S.sample.records.users;
+  var list = Array.from({ length: 1248 }, function (_, i) {
+    if (i < base.length) return base[i];
+    var b = base[i % base.length], k = Math.floor(i / base.length);
+    return { id: i + 1, email: b.email.replace('@', '.' + k + '@'), name: b.name, avatar_url: b.avatar_url ? 'https://cdn.example.com/avatars/' + (i + 1) + '.png' : null, created_at: stamp(Date.UTC(2026, 4, 3, 9, 14, 7) + (i - base.length) * 11520000) };
+  });
+  list[100] = { id: 101, email: 'an@example.com', name: 'An Nguyen', avatar_url: null, created_at: '2026-06-18 07:42:19' };
+  var status = ['delivered', 'paid', 'shipped', 'pending', 'delivered', 'cancelled'], total = [129.9, 24.99, 349.5, 59, 89, 39.9, 219, 74.5, 12.5, 119, 168.4, 45];
+  var orders = S.sample.records.orders.concat(total.map(function (t, i) {
+    return { id: 21 + i, user_id: 101, status: status[i % status.length], total: t, created_at: stamp(Date.UTC(2026, 5, 19, 9, 5, 0) + i * (3 * 86400000 + 4 * 3600000 + 11 * 60000 + 7000)) };
+  }));
+  return Object.assign({}, S.sample.records, { users: list, orders: orders });
+})();
+var record = DATA.users[100];
+var pageRows = DATA.users.slice(100, 150);
+var counts = {}; TABLES.forEach(function (t) { counts[t.name] = DATA[t.name].length; });
+var relations = S.relationsOf(users, TABLES);
+
+function App() {
+  return h('div', { className: 'ss-screen' }, h(S.AppShell, { sidebar: h(S.Sidebar, { activeSchema: 'ecommerce' }) }, h(Fragment, null,
+    h(S.Toolbar, { schema: 'ecommerce', version: 'v12', mode: 'data', saveState: 'saved' }),
+    h('div', { className: 'ss-work' },
+      h(S.TableList, { tables: TABLES, counts: counts, selected: 'users' }),
+      h('div', { className: 'ss-data' },
+        h(S.TableHeader, { schema: 'ecommerce', table: users, engine: 'PostgreSQL', rows: DATA.users.length, relationships: relations.out.length + relations.inn.length, tab: 'data' }),
+        h(S.DataToolbar, { columns: users.columns }),
+        h(S.DataGrid, { columns: users.columns, rows: pageRows, activeCell: { row: 0, column: 'email' }, label: 'users', openOnClick: true }),
+        h(S.Pagination, { page: 3, pageSize: 50, total: DATA.users.length })),
+      h(S.RecordEditor, { table: users, tables: TABLES, data: DATA, record: record, draft: { name: 'An Nguyen Thanh', email: 'minh.tran@example.com' } })),
+    h(S.StatusBar, { left: [h(Fragment, null, h('span', { className: 'ss-status-ok' }), 'Sample data'), 'public.users', '1,248 rows · 5 columns', 'Nothing selected'], right: ['PostgreSQL 16', 'UTF-8'] }))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<!-- @dsCard group="Records" height=250 width=1000 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SelectionBar — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%} .cap{padding:10px 12px 6px}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement;
+function Block(p){ return h('div',{style:{background:'var(--bg-1)',borderTop:'1px solid var(--line-1)'}}, h('div',{className:'cap ss-caption',style:{background:'var(--bg-2)'}},p.title), p.children); }
+function App(){
+  return h('div',null,
+    h(Block,{title:'3 rows selected'}, h(S.SelectionBar,{count:3})),
+    h(Block,{title:'1 row selected'}, h(S.SelectionBar,{count:1})),
+    h(Block,{title:'Over the grid · it pushes the rows down, nothing slides'}, h(S.SelectionBar,{count:2}), h('div',{style:{height:120,display:'flex'}}, h(S.DataGrid,{columns:S.sample.tables[3].columns,rows:S.sample.records.products.slice(0,4),selected:[0,2],label:'products'}))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

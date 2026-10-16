@@ -1,0 +1,53 @@
+<!-- @dsCard group="Records" height=9000 width=1080 page subtitle="Builder, SQL and every state of the output" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>QueryConsole — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement;
+var users = S.sample.tables[0];
+
+function stamp(ms) { return new Date(ms).toISOString().slice(0, 19).replace('T', ' '); }
+// 1,248 users as in Screen10: the 20 of the sample first, then more of the same kind.
+var DATA = (function () {
+  var base = S.sample.records.users;
+  var list = Array.from({ length: 1248 }, function (_, i) {
+    if (i < base.length) return base[i];
+    var b = base[i % base.length], k = Math.floor(i / base.length);
+    return { id: i + 1, email: b.email.replace('@', '.' + k + '@'), name: b.name, avatar_url: b.avatar_url ? 'https://cdn.example.com/avatars/' + (i + 1) + '.png' : null, created_at: stamp(Date.UTC(2026, 4, 3, 9, 14, 7) + (i - base.length) * 11520000) };
+  });
+  return Object.assign({}, S.sample.records, { users: list });
+})();
+var SPEC = S.sample.query.spec;
+function cond(column, op, value, value2) { return { column: column, op: op, value: value || '', value2: value2 || '' }; }
+
+// One state: a caption, then the console in a frame.
+function Frame(p) {
+  return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, flex: 'none' } },
+    h('div', { className: 'ss-row' }, h('span', { className: 'ss-caption' }, p.title), h('span', { className: 'ss-faint', style: { fontSize: 11 } }, p.note)),
+    h('div', { className: 'ss-work', style: { position: 'relative', height: p.height || 600, overflow: 'hidden', border: '1px solid var(--line-1)', borderRadius: 8, background: 'var(--bg-1)' } },
+      h(S.QueryConsole, Object.assign({ data: DATA, duration: 12 }, p.console))));
+}
+function App() {
+  return h('div', { className: 'ss-root', style: { background: 'var(--bg-1)', padding: 20, display: 'flex', flexDirection: 'column', gap: 20, minHeight: '100%' } },
+    h(Frame, { title: 'Builder: nothing set, never run', note: 'every row of the table matches · Results says to run', console: { spec: S.defaultQuery(users) } }),
+    h(Frame, { title: 'Builder: three conditions and a group', note: 'the SQL is the summary · Run (⌘⏎)', console: { spec: SPEC, run: true } }),
+    h(Frame, { title: 'Builder: conditions to fix', note: 'Run does not run until every value is valid', console: { attempted: true, spec: Object.assign({}, SPEC, { where: { op: 'AND', items: [cond('id', 'gt', 'abc'), cond('created_at', 'between', '2026-03-01', '2026-13-45'), cond('name', 'notnull')] } }) } }),
+    h(Frame, { title: 'SQL: the sample query, never run', note: 'Run · Format · Clear', console: { mode: 'sql', height: 260 } }),
+    h(Frame, { title: 'SQL: results', note: 'Ran in 12 ms · 100 rows · 12 ms · Export · double-click a row to edit it', console: { mode: 'sql', run: true, height: 260 } }),
+    h(Frame, { title: 'SQL: messages', note: '1,061 rows matched, the first 100 shown', console: { mode: 'sql', run: true, tab: 'messages', height: 260 } }),
+    h(Frame, { title: 'SQL: plan', note: 'what was scanned, filtered, sorted and cut', console: { mode: 'sql', run: true, tab: 'plan', height: 260 } }),
+    h(Frame, { title: 'SQL: an error', note: 'Messages opens · Line 7 · Go to line · the line is marked in the editor · no grid', console: { error: true, height: 260 } }),
+    h(Frame, { title: 'SQL: a statement that is not a SELECT', note: 'only SELECT runs here', console: { sql: "DELETE FROM users\nWHERE id = 3;", run: true, height: 260 } }),
+    h(Frame, { title: 'SQL: no rows', note: 'a query that matches nothing is not an error', console: { sql: "SELECT id, email\nFROM users\nWHERE email = 'nobody@example.com';", run: true, height: 260 } }),
+    h(Frame, { title: 'Running', note: 'Run is off, the grid is a skeleton', console: { mode: 'sql', run: true, running: true, height: 300 } }),
+    h(Frame, { title: 'History: saved and recent', note: 'a click loads the query · the builder ones come back to the builder', console: { mode: 'sql', run: true, historyOpen: true, height: 300 } }),
+    h(Frame, { title: 'Save query', note: 'a name, then it is listed in History', console: { mode: 'sql', run: true, saveOpen: true, height: 300 } }),
+    h(Frame, { title: 'A row of the results in the record editor', note: 'what it saves changes the working copy and the results follow', height: 700, console: { spec: SPEC, run: true, openRow: 2 } }));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

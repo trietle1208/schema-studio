@@ -1,0 +1,19 @@
+<!-- @dsCard group="Records" height=400 width=1000 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>TableStructure — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement;
+var T = S.sample.tables;
+function App(){
+  return h('div',{className:'ss-data',style:{height:400}},
+    h(S.TableHeader,{schema:'ecommerce',table:T[1],engine:'PostgreSQL',rows:20,relationships:3,tab:'structure'}),
+    h(S.TableStructure,{table:T[1]}));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

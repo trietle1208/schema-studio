@@ -1,0 +1,24 @@
+<!-- @dsCard group="Import & export" height=360 width=960 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Stepper — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%} .cap{padding:12px 16px 4px}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+var STEPS = ['Source', 'Map columns', 'Settings', 'Review & import'];
+function Row(p) { return h('div', null, h('div', { className: 'cap ss-caption' }, p.title), h(S.Stepper, { steps: STEPS, current: p.current, onStep: p.onStep })); }
+function App() {
+  var _c = useState(2), cur = _c[0], setCur = _c[1];
+  return h('div', { style: { background: 'var(--bg-2)' } },
+    h(Row, { title: 'First step', current: 0 }),
+    h(Row, { title: 'Third step: the steps behind it are buttons', current: 2, onStep: function () { } }),
+    h(Row, { title: 'Last step', current: 3, onStep: function () { } }),
+    h('div', null, h('div', { className: 'cap ss-caption' }, 'Working'), h(S.Stepper, { steps: STEPS, current: cur, onStep: setCur }),
+      h('div', { className: 'ss-row', style: { padding: '8px 16px' } }, h(S.Button, { size: 'sm', disabled: cur === 0, onClick: function () { setCur(cur - 1); } }, 'Back'), h(S.Button, { size: 'sm', variant: 'primary', disabled: cur === 3, onClick: function () { setCur(cur + 1); } }, 'Next'))));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

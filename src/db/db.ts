@@ -1,5 +1,6 @@
-import Dexie, { type EntityTable } from 'dexie';
+import Dexie, { type EntityTable, type Table } from 'dexie';
 import type { SchemaSnapshot } from '../core/model';
+import type { Row } from '../core/records';
 
 /** One row per schema: what the lists show, and the number of its current version. */
 export interface SchemaRecord {
@@ -36,6 +37,21 @@ export interface VersionRecord {
   snapshot: SchemaSnapshot;
 }
 
+/**
+ * The rows of one table of a schema: one record per table, keyed by the pair. A record that exists
+ * with no rows means the table was filled and then emptied; only a table without a record is
+ * filled with sample data. Rows are not part of a version.
+ */
+export interface RecordsRecord {
+  schemaId: number;
+  table: string;
+  rows: Row[];
+  /** The seed the first rows were drawn with. */
+  seed: number;
+  /** Milliseconds since the epoch: when the rows were made. */
+  createdAt: number;
+}
+
 /** An SSH server whose key was trusted, so the bridge logs in to it without asking again. One row per `host:port`. */
 export interface KnownHostRecord {
   /** The server as it is named in the connection form, in lower case: `bastion.example.com:22`. */
@@ -49,6 +65,7 @@ export interface KnownHostRecord {
 export type Database = Dexie & {
   schemas: EntityTable<SchemaRecord, 'id'>;
   versions: EntityTable<VersionRecord, 'id'>;
+  records: Table<RecordsRecord, [number, string]>;
   knownHosts: EntityTable<KnownHostRecord, 'id'>;
 };
 
@@ -60,6 +77,15 @@ db.version(1).stores({
   versions: '++id, &[schemaId+version]',
 });
 
+// Version 2 adds the rows of tables. Nothing stored earlier changes: a table without a record is
+// filled the first time its data is opened.
 db.version(2).stores({
+  schemas: '++id, &name, updatedAt',
+  versions: '++id, &[schemaId+version]',
+  records: '[schemaId+table]',
+});
+
+// Version 3 adds the SSH servers whose host key was trusted.
+db.version(3).stores({
   knownHosts: 'id',
 });

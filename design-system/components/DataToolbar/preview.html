@@ -1,0 +1,29 @@
+<!-- @dsCard group="Records" height=380 width=1000 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>DataToolbar — preview</title>
+<style>html,body{margin:0;height:100%;background:var(--bg-2)} #root{height:100%} .cap{padding:10px 12px 6px}</style></head>
+<body>
+<div id="root" class="ss-root"></div>
+<script>
+var S = window.SchemaStudio, h = React.createElement, useState = React.useState;
+var users = S.sample.tables[0];
+function Block(p){ return h('div',{style:{background:'var(--bg-1)',borderTop:'1px solid var(--line-1)',minHeight:p.height}}, h('div',{className:'cap ss-caption',style:{background:'var(--bg-2)'}},p.title), p.children); }
+function App(){
+  var _q = useState(''), q = _q[0], setQ = _q[1];
+  var _f = useState([]), filters = _f[0], setFilters = _f[1];
+  var _s = useState(null), sort = _s[0], setSort = _s[1];
+  var _h = useState([]), hidden = _h[0], setHidden = _h[1];
+  var _d = useState('regular'), density = _d[0], setDensity = _d[1];
+  var _p = useState(50), size = _p[0], setSize = _p[1];
+  return h('div',null,
+    h(Block,{title:'Interactive · open Filter, Sort or Columns',height:260},
+      h(S.DataToolbar,{columns:users.columns,search:q,onSearch:setQ,filters:filters,onAddFilter:function(f){ setFilters(filters.concat([f])); },sort:sort,onSort:setSort,hidden:hidden,onHidden:setHidden,density:density,onDensity:setDensity,pageSize:size,onPageSize:setSize}),
+      h(S.FilterChips,{filters:filters,onRemove:function(i){ setFilters(filters.filter(function(_,k){ return k!==i; })); },onClear:function(){ setFilters([]); }})),
+    h(Block,{title:'Filtered, sorted, one column hidden',height:0},
+      h(S.DataToolbar,{columns:users.columns,filters:[{column:'avatar_url',op:'IS NULL'},{column:'created_at',op:'>',value:'2026-01-01'}],sort:{column:'created_at',dir:'desc'},hidden:['avatar_url'],density:'compact',pageSize:100})));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

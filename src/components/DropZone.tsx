@@ -3,6 +3,7 @@ import { t } from '../core/i18n';
 import { Button } from './Button';
 import { cx } from './cx';
 import { Icon } from './Icon';
+import type { IconName } from './icons';
 import { rich } from './rich';
 import { IconButton } from './IconButton';
 
@@ -23,10 +24,16 @@ export interface DropZoneProps {
   /** Forces the look of a file being dragged over. */
   over?: boolean;
   hint?: ReactNode;
+  /** The file types the picker offers; SQL files when left out. */
+  accept?: string;
+  /** What the zone asks for, in "Drop … file here": `CSV or JSON`; SQL when left out. */
+  noun?: string;
+  /** The icon of the chosen file. */
+  fileIcon?: IconName;
   style?: CSSProperties;
 }
 
-export function DropZone({ file, onFile, over: forcedOver, hint, style }: DropZoneProps) {
+export function DropZone({ file, onFile, over: forcedOver, hint, accept = ACCEPT, noun, fileIcon = 'file-code', style }: DropZoneProps) {
   const [over, setOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -35,7 +42,7 @@ export function DropZone({ file, onFile, over: forcedOver, hint, style }: DropZo
     <input
       ref={inputRef}
       type="file"
-      accept={ACCEPT}
+      accept={accept}
       hidden
       onChange={(e) => {
         const picked = e.target.files?.[0];
@@ -50,7 +57,7 @@ export function DropZone({ file, onFile, over: forcedOver, hint, style }: DropZo
     return (
       <div className="ss-file">
         <span className="ss-file-icon">
-          <Icon name="file-code" size={16} />
+          <Icon name={fileIcon} size={16} />
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="ss-file-name">{file.name}</div>
@@ -92,7 +99,7 @@ export function DropZone({ file, onFile, over: forcedOver, hint, style }: DropZo
       <span className="ss-drop-icon">
         <Icon name="upload" size={16} />
       </span>
-      <div className="ss-drop-title">{rich('dropzone.title', { browse: <u>{t('dropzone.browse')}</u> })}</div>
+      <div className="ss-drop-title">{noun ? rich('dropzone.titleOf', { noun, browse: <u>{t('dropzone.browse')}</u> }) : rich('dropzone.title', { browse: <u>{t('dropzone.browse')}</u> })}</div>
       <div className="ss-drop-sub">{hint || t('dropzone.hint', { command: 'pg_dump --schema-only' })}</div>
       {input}
     </div>

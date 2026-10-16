@@ -124,6 +124,8 @@ export interface ConfirmDialogProps {
   cancelLabel?: string;
   /** The confirm button and ⌘⏎ (Ctrl + Enter outside macOS) call it. */
   onConfirm?: () => void;
+  /** Keeps what the dialog confirms from being done: the button is disabled and ⌘⏎ does nothing. */
+  confirmDisabled?: boolean;
   onCancel?: () => void;
   width?: number;
   children?: ReactNode;
@@ -135,12 +137,13 @@ export function ConfirmDialog({
   confirmLabel = t('modal.confirm'),
   cancelLabel = t('common.cancel'),
   onConfirm,
+  confirmDisabled,
   onCancel,
   width = 440,
   children,
 }: ConfirmDialogProps) {
   useEffect(() => {
-    if (!onConfirm) return;
+    if (!onConfirm || confirmDisabled) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return;
       e.preventDefault();
@@ -148,7 +151,7 @@ export function ConfirmDialog({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onConfirm]);
+  }, [onConfirm, confirmDisabled]);
 
   return (
     <Modal
@@ -163,7 +166,7 @@ export function ConfirmDialog({
           <Button onClick={onCancel} kbd="Esc" data-autofocus>
             {cancelLabel}
           </Button>
-          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} kbd={['⌘', '⏎']}>
+          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} disabled={confirmDisabled} kbd={['⌘', '⏎']}>
             {confirmLabel}
           </Button>
         </>
