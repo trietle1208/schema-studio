@@ -1,6 +1,6 @@
 import Dexie from 'dexie';
 import type { Table } from '../core/model';
-import { seedRecords, type Row } from '../core/records';
+import { seedRecords, type Row, type RecordsByTable } from '../core/records';
 import { db } from './db';
 
 /**
@@ -49,4 +49,54 @@ export async function readRecords(schemaId: number | null, tables: readonly Tabl
   }
   const rows = await openRecords(schemaId, tables, table);
   return { rows, counts: await recordCounts(schemaId) };
+}
+
+/**
+ * The rows of every table of `tables`, for the record editor: what a foreign key is chosen from and
+ * checked against, and the rows that point at a record. A schema that is not stored has seed 0.
+ */
+export async function readAllRecords(schemaId: number | null, tables: readonly Table[]): Promise<RecordsByTable> {
+  if (schemaId === null) return seedRecords(tables, 0);
+  const stored = () => db.records.where('[schemaId+table]').between([schemaId, Dexie.minKey], [schemaId, Dexie.maxKey]).toArray();
+  let all = await stored();
+  // A table the schema got after its rows were drawn has none yet: opening it draws all that are missing.
+  const missing = tables.find((t) => !all.some((r) => r.table === t.name));
+  if (missing) {
+    await openRecords(schemaId, tables, missing.name);
+    all = await stored();
+  }
+  return Object.fromEntries(tables.map((t) => [t.name, all.find((r) => r.table === t.name)?.rows ?? []]));
+}
+
+/**
+ * Changes the rows of a table that has been opened, in one write: `change` is given the stored rows
+ * and returns the rows to store (see `core/records/rows`). Returns what was stored. A table that has
+ * no record yet has nothing to change, as nothing has opened it.
+ */
+export function changeRecords(schemaId: number, table: string, change: (rows: Row[]) => Row[]): Promise<Row[]> {
+  return db.transaction('rw', db.records, async () => {
+    const stored = await db.records.get([schemaId, table]);
+    if (!stored) throw new Error(`The records of ${table} have not been opened.`);
+    const rows = change(stored.rows);
+    await db.records.update([schemaId, table], { rows });
+    return rows;
+  });
+}
+
+/**
+ * Replaces the rows of several tables in one write, as a delete that reaches other tables does.
+ * Returns the rows each table had, so that writing them back undoes it. A table that has not been
+ * opened has nothing to replace, and nothing is written.
+ */
+export function writeRecords(schemaId: number, rows: Readonly<Record<string, Row[]>>): Promise<Record<string, Row[]>> {
+  return db.transaction('rw', db.records, async () => {
+    const before: Record<string, Row[]> = {};
+    for (const table of Object.keys(rows)) {
+      const stored = await db.records.get([schemaId, table]);
+      if (!stored) throw new Error(`The records of ${table} have not been opened.`);
+      before[table] = stored.rows;
+    }
+    for (const [table, next] of Object.entries(rows)) await db.records.update([schemaId, table], { rows: next });
+    return before;
+  });
 }

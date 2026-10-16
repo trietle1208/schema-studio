@@ -28,7 +28,7 @@ export interface SqlEditorProps {
   placeholder?: string;
   label?: string;
   /** What the text is highlighted as. */
-  language?: 'sql' | 'json';
+  language?: 'sql' | 'json' | 'text';
   actionsRef?: Ref<SqlEditorActions>;
   style?: CSSProperties;
 }
@@ -54,7 +54,10 @@ export function SqlEditor({
 
   const lines = value.split('\n');
   const maxLength = lines.reduce((max, line) => Math.max(max, line.length), 0);
-  const tokens = useMemo(() => (language === 'json' ? highlightJson(value) : highlightSql(value)), [value, language]);
+  const tokens = useMemo(
+    () => (language === 'json' ? highlightJson(value) : language === 'text' ? [{ text: value }] : highlightSql(value)),
+    [value, language],
+  );
   // An error on a line that is not shown has nothing to mark.
   const marked = errorLine != null && errorLine >= firstLine && errorLine < firstLine + lines.length ? errorLine : null;
 
@@ -92,7 +95,7 @@ export function SqlEditor({
             ref={textarea}
             value={value}
             spellCheck={false}
-            aria-label={label || 'SQL'}
+            aria-label={label || (language === 'json' ? 'JSON' : language === 'text' ? 'Text' : 'SQL')}
             placeholder={placeholder}
             readOnly={readOnly}
             onChange={(e) => {

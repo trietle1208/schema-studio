@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ecommerceTables } from '../core/fixtures/ecommerce';
 import { ecommerceSnapshot } from '../core/fixtures/testing';
 import { seedRecords, DEFAULT_RECORD_ROWS } from '../core/records';
+import { insertRow, removeRows, replaceRow, restoreRows } from '../core/records/rows';
 import { db } from './db';
-import { openRecords, readRecords, recordCounts } from './records';
+import { changeRecords, openRecords, readAllRecords, readRecords, recordCounts, writeRecords } from './records';
 import { createSchema, deleteSchema } from './schemas';
 import { resetDatabase } from './testing';
 
@@ -195,5 +196,116 @@ describe('readRecords', () => {
     const schema = await createSchema(ecommerce, ecommerceSnapshot());
     expect((await readRecords(schema.id, ecommerceTables, 'nope')).rows).toEqual([]);
     expect((await readRecords(null, ecommerceTables, 'nope')).rows).toEqual([]);
+  });
+});
+
+describe('changeRecords', () => {
+  it('stores the rows the change gives, in one write, and returns them', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    const before = await openRecords(schema.id, ecommerceTables, 'users');
+    const row = { ...before[0], id: 500, email: 'new@example.com' };
+
+    const after = await changeRecords(schema.id, 'users', (rows) => insertRow(rows, row));
+
+    expect(after).toHaveLength(before.length + 1);
+    expect((await db.records.get([schema.id, 'users']))?.rows).toEqual(after);
+    expect((await recordCounts(schema.id)).users).toBe(before.length + 1);
+    // The other tables are not touched.
+    expect((await openRecords(schema.id, ecommerceTables, 'orders'))).toEqual(seedRecords(ecommerceTables, schema.id).orders);
+  });
+
+  it('edits, deletes and restores rows, and what is stored is what a reload reads', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    const before = await openRecords(schema.id, ecommerceTables, 'products');
+
+    await changeRecords(schema.id, 'products', (rows) => replaceRow(rows, 1, { ...rows[1], name: 'Renamed' }));
+    expect((await readRecords(schema.id, ecommerceTables, 'products')).rows[1].name).toBe('Renamed');
+
+    const taken = removeRows(before, [0, 2]);
+    await changeRecords(schema.id, 'products', (rows) => removeRows(rows, [0, 2]).rows);
+    expect((await readRecords(schema.id, ecommerceTables, 'products')).rows).toHaveLength(before.length - 2);
+
+    await changeRecords(schema.id, 'products', (rows) => restoreRows(rows, taken.removed));
+    const rows = (await readRecords(schema.id, ecommerceTables, 'products')).rows;
+    expect(rows.map((r) => r.id)).toEqual(before.map((r) => r.id));
+    expect(rows[1].name).toBe('Renamed');
+  });
+
+  it('keeps a table that was emptied empty: it is not drawn again', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    await openRecords(schema.id, ecommerceTables, 'payments');
+    await changeRecords(schema.id, 'payments', () => []);
+    expect((await readRecords(schema.id, ecommerceTables, 'payments')).rows).toEqual([]);
+  });
+
+  it('writes nothing when the change throws', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    const before = await openRecords(schema.id, ecommerceTables, 'users');
+    await expect(
+      changeRecords(schema.id, 'users', () => {
+        throw new Error('no');
+      }),
+    ).rejects.toThrow('no');
+    expect((await db.records.get([schema.id, 'users']))?.rows).toEqual(before);
+  });
+
+  it('has nothing to change in a table nothing opened', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    await expect(changeRecords(schema.id, 'users', (rows) => rows)).rejects.toThrow();
+  });
+});
+
+describe('readAllRecords', () => {
+  it('reads every table, drawing the ones that have no rows yet together', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    const all = await readAllRecords(schema.id, ecommerceTables);
+    expect(Object.keys(all).sort()).toEqual(ecommerceTables.map((t) => t.name).sort());
+    expect(all.users).toEqual(seedRecords(ecommerceTables, schema.id).users);
+    expect(await db.records.count()).toBe(ecommerceTables.length);
+  });
+
+  it('reads the rows that were changed, not the ones that were drawn', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    await openRecords(schema.id, ecommerceTables, 'users');
+    await changeRecords(schema.id, 'users', (rows) => removeRows(rows, [0, 1]).rows);
+    expect((await readAllRecords(schema.id, ecommerceTables)).users).toHaveLength(DEFAULT_RECORD_ROWS - 2);
+  });
+
+  it('draws a table the schema got after its rows were made, and keeps the others', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    const users = await openRecords(schema.id, ecommerceTables, 'users');
+    await db.records.delete([schema.id, 'payments']);
+    const all = await readAllRecords(schema.id, ecommerceTables);
+    expect(all.users).toEqual(users);
+    expect(all.payments.length).toBeGreaterThan(0);
+  });
+
+  it('draws seed 0 for a schema that is not stored', async () => {
+    expect(await readAllRecords(null, ecommerceTables)).toEqual(seedRecords(ecommerceTables, 0));
+  });
+});
+
+describe('writeRecords', () => {
+  it('replaces the rows of several tables in one write and gives back the rows they had', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    const all = await readAllRecords(schema.id, ecommerceTables);
+
+    const before = await writeRecords(schema.id, { orders: all.orders.slice(1), order_items: [] });
+
+    expect(before).toEqual({ orders: all.orders, order_items: all.order_items });
+    expect((await readAllRecords(schema.id, ecommerceTables)).orders).toHaveLength(all.orders.length - 1);
+    expect(await recordCounts(schema.id)).toMatchObject({ order_items: 0, users: all.users.length });
+    await writeRecords(schema.id, before);
+    expect(await readAllRecords(schema.id, ecommerceTables)).toEqual(all);
+  });
+
+  it('writes nothing when one of the tables has not been opened', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    await openRecords(schema.id, ecommerceTables, 'users');
+    await db.records.delete([schema.id, 'orders']);
+    const users = (await db.records.get([schema.id, 'users']))!.rows;
+
+    await expect(writeRecords(schema.id, { users: [], orders: [] })).rejects.toThrow('orders');
+    expect((await db.records.get([schema.id, 'users']))!.rows).toEqual(users);
   });
 });
