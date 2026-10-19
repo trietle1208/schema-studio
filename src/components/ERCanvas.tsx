@@ -42,6 +42,7 @@ import { cx } from './cx';
 import { Icon } from './Icon';
 import { rich } from './rich';
 import { TableNode, type TableNodeProps } from './TableNode';
+import { SMOOTH_EASE, useLiveView, viewTransform } from './useLiveView';
 import { useStableHandlers } from './useStableHandlers';
 
 const MINIMAP_SIZE: Size = { w: 168, h: 108 };
@@ -59,6 +60,13 @@ const CULL_STEP = 256;
 const LITE_ZOOM = 0.45;
 /** How long one pass looks for ways around tables, so that a diagram of hundreds of tables stays responsive while its lines are found. */
 const ROUTE_PASS_MS = 12;
+/** How long the canvas glides to where a step of the wheel puts it, and to where a drag of it has got. */
+const WHEEL_GLIDE_MS = 140;
+const DRAG_GLIDE_MS = 40;
+/** How long the canvas glides to the zoom of a step of the wheel: long enough for a wheel turned notch by notch to zoom without a stop between notches. */
+const WHEEL_ZOOM_GLIDE_MS = 260;
+/** How often a large diagram is drawn again while it is panned or zoomed. */
+const MOVING_COMMIT_MS = 250;
 
 export interface CanvasMenu {
   /** The table the menu is for; null for the menu of the empty canvas. */
@@ -414,6 +422,16 @@ export function ERCanvas({
   /** Set when a press with Shift held has added its table to the selected ones: the click that follows does not take it out again. */
   const added = useRef(false);
   const ref = useRef<HTMLDivElement>(null);
+  // The wheel and a drag of the canvas move the layer without a render of the canvas for each step. A
+  // large diagram is drawn again now and then while it moves, so that the tables coming into view are there.
+  const { layer: layerRef, live, move: moveView, settle: settleView } = useLiveView(
+    { offset, zoom },
+    (v) => {
+      setOffset(v.offset);
+      if (v.zoom !== zoom) onZoom?.(v.zoom);
+    },
+    tables.length > LARGE_DIAGRAM ? MOVING_COMMIT_MS : null,
+  );
   const chosen: readonly string[] = selection && selection.length > 1 ? selection : sel ? [sel] : [];
   const isChosen = new Set(chosen);
 
@@ -427,12 +445,14 @@ export function ERCanvas({
       const el = ref.current;
       if (!el) return;
       const view = fitView(tables, positions, { w: el.clientWidth, h: el.clientHeight });
+      // A glide that is still on its way would otherwise end where the wheel sent it.
+      settleView();
       setOffset(view.offset);
       onZoom?.(view.zoom);
     },
     view() {
       const el = ref.current;
-      return viewRect(offset, zoom, el ? { w: el.clientWidth, h: el.clientHeight } : size);
+      return viewRect(live.current.offset, live.current.zoom, el ? { w: el.clientWidth, h: el.clientHeight } : size);
     },
   }));
 
@@ -450,20 +470,20 @@ export function ERCanvas({
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      const { offset: o, zoom: z } = live.current;
       if (e.ctrlKey || e.metaKey) {
         if (!onZoom) return;
-        const next = clampZoom(zoom * Math.exp(-e.deltaY * WHEEL_ZOOM_SPEED));
-        if (next === zoom) return;
+        const next = clampZoom(z * Math.exp(-e.deltaY * WHEEL_ZOOM_SPEED));
+        if (next === z) return;
         const r = el.getBoundingClientRect();
-        setOffset(zoomAt(offset, zoom, next, { x: e.clientX - r.left, y: e.clientY - r.top }));
-        onZoom(next);
+        moveView({ offset: zoomAt(o, z, next, { x: e.clientX - r.left, y: e.clientY - r.top }), zoom: next }, WHEEL_ZOOM_GLIDE_MS, SMOOTH_EASE);
       } else {
-        setOffset((o) => ({ x: o.x - e.deltaX, y: o.y - e.deltaY }));
+        moveView({ offset: { x: o.x - e.deltaX, y: o.y - e.deltaY }, zoom: z }, WHEEL_GLIDE_MS);
       }
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [zoom, offset, onZoom]);
+  }, [live, moveView, onZoom]);
 
   // An open menu is what Esc closes, before anything under it: the key goes no further. Any other
   // key closes the menu too and goes on, so that a shortcut the menu names still does what it says.
@@ -499,7 +519,8 @@ export function ERCanvas({
   /** The canvas point under the pointer. */
   function pointAt(el: HTMLElement, e: PointerEvent): Position {
     const r = el.getBoundingClientRect();
-    return { x: (e.clientX - r.left - offset.x) / zoom, y: (e.clientY - r.top - offset.y) / zoom };
+    const { offset: o, zoom: z } = live.current;
+    return { x: (e.clientX - r.left - o.x) / z, y: (e.clientY - r.top - o.y) / z };
   }
 
   const columnRef = (row: Row | null): ColumnRef | null => {
@@ -669,13 +690,13 @@ export function ERCanvas({
     setMenu(null);
     // A press on the minimap moves the view (see Minimap): it is not one on the empty canvas.
     if ((e.target as Element).closest('.ss-minimap')) return;
-    drag.current = { table: null, sx: e.clientX, sy: e.clientY, ox: offset.x, oy: offset.y, moved: false };
-    if (e.shiftKey && onSelectTables) {
-      drag.current.frame = { from: pointAt(e.currentTarget, e), base: chosen };
-      // As for a press on a table: Shift + press would select the text between it and the last click.
-      e.preventDefault();
-      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-    }
+    settleView();
+    drag.current = { table: null, sx: e.clientX, sy: e.clientY, ox: live.current.offset.x, oy: live.current.offset.y, moved: false };
+    // As for a press on a table: the drag that follows would select the text it passes over (the
+    // legend, the panels beside the canvas), and Shift + press the text since the last click.
+    e.preventDefault();
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    if (e.shiftKey && onSelectTables) drag.current.frame = { from: pointAt(e.currentTarget, e), base: chosen };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
@@ -695,7 +716,7 @@ export function ERCanvas({
       return;
     }
     setPanning(true);
-    setOffset({ x: d.ox + dx, y: d.oy + dy });
+    moveView({ offset: { x: d.ox + dx, y: d.oy + dy }, zoom: live.current.zoom }, DRAG_GLIDE_MS);
   }
 
   function onBgUp() {
@@ -915,7 +936,7 @@ export function ERCanvas({
       role="application"
       aria-label={t('canvas.label')}
     >
-      <div className="ss-canvas-layer" style={{ transform: `translate(${offset.x}px,${offset.y}px) scale(${zoom})` }}>
+      <div ref={layerRef} className="ss-canvas-layer" style={{ transform: viewTransform({ offset, zoom }) }}>
         <svg className="ss-edges" width={1} height={1}>
           {shownEdges.map((e) => {
             const active = isChosen.has(e.from) || isChosen.has(e.to);
