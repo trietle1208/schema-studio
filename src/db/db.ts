@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable, type Table } from 'dexie';
 import type { SchemaSnapshot } from '../core/model';
 import type { Row } from '../core/records';
+import type { QuerySpec } from '../core/records/query';
 
 /** One row per schema: what the lists show, and the number of its current version. */
 export interface SchemaRecord {
@@ -52,6 +53,26 @@ export interface RecordsRecord {
   createdAt: number;
 }
 
+/**
+ * A query of Query mode that is kept for a schema: one the person saved with a name, or one that was
+ * run (the latest few are kept). A query written in the Builder keeps its `spec`, so that it opens
+ * in the Builder again.
+ */
+export interface QueryRecord {
+  id: number;
+  schemaId: number;
+  kind: 'saved' | 'recent';
+  /** What a saved query is called, unique among the saved queries of the schema. */
+  name?: string;
+  sql: string;
+  spec?: QuerySpec;
+  /** A run: whether it worked, and how long it took in milliseconds (only when it worked). */
+  ok?: boolean;
+  ms?: number;
+  /** Milliseconds since the epoch: when it was saved or run. */
+  at: number;
+}
+
 /** An SSH server whose key was trusted, so the bridge logs in to it without asking again. One row per `host:port`. */
 export interface KnownHostRecord {
   /** The server as it is named in the connection form, in lower case: `bastion.example.com:22`. */
@@ -67,6 +88,7 @@ export type Database = Dexie & {
   versions: EntityTable<VersionRecord, 'id'>;
   records: Table<RecordsRecord, [number, string]>;
   knownHosts: EntityTable<KnownHostRecord, 'id'>;
+  queries: EntityTable<QueryRecord, 'id'>;
 };
 
 export const db = new Dexie('schema-studio') as Database;
@@ -88,4 +110,9 @@ db.version(2).stores({
 // Version 3 adds the SSH servers whose host key was trusted.
 db.version(3).stores({
   knownHosts: 'id',
+});
+
+// Version 4 adds the queries of Query mode, saved and recent, by schema.
+db.version(4).stores({
+  queries: '++id, [schemaId+kind]',
 });

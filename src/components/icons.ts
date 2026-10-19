@@ -21,6 +21,8 @@ export const ICONS = {
   'chevron-right': '<path d="M9 6l6 6-6 6"/>',
   'chevron-left': '<path d="M15 6l-6 6 6 6"/>',
   refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4.5V11h-6.5"/>',
+  play: '<path d="M7.5 4.5v15L19 12z"/>',
+  bookmark: '<path d="M6.5 4.5h11v15L12 15.5l-5.5 4z"/>',
   'chevron-up': '<path d="M6 15l6-6 6 6"/>',
   'chevrons-ud': '<path d="M8 9l4-4 4 4M8 15l4 4 4-4"/>',
   'arrow-up': '<path d="M12 19V5M6 11l6-6 6 6"/>',
