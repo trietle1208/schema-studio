@@ -5,7 +5,9 @@ import type { WorkspaceMode } from '../core/routes';
 import { Badge } from './Badge';
 import type { ColumnsChoice } from '../core/edit';
 import { Button } from './Button';
+import { ButtonGroup } from './ButtonGroup';
 import { ContextMenu } from './ContextMenu';
+import { cx } from './cx';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Input } from './Input';
@@ -150,6 +152,11 @@ export interface ToolbarProps {
   onHistory?: () => void;
   onShare?: () => void;
   onExport?: () => void;
+  /**
+   * `centered` is the workspace chrome: three zones with the mode switch in the middle.
+   * Screens without a mode switch keep the compact bar.
+   */
+  chrome?: 'bar' | 'centered';
 }
 
 export function Toolbar({
@@ -180,10 +187,13 @@ export function Toolbar({
   onHistory,
   onShare,
   onExport,
+  chrome = 'bar',
 }: ToolbarProps) {
   const showModes = !!onMode;
-  return (
-    <header className="ss-toolbar">
+  const centered = chrome === 'centered';
+
+  const crumb = (
+    <>
       <div className="ss-tb-crumb">
         <Crumb onClick={onSchemas}>{t('common.schemas')}</Crumb>
         <Icon name="chevron-right" size={12} />
@@ -202,13 +212,86 @@ export function Toolbar({
           {version}
         </Badge>
       )}
-      {showModes && <ModeSwitch value={mode} onChange={onMode} dataDisabled={dataDisabled} />}
+      {centered && <span className="ss-tb-sep" />}
       <SaveStatus state={saveState} />
       {saveState === 'dirty' && (
         <Button size="sm" kbd={['⌘', 'S']} onClick={onSave}>
           {t('toolbar.save')}
         </Button>
       )}
+    </>
+  );
+
+  const searchBox = (
+    <div className={cx('ss-tb-search', centered && 'ss-tb-search--wide')}>
+      <Input
+        icon="search"
+        placeholder={t('toolbar.search')}
+        size="sm"
+        suffix={<Kbd keys={['⌘', 'K']} />}
+        value={search ?? ''}
+        onChange={onSearch ? (e) => onSearch(e.target.value) : undefined}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onSearchSubmit?.();
+          // Esc clears the search first, then leaves the field.
+          if (e.key !== 'Escape') return;
+          if (search) onSearch?.('');
+          else e.currentTarget.blur();
+        }}
+        readOnly={!onSearch}
+        inputRef={searchRef}
+        spellCheck={false}
+        aria-label={t('toolbar.searchLabel')}
+        data-local-edit
+      />
+    </div>
+  );
+
+  if (centered) {
+    return (
+      <header className="ss-toolbar ss-toolbar--centered">
+        <div className="ss-tb-zone ss-tb-zone--start">{crumb}</div>
+        <div className="ss-tb-zone ss-tb-zone--center">{showModes && <ModeSwitch value={mode} onChange={onMode} dataDisabled={dataDisabled} large />}</div>
+        <div className="ss-tb-zone ss-tb-zone--end">
+          {mode === 'diagram' && (
+            <>
+              <div className="ss-tb-group">
+                <IconButton icon="zoom-out" label={t('toolbar.zoomOut')} onClick={() => onZoom?.(stepZoom(zoom, -ZOOM_STEP))} />
+                <button type="button" className="ss-tb-zoom" title={t('toolbar.zoomReset')} onClick={() => onZoom?.(1)}>
+                  {`${Math.round(zoom * 100)}%`}
+                </button>
+                <IconButton icon="zoom-in" label={t('toolbar.zoomIn')} onClick={() => onZoom?.(stepZoom(zoom, ZOOM_STEP))} />
+                <IconButton icon="fit" label={t('toolbar.fit')} onClick={onFit} />
+                {onArrange && (
+                  <IconButton icon="sparkle" label={`${arrangeSelected ? t('action.arrangeSelected') : t('action.arrange')} (⇧A)`} onClick={onArrange} />
+                )}
+                {onShowColumns && <ColumnsMenu onChoose={onShowColumns} selected={columnsSelected} />}
+              </div>
+              <span className="ss-tb-sep" />
+            </>
+          )}
+          {searchBox}
+          <ButtonGroup label={t('toolbar.historyGroup')}>
+            <IconButton icon="undo" label={t('toolbar.undo')} disabled={canUndo === false} onClick={onUndo} />
+            <IconButton icon="redo" label={t('toolbar.redo')} disabled={canRedo === false} onClick={onRedo} />
+            <IconButton icon="history" label={t('toolbar.history')} disabled={!onHistory} onClick={onHistory} />
+          </ButtonGroup>
+          <span className="ss-tb-sep" />
+          <Button icon="share" disabled={!onShare} onClick={onShare}>
+            {t('toolbar.share')}
+          </Button>
+          <Button variant="primary" icon="download" disabled={!onExport} onClick={onExport}>
+            {t('common.exportSchema')}
+          </Button>
+        </div>
+      </header>
+    );
+  }
+
+  return (
+    <header className="ss-toolbar">
+      {crumb}
+      {showModes && <ModeSwitch value={mode} onChange={onMode} dataDisabled={dataDisabled} />}
       <span className="ss-spacer" />
       <div className="ss-tb-group">
         <IconButton icon="undo" label={t('toolbar.undo')} disabled={canUndo === false} onClick={onUndo} />
@@ -230,28 +313,7 @@ export function Toolbar({
         </div>
       )}
       <span className="ss-tb-sep" />
-      <div className="ss-tb-search">
-        <Input
-          icon="search"
-          placeholder={t('toolbar.search')}
-          size="sm"
-          suffix={<Kbd keys={['⌘', 'K']} />}
-          value={search ?? ''}
-          onChange={onSearch ? (e) => onSearch(e.target.value) : undefined}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') onSearchSubmit?.();
-            // Esc clears the search first, then leaves the field.
-            if (e.key !== 'Escape') return;
-            if (search) onSearch?.('');
-            else e.currentTarget.blur();
-          }}
-          readOnly={!onSearch}
-          inputRef={searchRef}
-          spellCheck={false}
-          aria-label={t('toolbar.searchLabel')}
-          data-local-edit
-        />
-      </div>
+      {searchBox}
       <IconButton icon="history" label={t('toolbar.history')} disabled={!onHistory} onClick={onHistory} />
       <Button icon="share" disabled={!onShare} onClick={onShare}>
         {t('toolbar.share')}

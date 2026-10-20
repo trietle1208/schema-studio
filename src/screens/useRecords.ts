@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { seedRecords, type Row } from '../core/records';
+import type { Row } from '../core/records';
 import type { RecordData } from '../core/records/fields';
 import { changeRecords, readAllRecords, readRecords, writeRecords } from '../db/records';
 import { useSchemaStore } from '../store/schema';
@@ -94,7 +94,7 @@ export function useRecords(schemaId: number | null, table: string): RecordsState
     },
     readData: async () => {
       const tables = useSchemaStore.getState().tables;
-      const all = schemaId === null ? seedRecords(tables, 0) : await readAllRecords(schemaId, tables);
+      const all = await readAllRecords(schemaId, tables);
       return shown.current ? { ...all, [table]: shown.current } : all;
     },
   };

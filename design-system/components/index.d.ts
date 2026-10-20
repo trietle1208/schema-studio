@@ -25,7 +25,7 @@ export interface SelectProps { value: string; onChange?: (v: string) => void; op
 export interface CheckboxProps { checked?: boolean; onChange?: (checked: boolean) => void; label?: ReactNode; description?: ReactNode; disabled?: boolean; name?: string; }
 export interface SwitchProps { checked?: boolean; onChange?: (checked: boolean) => void; label?: ReactNode; ariaLabel?: string; }
 export interface SegmentedControlProps { options: { value: string; label: ReactNode; icon?: IconName; badge?: ReactNode; disabled?: boolean }[]; value: string; onChange?: (v: string) => void; block?: boolean; }
-export interface SidebarProps { active?: 'schemas' | 'recent' | 'favorites'; onNavigate?: (id: string) => void; schemas?: SchemaSummary[]; activeSchema?: string; onSelectSchema?: (name: string) => void; onNew?: () => void; empty?: boolean; workspace?: string; userName?: string; userInitials?: string; }
+export interface SidebarProps { active?: 'schemas' | 'recent' | 'favorites'; onNavigate?: (id: string) => void; schemas?: SchemaSummary[]; activeSchema?: string; onSelectSchema?: (name: string) => void; onToggleFavorite?: (name: string, favorite: boolean) => void; onNew?: () => void; onSettings?: () => void; onShortcuts?: () => void; onCollapse?: () => void; collapsed?: boolean; empty?: boolean; workspace?: string; userName?: string; userInitials?: string; }
 export type WorkspaceMode = 'diagram' | 'data' | 'query';
 export interface ToolbarProps { mode?: WorkspaceMode; onMode?: (mode: WorkspaceMode) => void; schema?: string; engine?: string; version?: string; saveState?: 'saved' | 'dirty' | 'saving'; onSave?: () => void; zoom?: number; onZoom?: (z: number) => void; onFit?: () => void; onUndo?: () => void; onRedo?: () => void; canUndo?: boolean; canRedo?: boolean; search?: string; onSearch?: (q: string) => void; onHistory?: () => void; onShare?: () => void; onExport?: () => void; }
 export interface StatusBarProps { left?: ReactNode[]; right?: ReactNode[]; }
@@ -61,7 +61,12 @@ export interface DataGridColumn extends Column { width?: number; }
 export interface DataGridProps { columns: DataGridColumn[]; rows: RecordRow[]; selected?: number[]; onSelect?: (rows: number[]) => void; activeCell?: CellRef | null; onActiveCell?: (cell: CellRef) => void; modified?: CellRef[]; /** Cells that will not be accepted (the preview of Import Records): `removed` outline and an alert glyph; `message` is the cell's title. */ invalid?: (CellRef & { message?: string })[]; onOpenRow?: (row: number) => void; /** A click on a cell opens its row (`onOpenRow`), as a double click and ⏎ do; for a grid that sits next to a panel showing the row. */ openOnClick?: boolean; /** `false` leaves out the checkboxes of the gutter, which then only numbers the rows. */ selectable?: boolean; onRowAction?: (action: RowAction, row: number) => void; sort?: RecordSort | null; loading?: boolean; empty?: boolean | ReactNode; density?: RecordDensity; label?: string; }
 export type TableTab = 'data' | 'structure' | 'relationships';
 export interface TableHeaderProps { table: Table; schema?: string; engine?: string; rows?: number; relationships?: number; tab?: TableTab; onTab?: (tab: TableTab) => void; onAdd?: () => void; onImport?: () => void; onExport?: () => void; onRefresh?: () => void; menuItems?: (MenuItem | '-')[]; loading?: boolean; }
-export interface TableStructureProps { table: Table; }
+export interface TableStructureProps {
+  table: Table;
+  onOpenColumn?: (column: string) => void;
+  onOpenRelationships?: () => void;
+  onCopyColumn?: (column: string) => void;
+}
 export interface TableRelationshipsProps { table: Table; tables: Table[]; onOpen?: (table: string) => void; }
 export interface DataToolbarProps { columns: Column[]; search?: string; onSearch?: (q: string) => void; filters?: RecordFilter[]; onAddFilter?: (filter: RecordFilter) => void; sort?: RecordSort | null; onSort?: (sort: RecordSort | null) => void; hidden?: string[]; onHidden?: (names: string[]) => void; density?: RecordDensity; onDensity?: (density: RecordDensity) => void; pageSize?: number; onPageSize?: (size: number) => void; onRefresh?: () => void; loading?: boolean; }
 export interface FilterChipsProps { filters: RecordFilter[]; onRemove?: (index: number) => void; onClear?: () => void; }

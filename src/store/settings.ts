@@ -15,6 +15,8 @@ import { DEFAULT_THEME, parseTheme, THEME_STORAGE_KEY, type Theme } from '../cor
 
 // What the user set for the app itself. It is kept in this browser and is not part of any schema.
 
+export const SIDEBAR_COLLAPSED_KEY = 'schema-studio.sidebar-collapsed';
+
 export interface SettingsState {
   theme: Theme;
   /** Paints the app in `theme` at once and keeps the choice for the next visit. */
@@ -33,6 +35,12 @@ export interface SettingsState {
    * to the other panel, and keeps the width for the next visit.
    */
   setPanelWidth: (panel: Panel, width: number) => void;
+  /** Whether the sidebar is the narrow icon rail. */
+  sidebarCollapsed: boolean;
+  /** Collapses or expands the sidebar and keeps the choice for the next visit. */
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  /** Toggles the sidebar between the full rail and the icon rail. */
+  toggleSidebar: () => void;
 }
 
 /** The theme chosen on an earlier visit. A browser that keeps nothing, as in private mode, gives the default. */
@@ -80,6 +88,15 @@ function storedPanels(): PanelWidths {
     return parsePanelWidths(localStorage.getItem(PANEL_STORAGE_KEY));
   } catch {
     return parsePanelWidths(null);
+  }
+}
+
+/** Whether the sidebar was collapsed on an earlier visit. */
+function storedSidebarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
   }
 }
 
@@ -137,6 +154,16 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
     set({ panels: widths });
   },
+  sidebarCollapsed: storedSidebarCollapsed(),
+  setSidebarCollapsed: (collapsed) => {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+    } catch {
+      // The choice still holds until the page is closed.
+    }
+    set({ sidebarCollapsed: collapsed });
+  },
+  toggleSidebar: () => get().setSidebarCollapsed(!get().sidebarCollapsed),
 }));
 
 // index.html has applied the stored theme before the first paint; this keeps the page and the store in step.

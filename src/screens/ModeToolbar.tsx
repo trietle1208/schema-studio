@@ -16,7 +16,7 @@ export interface ModeToolbarProps {
   onSearchSubmit?: () => void;
 }
 
-/** The toolbar of the Data and Query modes: the diagram's, without its zoom and arrange tools. */
+/** The toolbar of the Data and Query modes: same centered chrome as Data, without zoom/arrange. */
 export function ModeToolbar({ mode, searchRef, onSearchSubmit }: ModeToolbarProps) {
   const name = useSchemaStore((s) => s.name);
   const engine = useSchemaStore((s) => s.engine);
@@ -51,6 +51,7 @@ export function ModeToolbar({ mode, searchRef, onSearchSubmit }: ModeToolbarProp
       onSchemas={() => go(SCHEMAS_ROUTE)}
       onHistory={() => go({ screen: 'history', schema: name })}
       onExport={requestExport}
+      chrome="centered"
     />
   );
 }

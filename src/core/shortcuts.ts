@@ -6,6 +6,8 @@ export type Shortcut =
   | 'new-schema'
   | 'import'
   | 'settings'
+  | 'shortcuts'
+  | 'toggle-sidebar'
   | 'add-column'
   | 'copy-create-table'
   | 'duplicate'
@@ -46,6 +48,8 @@ export function matchShortcut(e: KeyStroke): Shortcut | null {
     if (key === 'n') return 'new-schema';
     if (key === 'i') return 'import';
     if (key === ',') return 'settings';
+    if (key === '/') return 'shortcuts';
+    if (key === 'b') return 'toggle-sidebar';
     if (key === 'd') return 'duplicate';
     if (key === 'h') return 'history';
     if (key === '-') return 'zoom-out';

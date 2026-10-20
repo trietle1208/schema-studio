@@ -3,15 +3,17 @@ import { t } from '../core/i18n';
 import type { Table } from '../core/model';
 import { rowsText } from '../core/records/cells';
 import { Badge } from './Badge';
-import { Button } from './Button';
-import { ContextMenu, type MenuItem } from './ContextMenu';
 import { cx } from './cx';
-import { IconButton } from './IconButton';
-import { usePopover } from './usePopover';
+import { Icon } from './Icon';
+import type { IconName } from './icons';
 
 export type TableTab = 'data' | 'structure' | 'relationships';
 
-const TABS: TableTab[] = ['data', 'structure', 'relationships'];
+const TABS: { value: TableTab; icon: IconName }[] = [
+  { value: 'data', icon: 'table' },
+  { value: 'structure', icon: 'columns' },
+  { value: 'relationships', icon: 'link' },
+];
 
 export interface TableHeaderProps {
   table: Table;
@@ -24,13 +26,12 @@ export interface TableHeaderProps {
   relationships?: number;
   tab?: TableTab;
   onTab?: (tab: TableTab) => void;
-  // Each button stays disabled without a handler.
+  /** Kept for callers that still pass them; the data toolbar owns these actions now. */
   onAdd?: () => void;
   onImport?: () => void;
   onExport?: () => void;
   onRefresh?: () => void;
-  /** The items of the "More actions" menu; without them the menu lists the usual ones with nothing behind them. */
-  menuItems?: (MenuItem | '-')[];
+  menuItems?: unknown;
   loading?: boolean;
 }
 
@@ -42,24 +43,22 @@ export function TableHeader({
   relationships,
   tab = 'data',
   onTab,
-  onAdd,
-  onImport,
-  onExport,
-  onRefresh,
-  menuItems,
-  loading,
 }: TableHeaderProps) {
-  const [moreOpen, setMoreOpen, moreRef] = usePopover();
   const counts: Partial<Record<TableTab, number>> = { structure: table.columns.length, relationships };
-  const meta = t('tableHeader.meta', {
-    rows: rows != null ? rowsText(rows) : '',
-    columns: t('count.columns', { count: table.columns.length }),
-  });
-  const items: (MenuItem | '-')[] = menuItems ?? [
-    { icon: 'layers', label: t('action.openInDiagram') },
-    { icon: 'copy', label: t('action.copyTableName') },
-    { icon: 'code', label: t('action.copyCreateTable') },
-  ];
+  const storage = engine && /mysql/i.test(engine) ? 'InnoDB' : undefined;
+  const meta =
+    rows != null
+      ? storage
+        ? t('tableHeader.metaStorage', {
+            rows: rowsText(rows),
+            columns: t('count.columns', { count: table.columns.length }),
+            storage,
+          })
+        : t('tableHeader.meta', {
+            rows: rowsText(rows),
+            columns: t('count.columns', { count: table.columns.length }),
+          })
+      : t('count.columns', { count: table.columns.length });
 
   const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
     const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
@@ -67,7 +66,7 @@ export function TableHeader({
     e.preventDefault();
     const n = (i + step + TABS.length) % TABS.length;
     (e.currentTarget.parentNode?.children[n] as HTMLElement | undefined)?.focus();
-    onTab?.(TABS[n]);
+    onTab?.(TABS[n].value);
   };
 
   return (
@@ -89,36 +88,10 @@ export function TableHeader({
             {engine}
           </Badge>
         )}
-        <span className="ss-tbh-meta">{rows != null ? meta : t('count.columns', { count: table.columns.length })}</span>
-        <span className="ss-spacer" />
-        <IconButton icon="refresh" label={t('tableHeader.refresh')} disabled={loading || !onRefresh} onClick={onRefresh} />
-        <div className="ss-anchor" ref={moreRef}>
-          <IconButton
-            icon="more"
-            label={t('tableHeader.more')}
-            active={moreOpen}
-            aria-haspopup="menu"
-            aria-expanded={moreOpen}
-            onClick={() => setMoreOpen(!moreOpen)}
-          />
-          {moreOpen && (
-            <div className="ss-anchor-pop ss-anchor-pop--end">
-              <ContextMenu items={items} onClose={() => setMoreOpen(false)} />
-            </div>
-          )}
-        </div>
-        <Button icon="upload" disabled={!onImport} onClick={onImport}>
-          {t('action.importRecords')}
-        </Button>
-        <Button icon="download" disabled={!onExport} onClick={onExport}>
-          {t('common.export')}
-        </Button>
-        <Button variant="primary" icon="plus" kbd={['⌘', '⏎']} disabled={!onAdd} onClick={onAdd}>
-          {t('action.addRecord')}
-        </Button>
+        <span className="ss-tbh-meta">{meta}</span>
       </div>
       <div className="ss-tabs" role="tablist" aria-label={t('tableHeader.views')}>
-        {TABS.map((value, i) => {
+        {TABS.map(({ value, icon }, i) => {
           const on = tab === value;
           const n = counts[value];
           return (
@@ -132,8 +105,9 @@ export function TableHeader({
               onClick={() => onTab?.(value)}
               onKeyDown={(e) => onTabKey(e, i)}
             >
+              <Icon name={icon} size={14} />
               {t(`tableHeader.tab.${value}`)}
-              {n != null && <span className="ss-tab-count">{n}</span>}
+              {n != null && <span className="ss-tab-count">({n})</span>}
             </button>
           );
         })}

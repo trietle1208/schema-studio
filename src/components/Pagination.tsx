@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { formatNumber, t } from '../core/i18n';
+import { PAGE_SIZES } from '../core/records';
 import { rowsText } from '../core/records/cells';
+import { ButtonGroup } from './ButtonGroup';
 import { IconButton } from './IconButton';
 import { Input } from './Input';
+import { Select } from './Select';
 
 export interface PaginationProps {
   /** Counts from 1. */
@@ -11,10 +14,11 @@ export interface PaginationProps {
   /** The rows there are, all pages together. */
   total: number;
   onPage?: (page: number) => void;
+  onPageSize?: (size: number) => void;
   loading?: boolean;
 }
 
-export function Pagination({ page: asked, pageSize, total, onPage, loading }: PaginationProps) {
+export function Pagination({ page: asked, pageSize, total, onPage, onPageSize, loading }: PaginationProps) {
   const size = pageSize || 50;
   const pages = Math.max(1, Math.ceil(total / size));
   const page = Math.min(Math.max(1, asked || 1), pages);
@@ -41,8 +45,25 @@ export function Pagination({ page: asked, pageSize, total, onPage, loading }: Pa
   return (
     <div className="ss-pager" role="navigation" aria-label={t('pager.label')}>
       <span className="ss-pager-range">{range}</span>
+      {onPageSize && (
+        <label className="ss-pager-size">
+          <span>{t('pager.pageSize')}</span>
+          <Select
+            size="sm"
+            mono
+            label={t('pager.pageSize')}
+            value={String(size)}
+            disabled={loading}
+            onChange={(v) => onPageSize(Number(v))}
+            options={PAGE_SIZES.map((n) => ({ value: String(n), label: String(n) }))}
+          />
+        </label>
+      )}
       <span className="ss-spacer" />
-      <IconButton icon="chevron-left" size="sm" label={t('pager.previous')} disabled={loading || page <= 1} onClick={() => go(page - 1)} />
+      <ButtonGroup label={t('pager.nav')}>
+        <IconButton icon="chevron-left" size="sm" label={t('pager.previous')} disabled={loading || page <= 1} onClick={() => go(page - 1)} />
+        <IconButton icon="chevron-right" size="sm" label={t('pager.next')} disabled={loading || page >= pages} onClick={() => go(page + 1)} />
+      </ButtonGroup>
       <span className="ss-pager-page">
         {t('pager.page')}
         <Input
@@ -66,7 +87,6 @@ export function Pagination({ page: asked, pageSize, total, onPage, loading }: Pa
         />
         {t('pager.of', { pages: formatNumber(pages) })}
       </span>
-      <IconButton icon="chevron-right" size="sm" label={t('pager.next')} disabled={loading || page >= pages} onClick={() => go(page + 1)} />
     </div>
   );
 }

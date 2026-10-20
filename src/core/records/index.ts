@@ -2,9 +2,9 @@ import { generateSeed, type SeedValue } from '../generate/seed';
 import { columnKind } from '../generate/seedValues';
 import type { Column, Table } from '../model';
 
-// The rows of a schema's tables, as the Data mode shows them. They are sample data: `seedRecords`
-// makes them from the schema with `generateSeed`, and everything else here reads them, never
-// changes them. Pure TS, so that it runs without React or the database.
+// The rows of a schema's tables, as the Data mode shows them. `seedRecords` still builds sample
+// rows from `generateSeed` for tests and Export → Sample data; Data mode itself starts empty and
+// is filled by Import Records or Add record. Pure TS, so that it runs without React or the database.
 
 /** A value of a record: `null` is NULL, timestamps are `YYYY-MM-DD HH:mm:ss`, binary is `\x…`. */
 export type RecordValue = string | number | boolean | null;

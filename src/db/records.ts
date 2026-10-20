@@ -1,13 +1,12 @@
 import Dexie from 'dexie';
 import type { Table } from '../core/model';
-import { seedRecords, type Row, type RecordsByTable } from '../core/records';
+import { type Row, type RecordsByTable } from '../core/records';
 import { db } from './db';
 
 /**
- * The rows of `table`, made the first time they are asked for. The rows of every table without a
- * record are drawn together, so that foreign keys point at rows that exist, and stored; the tables
- * that have rows already keep them. `seed` defaults to the schema's id, so each schema has its
- * own data and the same data every time. A table that is not in `tables` has no rows.
+ * The rows of `table`, made the first time they are asked for. Every table without a record gets
+ * an empty list and is stored together, so tables that have rows already keep them. Import Records
+ * (or Add record) fills them afterwards. A table that is not in `tables` has no rows.
  */
 export function openRecords(schemaId: number, tables: readonly Table[], table: string, seed = schemaId): Promise<Row[]> {
   return db.transaction('rw', db.records, async () => {
@@ -16,12 +15,11 @@ export function openRecords(schemaId: number, tables: readonly Table[], table: s
     if (!tables.some((t) => t.name === table)) return [];
 
     const have = new Set((await db.records.where('[schemaId+table]').between([schemaId, Dexie.minKey], [schemaId, Dexie.maxKey]).primaryKeys()).map(([, name]) => name));
-    const made = seedRecords(tables, seed);
     const now = Date.now();
     await db.records.bulkAdd(
-      tables.filter((t) => !have.has(t.name)).map((t) => ({ schemaId, table: t.name, rows: made[t.name], seed, createdAt: now })),
+      tables.filter((t) => !have.has(t.name)).map((t) => ({ schemaId, table: t.name, rows: [], seed, createdAt: now })),
     );
-    return made[table];
+    return [];
   });
 }
 
@@ -39,13 +37,13 @@ export interface TableRecords {
 
 /**
  * The rows of `table` and the row counts of every table, for the Data mode. A schema that is not
- * stored yet (`schemaId` null) has nothing to keep rows in: its rows are drawn again each time, with
- * seed 0, and are gone when it goes. Opening a table fills all of them, so every table has a count.
+ * stored yet (`schemaId` null) has nothing to keep rows in: every table is empty and gone when it
+ * goes. Opening a table creates empty records for all of them, so every table has a count.
  */
 export async function readRecords(schemaId: number | null, tables: readonly Table[], table: string): Promise<TableRecords> {
   if (schemaId === null) {
-    const made = seedRecords(tables, 0);
-    return { rows: made[table] ?? [], counts: Object.fromEntries(Object.entries(made).map(([name, rows]) => [name, rows.length])) };
+    const counts = Object.fromEntries(tables.map((t) => [t.name, 0]));
+    return { rows: [], counts };
   }
   const rows = await openRecords(schemaId, tables, table);
   return { rows, counts: await recordCounts(schemaId) };
@@ -53,13 +51,13 @@ export async function readRecords(schemaId: number | null, tables: readonly Tabl
 
 /**
  * The rows of every table of `tables`, for the record editor: what a foreign key is chosen from and
- * checked against, and the rows that point at a record. A schema that is not stored has seed 0.
+ * checked against, and the rows that point at a record. A schema that is not stored has empty tables.
  */
 export async function readAllRecords(schemaId: number | null, tables: readonly Table[]): Promise<RecordsByTable> {
-  if (schemaId === null) return seedRecords(tables, 0);
+  if (schemaId === null) return Object.fromEntries(tables.map((t) => [t.name, []]));
   const stored = () => db.records.where('[schemaId+table]').between([schemaId, Dexie.minKey], [schemaId, Dexie.maxKey]).toArray();
   let all = await stored();
-  // A table the schema got after its rows were drawn has none yet: opening it draws all that are missing.
+  // A table the schema got after its rows were opened has none yet: opening it creates the missing empties.
   const missing = tables.find((t) => !all.some((r) => r.table === t.name));
   if (missing) {
     await openRecords(schemaId, tables, missing.name);

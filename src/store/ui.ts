@@ -29,6 +29,7 @@ export type Dialog =
   | { kind: 'import-schema' }
   | { kind: 'export'; schema: ExportSource }
   | { kind: 'settings' }
+  | { kind: 'shortcuts' }
   /** Adds a foreign key to `table`, on one of its columns or on a new one. */
   | { kind: 'add-foreign-key'; table: string }
   /** Lists the inferred foreign keys of the open schema, to be accepted or removed one by one. */

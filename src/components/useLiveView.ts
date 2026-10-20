@@ -85,7 +85,7 @@ export function useLiveView(view: View, commit: (view: View) => void, commitEver
     latest.current.commit(live.current);
   }, []);
 
-  /** Moves the view to `next`, the layer gliding there in `ms`. */
+  /** Moves the view to `next`, the layer gliding there in `ms`. A drag of the canvas passes `0` so the layer stays under the pointer. */
   const move = useCallback(
     (next: View, ms: number, easing = EASE) => {
       live.current = next;
@@ -96,9 +96,6 @@ export function useLiveView(view: View, commit: (view: View) => void, commitEver
         clearTimeout(sharpenTimer.current);
         layer.current?.style.setProperty('will-change', 'transform');
       }
-      glide.current = ms;
-      ease.current = easing;
-      if (!frame.current) frame.current = requestAnimationFrame(draw);
       clearTimeout(timer.current);
       timer.current = window.setTimeout(settle, ms + SETTLE_MS);
       const every = latest.current.commitEvery;
@@ -106,6 +103,22 @@ export function useLiveView(view: View, commit: (view: View) => void, commitEver
         committedAt.current = now;
         latest.current.commit(next);
       }
+      // A drag keeps the layer on the pointer: an animation of even a few ms would leave it behind.
+      // With `will-change: transform` the compositor can take each step without laying the diagram out again.
+      if (ms <= 0) {
+        cancelAnimationFrame(frame.current);
+        frame.current = 0;
+        const el = layer.current;
+        if (el) {
+          el.style.transform = viewTransform(next);
+          animation.current?.cancel();
+          animation.current = null;
+        }
+        return;
+      }
+      glide.current = ms;
+      ease.current = easing;
+      if (!frame.current) frame.current = requestAnimationFrame(draw);
     },
     [draw, settle],
   );

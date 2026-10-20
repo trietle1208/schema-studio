@@ -7,6 +7,7 @@ import { ContextMenu, type MenuItem } from './ContextMenu';
 import { cx } from './cx';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
+import { RowActions } from './RowActions';
 
 export interface CellRef {
   /** The index of the row among the rows the grid was given. */
@@ -63,7 +64,8 @@ const ROW_ACTIONS: ({ action: RowAction; icon: IconName; shortcut: string; dange
 const GRID_WIDTH: Record<CellKind, number> = { number: 112, boolean: 96, time: 176, text: 220 };
 const SKELETON_WIDTH = [58, 82, 46, 70, 54, 76];
 const SKELETON_ROWS = 12;
-const GUTTER = 56;
+const CHECK_W = 44;
+const INDEX_W = 44;
 
 const NO_ROWS: Row[] = [];
 const NO_INDEXES: number[] = [];
@@ -101,14 +103,21 @@ export function DataGrid({
   // A column is as wide as its kind asks, and never narrower than its header: glyphs, name, type and the sort arrow.
   const widths = columns.map((c, i) => {
     const glyphs = (c.pk ? 1 : 0) + (c.fk ? 1 : 0) + (sort?.column === c.name ? 1 : 0);
-    const head = Math.ceil(c.name.length * 7.3 + c.type.length * 6.7 + 6 + glyphs * 18 + 26);
+    const head = Math.ceil(c.name.length * 7.3 + c.type.length * 6.7 + 6 + glyphs * 18 + 40);
     return c.width ?? Math.max(GRID_WIDTH[kinds[i]], head);
   });
-  const width = GUTTER + widths.reduce((a, b) => a + b, 0);
+  const gutter = (selectableProp !== false ? CHECK_W : 0) + INDEX_W;
+  const width = gutter + widths.reduce((a, b) => a + b, 0);
   const ref = useRef<HTMLDivElement>(null);
   const allOn = rows.length > 0 && selected.length === rows.length;
+  const someOn = selected.length > 0 && !allOn;
   const selectable = selectableProp !== false;
   const [menu, setMenu] = useState<{ row: number; x: number; y: number } | null>(null);
+  const headCheck = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (headCheck.current) headCheck.current.indeterminate = someOn;
+  }, [someOn]);
 
   // The row menu closes on a press outside it, on Esc, on scroll and when the window changes size.
   useEffect(() => {
@@ -154,7 +163,7 @@ export function DataGrid({
 
   const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    if (!rows.length || !columns.length || target.tagName === 'INPUT' || target.closest('.ss-grid-menu')) return;
+    if (!rows.length || !columns.length || target.tagName === 'INPUT' || target.closest('.ss-grid-menu') || target.closest('.ss-row-actions')) return;
     let r = activeCell ? activeCell.row : 0;
     let c = activeCell ? columns.findIndex((x) => x.name === activeCell.column) : 0;
     if (c < 0) c = 0;
@@ -197,27 +206,30 @@ export function DataGrid({
 
   const head = (c: DataGridColumn, i: number) => {
     const sorted = !!sort && sort.column === c.name;
+    const typeLine = c.nullable ? `${c.type} · NULL` : c.type;
     return (
       <th
         key={c.name}
         scope="col"
-        className={cx(kinds[i] === 'number' && 'is-num', i === 0 && 'is-first')}
-        title={`${c.name} ${c.type}`}
+        className={cx(kinds[i] === 'number' && 'is-num')}
+        title={`${c.name} ${typeLine}`}
         aria-sort={sorted ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
       >
         <span className="ss-grid-hc">
-          {c.pk && <Icon name="key" size={12} className="ss-grid-key is-pk" label={t('grid.primaryKey')} />}
-          {c.fk && <Icon name="link" size={12} className="ss-grid-key is-fk" label={t('grid.foreignKey')} />}
-          <span className="ss-grid-name">{c.name}</span>
-          <span className="ss-grid-type">{c.type}</span>
-          {sorted && (
-            <Icon
-              name={sort.dir === 'asc' ? 'arrow-up' : 'arrow-down'}
-              size={12}
-              className="ss-grid-sort"
-              label={sort.dir === 'asc' ? t('grid.sortedAscending') : t('grid.sortedDescending')}
-            />
-          )}
+          <span className="ss-grid-h1">
+            {c.pk && <Icon name="key" size={12} className="ss-grid-key is-pk" label={t('grid.primaryKey')} />}
+            {c.fk && <Icon name="link" size={12} className="ss-grid-key is-fk" label={t('grid.foreignKey')} />}
+            <span className="ss-grid-name">{c.name}</span>
+            {sorted && (
+              <Icon
+                name={sort.dir === 'asc' ? 'arrow-up' : 'arrow-down'}
+                size={12}
+                className="ss-grid-sort"
+                label={sort.dir === 'asc' ? t('grid.sortedAscending') : t('grid.sortedDescending')}
+              />
+            )}
+          </span>
+          <span className="ss-grid-type">{typeLine}</span>
         </span>
       </th>
     );
@@ -227,9 +239,10 @@ export function DataGrid({
     if (loading) {
       return Array.from({ length: SKELETON_ROWS }, (_, r) => (
         <tr key={r} aria-hidden>
-          <td className="ss-grid-gutter" />
+          {selectable && <td className="ss-grid-check" />}
+          <td className="ss-grid-index" />
           {columns.map((c, i) => (
-            <td key={c.name} className={cx(kinds[i] === 'number' && 'is-num', i === 0 && 'is-first')}>
+            <td key={c.name} className={cx(kinds[i] === 'number' && 'is-num')}>
               <span className="ss-grid-skel" style={{ width: `${SKELETON_WIDTH[(r + i * 2) % SKELETON_WIDTH.length]}%` }} />
             </td>
           ))}
@@ -240,14 +253,16 @@ export function DataGrid({
       const on = selected.includes(r);
       return (
         <tr key={r} className={cx(on && 'is-selected')} aria-selected={on} aria-rowindex={r + 2} onDoubleClick={() => onOpenRow?.(r)}>
-          <td className="ss-grid-gutter" onContextMenu={(e) => openMenu(e, r)}>
-            <span className="ss-grid-n">{r + 1}</span>
-            {selectable && (
+          {selectable && (
+            <td className="ss-grid-check" onContextMenu={(e) => openMenu(e, r)}>
               <label className="ss-check">
                 <input type="checkbox" checked={on} aria-label={t('grid.selectRow', { n: r + 1 })} onChange={() => toggle(r)} />
                 <span className="ss-check-box">{on && <Icon name="check" size={11} strokeWidth={3} />}</span>
               </label>
-            )}
+            </td>
+          )}
+          <td className="ss-grid-index" onContextMenu={(e) => openMenu(e, r)}>
+            <span className="ss-grid-n">{r + 1}</span>
           </td>
           {columns.map((c, i) => {
             const v = row[c.name] ?? null;
@@ -265,7 +280,6 @@ export function DataGrid({
                   kinds[i] === 'number' && 'is-num',
                   kinds[i] === 'time' && 'is-time',
                   kinds[i] === 'boolean' && 'is-bool',
-                  i === 0 && 'is-first',
                   isActive && 'is-active',
                   modified.some((m) => sameCell(m, r, c.name)) && 'is-modified',
                   bad && 'is-invalid',
@@ -287,6 +301,15 @@ export function DataGrid({
               </td>
             );
           })}
+          {onRowAction && (
+            <td className="ss-grid-actions" aria-hidden={!on}>
+              <RowActions
+                onEdit={() => onRowAction('edit', r)}
+                onDuplicate={() => onRowAction('duplicate', r)}
+                onDelete={() => onRowAction('delete', r)}
+              />
+            </td>
+          )}
         </tr>
       );
     });
@@ -301,33 +324,42 @@ export function DataGrid({
       aria-label={label || t('grid.label')}
       aria-busy={loading || undefined}
       aria-rowcount={rows.length + 1}
-      aria-colcount={columns.length + 1}
+      aria-colcount={columns.length + (selectable ? 2 : 1)}
       onKeyDown={onKey}
     >
       <table className="ss-grid-table" style={{ width }}>
         <colgroup>
-          <col style={{ width: GUTTER }} />
+          {selectable && <col style={{ width: CHECK_W }} />}
+          <col style={{ width: INDEX_W }} />
           {columns.map((c, i) => (
             <col key={c.name} style={{ width: widths[i] }} />
           ))}
         </colgroup>
         <thead>
           <tr>
-            <th className="ss-grid-gutter" scope="col">
-              {selectable && (
+            {selectable && (
+              <th className="ss-grid-check" scope="col">
                 <label className="ss-check">
                   <input
+                    ref={headCheck}
                     type="checkbox"
                     checked={allOn}
                     disabled={!rows.length || !!loading}
                     aria-label={t('grid.selectAll')}
                     onChange={() => onSelect?.(allOn ? [] : rows.map((_, r) => r))}
                   />
-                  <span className="ss-check-box">{allOn && <Icon name="check" size={11} strokeWidth={3} />}</span>
+                  <span className="ss-check-box">
+                    {allOn && <Icon name="check" size={11} strokeWidth={3} />}
+                    {someOn && <Icon name="minus" size={11} strokeWidth={3} />}
+                  </span>
                 </label>
-              )}
+              </th>
+            )}
+            <th className="ss-grid-index" scope="col">
+              <span className="ss-grid-n">#</span>
             </th>
             {columns.map(head)}
+            {onRowAction && <th className="ss-grid-actions" aria-hidden />}
           </tr>
         </thead>
         <tbody>{body()}</tbody>

@@ -11,6 +11,7 @@ import { NewSchemaDialog } from './NewSchemaDialog';
 import { RestoreVersionDialog } from './RestoreVersionDialog';
 import { ReviewInferredDialog } from './ReviewInferredDialog';
 import { SettingsDialog } from './SettingsDialog';
+import { ShortcutsDialog } from './ShortcutsDialog';
 import { TableGroupsDialog } from './TableGroupsDialog';
 
 // The SQL parser comes with the import dialog, so it is only loaded when that is first opened.
@@ -53,6 +54,7 @@ export function Overlays() {
       )}
       {dialog?.kind === 'export' && <ExportDialog schema={dialog.schema} />}
       {dialog?.kind === 'settings' && <SettingsDialog />}
+      {dialog?.kind === 'shortcuts' && <ShortcutsDialog />}
       {dialog?.kind === 'add-foreign-key' && <AddForeignKeyDialog table={dialog.table} />}
       {dialog?.kind === 'review-inferred' && <ReviewInferredDialog />}
       {dialog?.kind === 'table-groups' && <TableGroupsDialog />}

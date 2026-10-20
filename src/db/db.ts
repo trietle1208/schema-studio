@@ -19,6 +19,8 @@ export interface SchemaRecord {
   /** Milliseconds since the epoch. `updatedAt` is when the current version was saved. */
   createdAt: number;
   updatedAt: number;
+  /** Pinned in the sidebar Favorites nav. Left out when it is not a favorite. */
+  favorite?: boolean;
 }
 
 /**
@@ -40,8 +42,8 @@ export interface VersionRecord {
 
 /**
  * The rows of one table of a schema: one record per table, keyed by the pair. A record that exists
- * with no rows means the table was filled and then emptied; only a table without a record is
- * filled with sample data. Rows are not part of a version.
+ * with no rows means the table was opened (or emptied); a table without a record is given an empty
+ * list the first time its data is opened. Rows are not part of a version.
  */
 export interface RecordsRecord {
   schemaId: number;
@@ -116,3 +118,13 @@ db.version(3).stores({
 db.version(4).stores({
   queries: '++id, [schemaId+kind]',
 });
+
+// Version 5 adds an optional favorite flag on schemas. Existing rows stay as they are.
+db.version(5).stores({
+  schemas: '++id, &name, updatedAt',
+});
+
+// Version 6 drops auto-seeded sample rows: tables start empty and are filled by Import Records.
+db.version(6)
+  .stores({})
+  .upgrade((tx) => tx.table('records').clear());

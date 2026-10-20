@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { t } from '../core/i18n';
 import type { SchemaSummary } from '../core/model';
+import { filterSidebarSchemas, type SidebarNav } from '../core/sidebar';
 import { Avatar } from './Avatar';
 import { cx } from './cx';
 import { Icon } from './Icon';
@@ -7,16 +9,18 @@ import { IconButton } from './IconButton';
 import type { IconName } from './icons';
 import { Logo } from './Logo';
 
-type NavId = 'schemas' | 'recent' | 'favorites';
-
 export interface SidebarProps {
-  active?: NavId;
-  onNavigate?: (id: string) => void;
+  active?: SidebarNav;
+  onNavigate?: (id: SidebarNav) => void;
   schemas?: SchemaSummary[];
   activeSchema?: string;
   onSelectSchema?: (name: string) => void;
+  onToggleFavorite?: (name: string, favorite: boolean) => void;
   onNew?: () => void;
   onSettings?: () => void;
+  onShortcuts?: () => void;
+  onCollapse?: () => void;
+  collapsed?: boolean;
   empty?: boolean;
   workspace?: string;
   userName?: string;
@@ -24,95 +28,143 @@ export interface SidebarProps {
 }
 
 export function Sidebar({
-  active = 'schemas',
+  active: activeProp = 'schemas',
   onNavigate,
   schemas = [],
   activeSchema,
   onSelectSchema,
+  onToggleFavorite,
   onNew,
   onSettings,
+  onShortcuts,
+  onCollapse,
+  collapsed = false,
   empty,
   workspace = t('sidebar.workspace'),
   userName = 'Luong Hoang',
   userInitials = 'LH',
 }: SidebarProps) {
+  const [active, setActive] = useState<SidebarNav>(activeProp);
+  useEffect(() => setActive(activeProp), [activeProp]);
+
   const isEmpty = empty || schemas.length === 0;
   const favorites = isEmpty ? 0 : schemas.filter((s) => s.favorite).length;
-  const nav: { id: NavId; icon: IconName; label: string; count?: number }[] = [
+  const visible = isEmpty ? [] : filterSidebarSchemas(schemas, active);
+  const sectionLabel =
+    active === 'recent' ? t('sidebar.recent') : active === 'favorites' ? t('sidebar.favorites') : t('sidebar.saved');
+  const emptyMessage =
+    isEmpty
+      ? t('sidebar.empty')
+      : active === 'recent'
+        ? t('sidebar.emptyRecent')
+        : active === 'favorites'
+          ? t('sidebar.emptyFavorites')
+          : t('sidebar.empty');
+
+  const nav: { id: SidebarNav; icon: IconName; label: string; count?: number }[] = [
     { id: 'schemas', icon: 'layers', label: t('common.schemas'), count: isEmpty ? 0 : schemas.length },
     { id: 'recent', icon: 'clock', label: t('sidebar.recent') },
     { id: 'favorites', icon: 'star', label: t('sidebar.favorites'), count: favorites || undefined },
   ];
+
+  const goNav = (id: SidebarNav) => {
+    setActive(id);
+    onNavigate?.(id);
+  };
+
   return (
-    <nav className="ss-sidebar" aria-label={t('sidebar.label')}>
+    <nav className={cx('ss-sidebar', collapsed && 'is-collapsed')} aria-label={t('sidebar.label')}>
       <div className="ss-sb-brand">
-        <Logo />
+        <Logo markOnly={collapsed} />
         <span className="ss-spacer" />
-        <IconButton icon="sidebar" size="sm" label={t('sidebar.collapse')} />
+        <IconButton
+          icon="sidebar"
+          size="sm"
+          label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
+          onClick={onCollapse}
+        />
       </div>
-      <button className="ss-sb-ws" type="button">
-        <span className="ss-sb-ws-mark">P</span>
-        <span style={{ flex: 1 }}>{workspace}</span>
-        <Icon name="chevrons-ud" size={14} style={{ color: 'var(--ink-3)' }} />
-      </button>
+      {!collapsed && (
+        <button className="ss-sb-ws" type="button">
+          <span className="ss-sb-ws-mark">P</span>
+          <span className="ss-sb-ws-name">{workspace}</span>
+          <Icon name="chevrons-ud" size={14} className="ss-sb-chevron" />
+        </button>
+      )}
       <div className="ss-sb-nav">
         {nav.map((n) => (
           <button
             key={n.id}
             type="button"
             className={cx('ss-nav-item', active === n.id && 'is-active')}
-            onClick={() => onNavigate?.(n.id)}
+            title={collapsed ? n.label : undefined}
+            onClick={() => goNav(n.id)}
           >
             <Icon name={n.icon} size={16} />
-            {n.label}
+            <span className="ss-sb-label">{n.label}</span>
             {n.count != null && <span className="ss-nav-count">{n.count}</span>}
           </button>
         ))}
       </div>
       <div className="ss-sb-section">
-        <span className="ss-caption">{t('sidebar.saved')}</span>
+        <span className="ss-caption">{sectionLabel}</span>
         <IconButton icon="plus" size="sm" label={t('sidebar.newSchema')} onClick={onNew} />
       </div>
-      {isEmpty ? (
+      {visible.length === 0 ? (
         <div className="ss-sb-list">
-          <div className="ss-sb-empty">{t('sidebar.empty')}</div>
+          <div className="ss-sb-empty">{emptyMessage}</div>
         </div>
       ) : (
         <div className="ss-sb-list">
-          {schemas.map((s) => (
-            <button
-              key={s.name}
-              type="button"
-              className={cx('ss-sb-item', activeSchema === s.name && 'is-active')}
-              onClick={() => onSelectSchema?.(s.name)}
-            >
-              <Icon name="database" size={14} />
-              <span className="ss-sb-item-name">{s.name}</span>
-              <span className="ss-sb-item-time">{s.updatedShort ?? s.updated}</span>
-              <span className="ss-sb-item-meta">{`${s.engine} · ${t('count.tables', { count: s.tables })}`}</span>
-            </button>
+          {visible.map((s) => (
+            <div key={s.name} className={cx('ss-sb-item', activeSchema === s.name && 'is-active')}>
+              <button
+                type="button"
+                className="ss-sb-item-hit"
+                title={collapsed ? s.name : undefined}
+                onClick={() => onSelectSchema?.(s.name)}
+              >
+                <Icon name="database" size={14} />
+                <span className="ss-sb-item-body">
+                  <span className="ss-sb-item-row">
+                    <span className="ss-sb-item-name">{s.name}</span>
+                    <span className="ss-sb-item-time">{s.updatedShort ?? s.updated}</span>
+                  </span>
+                  <span className="ss-sb-item-meta">{`${s.engine} · ${t('count.tables', { count: s.tables })}`}</span>
+                </span>
+              </button>
+              {onToggleFavorite && (
+                <IconButton
+                  className={cx('ss-sb-item-fav', s.favorite && 'is-on')}
+                  icon="star"
+                  size="sm"
+                  label={s.favorite ? t('sidebar.unfavorite') : t('sidebar.favorite')}
+                  onClick={() => onToggleFavorite(s.name, !s.favorite)}
+                />
+              )}
+            </div>
           ))}
         </div>
       )}
       <div className="ss-sb-foot">
-        <button type="button" className="ss-nav-item" onClick={onSettings}>
+        <button type="button" className="ss-nav-item" title={collapsed ? t('sidebar.settings') : undefined} onClick={onSettings}>
           <Icon name="settings" size={16} />
-          {t('sidebar.settings')}
+          <span className="ss-sb-label">{t('sidebar.settings')}</span>
           <span className="ss-nav-count">⌘,</span>
         </button>
-        <button type="button" className="ss-nav-item">
+        <button type="button" className="ss-nav-item" title={collapsed ? t('sidebar.shortcuts') : undefined} onClick={onShortcuts}>
           <Icon name="keyboard" size={16} />
-          {t('sidebar.shortcuts')}
+          <span className="ss-sb-label">{t('sidebar.shortcuts')}</span>
           <span className="ss-nav-count">⌘/</span>
         </button>
-        <div className="ss-sb-user">
+        <button type="button" className="ss-sb-user" title={collapsed ? userName : undefined}>
           <Avatar initials={userInitials} name={userName} />
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="ss-sb-grow">
             <div className="ss-sb-user-name">{userName}</div>
             <div className="ss-sb-user-plan">{t('sidebar.plan')}</div>
           </div>
-          <Icon name="chevrons-ud" size={14} style={{ color: 'var(--ink-3)' }} />
-        </div>
+          <Icon name="chevrons-ud" size={14} className="ss-sb-chevron" />
+        </button>
       </div>
     </nav>
   );

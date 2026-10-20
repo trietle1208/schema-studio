@@ -393,7 +393,7 @@ export function QueryConsole({ tables, data, saved, recent, table: startTable, o
     <div className="ss-qc-head">
       <h2 className="ss-rec-title">{t('query.title')}</h2>
       <Badge dot title={t('query.sampleHint')}>
-        {t('data.sampleData')}
+        {t('data.localData')}
       </Badge>
       <SegmentedControl
         options={[

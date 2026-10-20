@@ -3,7 +3,7 @@ import { AppShell } from './components/AppShell';
 import { Sidebar } from './components/Sidebar';
 import { t } from './core/i18n';
 import { routeSchema, SCHEMAS_ROUTE, type Route } from './core/routes';
-import { schemaSummary } from './db/schemas';
+import { schemaSummary, setSchemaFavorite } from './db/schemas';
 import { useSchemas } from './db/useSchemas';
 import { DataMode } from './screens/DataMode';
 import { go } from './screens/navigation';
@@ -14,6 +14,7 @@ import { requestNewSchema } from './screens/schemaActions';
 import { SchemaDiff } from './screens/SchemaDiff';
 import { SchemaList } from './screens/SchemaList';
 import { requestSettings } from './screens/settingsActions';
+import { requestShortcuts } from './screens/shortcutsActions';
 import { useAppShortcuts } from './screens/useAppShortcuts';
 import { VersionHistory } from './screens/VersionHistory';
 import { Workspace } from './screens/Workspace';
@@ -57,6 +58,8 @@ function Screens() {
   const stored = useSchemas();
   const now = useNow();
   const summaries = useMemo(() => (stored ?? []).map((s) => schemaSummary(s, now)), [stored, now]);
+  const sidebarCollapsed = useSettingsStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
   useAppShortcuts();
 
   const title = routeTitle(route);
@@ -72,14 +75,20 @@ function Screens() {
             schemas={summaries}
             // On the list no schema is the current one, as in the design.
             activeSchema={routeSchema(route) ?? undefined}
+            collapsed={sidebarCollapsed}
+            onCollapse={toggleSidebar}
             onNavigate={(id) => {
               if (id === 'schemas') go(SCHEMAS_ROUTE);
             }}
             onSelectSchema={(schema) => go({ screen: 'workspace', schema })}
+            onToggleFavorite={(name, favorite) => {
+              void setSchemaFavorite(name, favorite);
+            }}
             onNew={requestNewSchema}
             onSettings={requestSettings}
+            onShortcuts={requestShortcuts}
           />
-          <PanelHandle panel="sidebar" />
+          {!sidebarCollapsed && <PanelHandle panel="sidebar" />}
         </>
       }
       overlay={<Overlays />}

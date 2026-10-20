@@ -4,7 +4,18 @@ import { existingUsers, USERS_IMPORT_CLASHES, usersImportCsv } from '../fixtures
 import { DEFAULT_LOCALE, setLocale } from '../i18n';
 import type { Table } from '../model';
 import { type RecordData } from './fields';
-import { analyzeImport, convertedColumns, CONSTANT, groupRows, importPreview, mapColumns, type ImportMapping } from './import';
+import {
+  analyzeImport,
+  convertedColumns,
+  CONSTANT,
+  groupRows,
+  importPreview,
+  importReport,
+  importSummary,
+  mapColumns,
+  runImport,
+  type ImportMapping,
+} from './import';
 import { delimiterName, describeSource, parseJsonRows, readRecordsFile, sampleCells } from './importFile';
 import { seedRecords } from '.';
 
@@ -361,5 +372,53 @@ describe('convertedColumns', () => {
     const json = parseJsonRows('[{"user_id":1,"total":9.99}]');
     // Numbers that are already numbers are not converted.
     expect([...convertedColumns(orders, json, mapColumns(orders, json, data), {}, data)]).toEqual([]);
+  });
+});
+
+describe('runImport and importReport', () => {
+  const mapping = mapColumns(users, file, data);
+  const analysis = analyzeImport(users, file, mapping, { skipInvalid: true }, data);
+
+  it('writes the valid rows and skips the rest', () => {
+    const o = runImport(analysis, { skipInvalid: true });
+    expect(o).toMatchObject({ processed: 1000, inserted: 985, updated: 0, skipped: 15, failed: 0, stopped: false, rolledBack: false });
+    expect(o.insert).toHaveLength(985);
+    expect(o.insert[0]).toEqual({ email: 'an.nguyen1@example.com', name: 'An Nguyen', created_at: '2024-01-01 00:00:00' });
+  });
+
+  it('upserts matching rows and can stop at a refused line in a transaction', () => {
+    const upsert = analyzeImport(users, file, mapping, { mode: 'upsert' }, data);
+    const ok = runImport(upsert, { mode: 'upsert', oneTx: true });
+    expect(ok).toMatchObject({ inserted: 985, updated: 10 });
+    expect(ok.update[0].match).toMatchObject({ email: 'member1@shop.example' });
+
+    // Line 2 is the first data row: nothing was written yet, so a transaction has nothing to roll back.
+    const fail = runImport(upsert, { mode: 'upsert', oneTx: true }, { line: 2, message: 'unique_violation' });
+    expect(fail).toMatchObject({ inserted: 0, updated: 0, failed: 1, stopped: true, rolledBack: false, insert: [], update: [] });
+    expect(fail.error).toEqual({ line: 2, message: 'unique_violation' });
+    // A later refusal undoes the rows that had gone through.
+    const mid = runImport(upsert, { mode: 'upsert', oneTx: true }, { line: upsert.rows.find((r) => r.kind === 'update')!.line, message: 'unique_violation' });
+    expect(mid).toMatchObject({ inserted: 0, updated: 0, failed: 1, stopped: true, rolledBack: true });
+  });
+
+  it('cancels a transaction with nothing written, and without one keeps what went through', () => {
+    const o = runImport(analysis, { oneTx: true }, null, 50, true);
+    expect(o).toMatchObject({ processed: 50, inserted: 0, updated: 0, rolledBack: true, insert: [] });
+    const part = runImport(analysis, { oneTx: false }, null, 50, true);
+    expect(part.inserted).toBeGreaterThan(0);
+    expect(part.insert).toHaveLength(part.inserted);
+  });
+
+  it('writes an English CSV of every left-out row for the error report', () => {
+    const csv = importReport(analysis, null);
+    expect(csv.split('\n')[0]).toBe('line,column,value,reason');
+    expect(csv).toContain('5,email,,"Column ""email"" cannot be NULL."');
+    expect(csv).toContain('member1@shop.example');
+    const withFail = importReport(analysis, runImport(analysis, { oneTx: true }, { line: 2, message: 'refused' }));
+    expect(withFail).toContain('2,,,refused');
+  });
+
+  it('summarises the counts the Settings step shows', () => {
+    expect(importSummary(analysis.counts)).toBe('1,000 rows · 985 valid · 10 warnings · 5 errors');
   });
 });

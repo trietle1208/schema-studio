@@ -5,6 +5,7 @@ import { rowsText } from '../core/records/cells';
 import { searchTableNames } from '../core/search';
 import { cx } from './cx';
 import { Icon } from './Icon';
+import { IconButton } from './IconButton';
 import { Input } from './Input';
 
 export interface TableListProps {
@@ -16,10 +17,12 @@ export interface TableListProps {
   /** Makes the search a controlled field; without it the list keeps what was typed itself. */
   search?: string;
   onSearch?: (query: string) => void;
+  /** Opens the diagram to add a table; without it the + button stays disabled. */
+  onAdd?: () => void;
 }
 
 /** The tables of the schema at the left of the Data mode, each with its number of rows. */
-export function TableList({ tables, counts = {}, selected, onSelect, search, onSearch }: TableListProps) {
+export function TableList({ tables, counts = {}, selected, onSelect, search, onSearch, onAdd }: TableListProps) {
   const [own, setOwn] = useState('');
   const q = search ?? own;
   const shown = searchTableNames(tables, q);
@@ -28,8 +31,11 @@ export function TableList({ tables, counts = {}, selected, onSelect, search, onS
   return (
     <aside className="ss-tablelist" aria-label={t('tableList.title')}>
       <div className="ss-tl-head">
-        <span className="ss-caption">{t('tableList.title')}</span>
-        <span className="ss-tl-count">{tables.length}</span>
+        <span className="ss-caption">
+          {t('tableList.title')} <span className="ss-tl-count">{tables.length}</span>
+        </span>
+        <span className="ss-spacer" />
+        <IconButton icon="plus" size="sm" label={t('action.newTable')} disabled={!onAdd} onClick={onAdd} />
       </div>
       <div className="ss-tl-search">
         <Input

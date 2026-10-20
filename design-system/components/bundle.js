@@ -753,34 +753,44 @@
   // ------------------------------------------------------------------ shell pieces
   function Sidebar(p) {
     var schemas = p.schemas || SAMPLE_SCHEMAS.slice(0, 4);
+    var active = p.active || 'schemas';
+    var collapsed = !!p.collapsed;
+    var favorites = p.empty ? 0 : schemas.filter(function (s) { return s.favorite; }).length;
+    var visible = p.empty ? [] : active === 'favorites' ? schemas.filter(function (s) { return s.favorite; }) : active === 'recent' ? schemas.slice(0, 8) : schemas;
+    var sectionLabel = active === 'recent' ? 'Recent' : active === 'favorites' ? 'Favorites' : 'Saved schemas';
+    var emptyMessage = p.empty ? 'No schemas yet. Import a .sql file or start from scratch.' : active === 'favorites' ? 'No favorites yet. Star a schema to pin it here.' : active === 'recent' ? 'No recent schemas yet.' : 'No schemas yet. Import a .sql file or start from scratch.';
     var nav = [
-      { id: 'schemas', icon: 'layers', label: 'Schemas', count: p.empty ? 0 : (p.schemaCount || 6) },
+      { id: 'schemas', icon: 'layers', label: 'Schemas', count: p.empty ? 0 : (p.schemaCount || schemas.length) },
       { id: 'recent', icon: 'clock', label: 'Recent' },
-      { id: 'favorites', icon: 'star', label: 'Favorites', count: p.empty ? null : 2 }
+      { id: 'favorites', icon: 'star', label: 'Favorites', count: favorites || null }
     ];
-    return h('nav', { className: 'ss-sidebar', 'aria-label': 'Sidebar' },
-      h('div', { className: 'ss-sb-brand' }, h(Logo, null), h('span', { className: 'ss-spacer' }), h(IconButton, { icon: 'sidebar', size: 'sm', label: 'Collapse sidebar (⌘B)' })),
-      h('button', { className: 'ss-sb-ws', type: 'button' }, h('span', { className: 'ss-sb-ws-mark' }, 'P'), h('span', { style: { flex: 1 } }, p.workspace || 'Personal'), h(Icon, { name: 'chevrons-ud', size: 14, style: { color: 'var(--ink-3)' } })),
+    return h('nav', { className: cx('ss-sidebar', collapsed && 'is-collapsed'), 'aria-label': 'Sidebar' },
+      h('div', { className: 'ss-sb-brand' }, h(Logo, { markOnly: collapsed }), h('span', { className: 'ss-spacer' }), h(IconButton, { icon: 'sidebar', size: 'sm', label: collapsed ? 'Expand sidebar (⌘B)' : 'Collapse sidebar (⌘B)', onClick: p.onCollapse })),
+      !collapsed && h('button', { className: 'ss-sb-ws', type: 'button' }, h('span', { className: 'ss-sb-ws-mark' }, 'P'), h('span', { className: 'ss-sb-ws-name' }, p.workspace || 'Personal'), h(Icon, { name: 'chevrons-ud', size: 14, className: 'ss-sb-chevron' })),
       h('div', { className: 'ss-sb-nav' }, nav.map(function (n) {
-        return h('button', { key: n.id, type: 'button', className: cx('ss-nav-item', (p.active || 'schemas') === n.id && 'is-active'), onClick: function () { p.onNavigate && p.onNavigate(n.id); } },
-          h(Icon, { name: n.icon, size: 16 }), n.label, n.count != null && h('span', { className: 'ss-nav-count' }, n.count));
+        return h('button', { key: n.id, type: 'button', className: cx('ss-nav-item', active === n.id && 'is-active'), title: collapsed ? n.label : undefined, onClick: function () { p.onNavigate && p.onNavigate(n.id); } },
+          h(Icon, { name: n.icon, size: 16 }), h('span', { className: 'ss-sb-label' }, n.label), n.count != null && h('span', { className: 'ss-nav-count' }, n.count));
       })),
-      h('div', { className: 'ss-sb-section' }, h('span', { className: 'ss-caption' }, 'Saved schemas'), h(IconButton, { icon: 'plus', size: 'sm', label: 'New schema (⌘N)', onClick: p.onNew })),
-      p.empty
-        ? h('div', { className: 'ss-sb-list' }, h('div', { className: 'ss-sb-empty' }, 'No schemas yet. Import a .sql file or start from scratch.'))
-        : h('div', { className: 'ss-sb-list' }, schemas.map(function (s) {
-          return h('button', { key: s.name, type: 'button', className: cx('ss-sb-item', p.activeSchema === s.name && 'is-active'), onClick: function () { p.onSelectSchema && p.onSelectSchema(s.name); } },
-            h(Icon, { name: 'database', size: 14 }),
-            h('span', { className: 'ss-sb-item-name' }, s.name),
-            h('span', { className: 'ss-sb-item-time' }, s.updated.replace(' ago', '').replace(' hours', 'h').replace(' days', 'd').replace(' week', 'w').replace('Yesterday', '1d')),
-            h('span', { className: 'ss-sb-item-meta' }, s.engine + ' · ' + s.tables + ' tables'));
+      h('div', { className: 'ss-sb-section' }, h('span', { className: 'ss-caption' }, sectionLabel), h(IconButton, { icon: 'plus', size: 'sm', label: 'New schema (⌘N)', onClick: p.onNew })),
+      visible.length === 0
+        ? h('div', { className: 'ss-sb-list' }, h('div', { className: 'ss-sb-empty' }, emptyMessage))
+        : h('div', { className: 'ss-sb-list' }, visible.map(function (s) {
+          return h('div', { key: s.name, className: cx('ss-sb-item', p.activeSchema === s.name && 'is-active') },
+            h('button', { type: 'button', className: 'ss-sb-item-hit', title: collapsed ? s.name : undefined, onClick: function () { p.onSelectSchema && p.onSelectSchema(s.name); } },
+              h(Icon, { name: 'database', size: 14 }),
+              h('span', { className: 'ss-sb-item-body' },
+                h('span', { className: 'ss-sb-item-row' },
+                  h('span', { className: 'ss-sb-item-name' }, s.name),
+                  h('span', { className: 'ss-sb-item-time' }, s.updated.replace(' ago', '').replace(' hours', 'h').replace(' days', 'd').replace(' week', 'w').replace('Yesterday', '1d'))),
+                h('span', { className: 'ss-sb-item-meta' }, s.engine + ' · ' + s.tables + ' tables'))),
+            h(IconButton, { className: cx('ss-sb-item-fav', s.favorite && 'is-on'), icon: 'star', size: 'sm', label: s.favorite ? 'Remove from favorites' : 'Add to favorites', onClick: function () { p.onToggleFavorite && p.onToggleFavorite(s.name, !s.favorite); } }));
         })),
       h('div', { className: 'ss-sb-foot' },
-        h('button', { type: 'button', className: 'ss-nav-item' }, h(Icon, { name: 'settings', size: 16 }), 'Settings', h('span', { className: 'ss-nav-count' }, '⌘,')),
-        h('button', { type: 'button', className: 'ss-nav-item' }, h(Icon, { name: 'keyboard', size: 16 }), 'Keyboard shortcuts', h('span', { className: 'ss-nav-count' }, '⌘/')),
-        h('div', { className: 'ss-sb-user' }, h(Avatar, { initials: p.userInitials || 'LH', name: p.userName || 'Luong Hoang' }),
-          h('div', { style: { flex: 1, minWidth: 0 } }, h('div', { className: 'ss-sb-user-name' }, p.userName || 'Luong Hoang'), h('div', { className: 'ss-sb-user-plan' }, 'Local workspace')),
-          h(Icon, { name: 'chevrons-ud', size: 14, style: { color: 'var(--ink-3)' } }))));
+        h('button', { type: 'button', className: 'ss-nav-item', onClick: p.onSettings }, h(Icon, { name: 'settings', size: 16 }), h('span', { className: 'ss-sb-label' }, 'Settings'), h('span', { className: 'ss-nav-count' }, '⌘,')),
+        h('button', { type: 'button', className: 'ss-nav-item', onClick: p.onShortcuts }, h(Icon, { name: 'keyboard', size: 16 }), h('span', { className: 'ss-sb-label' }, 'Keyboard shortcuts'), h('span', { className: 'ss-nav-count' }, '⌘/')),
+        h('button', { type: 'button', className: 'ss-sb-user' }, h(Avatar, { initials: p.userInitials || 'LH', name: p.userName || 'Luong Hoang' }),
+          h('div', { className: 'ss-sb-grow' }, h('div', { className: 'ss-sb-user-name' }, p.userName || 'Luong Hoang'), h('div', { className: 'ss-sb-user-plan' }, 'Local workspace')),
+          h(Icon, { name: 'chevrons-ud', size: 14, className: 'ss-sb-chevron' })));
   }
 
   function SaveStatus(p) {
@@ -1102,7 +1112,9 @@
       }))),
       h('tbody', null, p.rows.map(function (r, i) {
         var k = p.rowKey ? r[p.rowKey] : i;
-        return h('tr', { key: k, className: cx(p.selectedKey === k && 'is-selected'), onClick: function () { p.onRowClick && p.onRowClick(r); } },
+        return h('tr', { key: k, className: cx(p.selectedKey === k && 'is-selected'),
+          onClick: function () { p.onRowClick && p.onRowClick(r); },
+          onDoubleClick: function () { p.onRowDoubleClick && p.onRowDoubleClick(r); } },
           p.columns.map(function (c) { return h('td', { key: c.key, className: c.numeric ? 'is-num' : null, style: { textAlign: c.align } }, c.render ? c.render(r) : r[c.key]); }));
       })));
   }
@@ -1351,13 +1363,14 @@
         p.engine && h(Badge, { dot: true, title: 'Database engine' }, p.engine),
         h('span', { className: 'ss-tbh-meta' }, meta),
         h('span', { className: 'ss-spacer' }),
-        h(IconButton, { icon: 'refresh', label: 'Refresh table', disabled: p.loading, onClick: p.onRefresh }),
-        h('div', { className: 'ss-anchor', ref: more.ref },
-          h(IconButton, { icon: 'more', label: 'More actions', active: more.open, 'aria-haspopup': 'menu', 'aria-expanded': more.open, onClick: function () { more.set(!more.open); } }),
-          more.open && h('div', { className: 'ss-anchor-pop ss-anchor-pop--end' }, h(ContextMenu, { items: p.menuItems || TABLE_MENU, onClose: function () { more.set(false); } }))),
-        h(Button, { icon: 'upload', onClick: p.onImport }, 'Import Records'),
-        h(Button, { icon: 'download', onClick: p.onExport }, 'Export'),
-        h(Button, { variant: 'primary', icon: 'plus', kbd: ['⌘', '⏎'], onClick: p.onAdd }, 'Add record')),
+        h('div', { className: 'ss-tbh-actions' },
+          h(IconButton, { icon: 'refresh', label: 'Refresh table', disabled: p.loading, onClick: p.onRefresh }),
+          h('div', { className: 'ss-anchor', ref: more.ref },
+            h(IconButton, { icon: 'more', label: 'More actions', active: more.open, 'aria-haspopup': 'menu', 'aria-expanded': more.open, onClick: function () { more.set(!more.open); } }),
+            more.open && h('div', { className: 'ss-anchor-pop ss-anchor-pop--end' }, h(ContextMenu, { items: p.menuItems || TABLE_MENU, onClose: function () { more.set(false); } }))),
+          h(Button, { icon: 'upload', onClick: p.onImport }, 'Import Records'),
+          h(Button, { icon: 'download', onClick: p.onExport }, 'Export'),
+          h(Button, { variant: 'primary', icon: 'plus', kbd: ['⌘', '⏎'], onClick: p.onAdd }, 'Add record'))),
       h('div', { className: 'ss-tabs', role: 'tablist', 'aria-label': 'Table views' }, TABLE_TABS.map(function (x, i) {
         var on = tab === x.value, n = counts[x.value];
         return h('button', {
@@ -1369,27 +1382,88 @@
 
   function TableStructure(p) {
     var t = p.table;
-    var rows = t.columns.map(function (c, i) { return assign(c, { n: i + 1 }); });
+    var _s = useState(''), search = _s[0], setSearch = _s[1];
+    var _f = useState('all'), filter = _f[0], setFilter = _f[1];
+    var _d = useState('regular'), density = _d[0], setDensity = _d[1];
+    var _sel = useState(null), selected = _sel[0], setSelected = _sel[1];
+    var q = search.trim().toLowerCase();
+    var cols = t.columns;
+    var pk = cols.filter(function (c) { return c.pk; }).length;
+    var fk = cols.filter(function (c) { return c.fk; }).length;
+    var nullable = cols.filter(function (c) { return c.nullable; }).length;
+    var indexCount = (t.indexes || []).length;
+    var summary = [cols.length + (cols.length === 1 ? ' column' : ' columns')];
+    if (pk) summary.push(pk + ' PK');
+    if (fk) summary.push(fk + ' FK');
+    if (nullable) summary.push(nullable + ' nullable');
+    if (indexCount) summary.push(indexCount + (indexCount === 1 ? ' index' : ' indexes'));
+    function matchCol(c) {
+      if (filter === 'keys' && !(c.pk || c.fk || c.unique)) return false;
+      if (filter === 'nullable' && !c.nullable) return false;
+      if (!q) return true;
+      return [c.name, c.type, c.default, c.comment, c.fk ? c.fk.table + '.' + c.fk.column : ''].join(' ').toLowerCase().indexOf(q) >= 0;
+    }
+    var rows = cols.map(function (c, i) { return assign(c, { n: i + 1 }); }).filter(matchCol);
+    var indexes = (t.indexes || []).filter(function (ix) {
+      return !q || [ix.name, ix.type, ix.using].concat(ix.columns).join(' ').toLowerCase().indexOf(q) >= 0;
+    });
+    var empty = !cols.length ? 'This table has no columns.' : !rows.length ? (q ? 'No columns match "' + search.trim() + '".' : 'No columns match this filter.') : null;
+    var stop = function (e) { e.stopPropagation(); };
+    var card = function (body) { return h('div', { className: cx('ss-pane-card', density === 'compact' && 'ss-pane-card--compact') }, body); };
     return h('div', { className: 'ss-pane' },
       t.comment && h('div', { className: 'ss-pane-note' }, t.comment),
-      h('div', { className: 'ss-pane-card' }, h(DataTable, {
-        rowKey: 'name', rows: rows, columns: [
-          { key: 'n', label: '#', width: 56, numeric: true, align: 'right', sortable: false },
-          { key: 'name', label: 'Column', sortable: false, render: function (c) {
-            return h('span', { className: 'ss-pane-name' },
-              h('span', { className: 'ss-pane-key' }, c.pk && h(Icon, { name: 'key', size: 14, className: 'ss-grid-key is-pk', label: 'Primary key' }), !c.pk && c.fk && h(Icon, { name: 'link', size: 14, className: 'ss-grid-key is-fk', label: 'Foreign key' })),
-              h('span', { className: 'ss-mono', style: { fontWeight: 500 } }, c.name));
-          } },
-          { key: 'type', label: 'Type', sortable: false, render: function (c) { return h('span', { className: 'ss-mono', style: { fontSize: 12, color: 'var(--ink-2)' } }, c.type); } },
-          { key: 'nullable', label: 'Nullable', sortable: false, render: function (c) { return h('span', { className: 'ss-mono', style: { fontSize: 12, color: 'var(--ink-2)' } }, c.nullable ? 'NULL' : 'NOT NULL'); } },
-          { key: 'default', label: 'Default', sortable: false, render: function (c) { return c.default ? h('span', { className: 'ss-mono', style: { fontSize: 12 } }, c.default) : h('span', { className: 'ss-faint' }, '—'); } },
-          { key: 'keys', label: 'Keys', sortable: false, render: function (c) {
-            return h('span', { className: 'ss-row', style: { gap: 4 } },
-              c.pk && h(Badge, { tone: 'pk' }, 'PK'), c.unique && h(Badge, null, 'UQ'),
-              c.fk && h(Badge, { tone: 'fk', icon: 'link', title: 'References ' + c.fk.table + '.' + c.fk.column }, c.fk.table + '.' + c.fk.column));
-          } }
-        ]
-      })));
+      h('div', { className: 'ss-pane-summary' }, summary.join(' · ')),
+      h('div', { className: 'ss-pane-bar', role: 'toolbar', 'aria-label': 'Structure tools' },
+        h('div', { className: 'ss-dt-search' }, h(Input, { icon: 'search', size: 'sm', placeholder: 'Filter columns…', value: search, onChange: function (e) { setSearch(e.target.value); }, spellCheck: false })),
+        h(SegmentedControl, { options: [{ value: 'all', label: 'All' }, { value: 'keys', label: 'Keys' }, { value: 'nullable', label: 'Nullable' }], value: filter, onChange: setFilter }),
+        h('div', { className: 'ss-pane-bar-end' }, h(SegmentedControl, { options: DENSITIES, value: density, onChange: setDensity }))
+      ),
+      h('section', { className: 'ss-pane-group', 'aria-label': 'Columns' },
+        h('div', { className: 'ss-row' }, h('span', { className: 'ss-caption' }, 'Columns'), h('span', { className: 'ss-tl-count' }, rows.length)),
+        empty
+          ? h('div', { className: 'ss-pane-none' }, empty, (q || filter !== 'all') && h('button', { type: 'button', className: 'ss-pane-clear', onClick: function () { setSearch(''); setFilter('all'); } }, 'Clear filters'))
+          : card(h(DataTable, {
+            rowKey: 'name', rows: rows, selectedKey: selected || undefined,
+            onRowClick: function (c) { setSelected(c.name); },
+            onRowDoubleClick: function (c) { p.onOpenColumn && p.onOpenColumn(c.name); },
+            columns: [
+              { key: 'n', label: '#', width: 56, numeric: true, align: 'right', sortable: false },
+              { key: 'name', label: 'Column', sortable: false, render: function (c) {
+                return h('span', { className: 'ss-pane-name' },
+                  h('span', { className: 'ss-pane-key' }, c.pk && h(Icon, { name: 'key', size: 14, className: 'ss-grid-key is-pk', label: 'Primary key' }), !c.pk && c.fk && h(Icon, { name: 'link', size: 14, className: 'ss-grid-key is-fk', label: 'Foreign key' })),
+                  h('span', { className: 'ss-mono', style: { fontWeight: 500 } }, c.name));
+              } },
+              { key: 'type', label: 'Type', sortable: false, render: function (c) { return h('span', { className: 'ss-mono', style: { fontSize: 12, color: 'var(--ink-2)' } }, c.type); } },
+              { key: 'nullable', label: 'Nullable', sortable: false, render: function (c) { return h('span', { className: 'ss-mono', style: { fontSize: 12, color: 'var(--ink-2)' } }, c.nullable ? 'NULL' : 'NOT NULL'); } },
+              { key: 'default', label: 'Default', sortable: false, render: function (c) { return c.default ? h('span', { className: 'ss-mono', style: { fontSize: 12 } }, c.default) : h('span', { className: 'ss-faint' }, '—'); } },
+              { key: 'comment', label: 'Comment', sortable: false, render: function (c) { return c.comment ? h('span', { className: 'ss-pane-comment', title: c.comment }, c.comment) : h('span', { className: 'ss-faint' }, '—'); } },
+              { key: 'keys', label: 'Keys', sortable: false, render: function (c) {
+                return h('span', { className: 'ss-row', style: { gap: 4 }, onClick: stop, onDoubleClick: stop },
+                  c.pk && h(Badge, { tone: 'pk' }, 'PK'), c.unique && h(Badge, null, 'UQ'),
+                  c.fk && h('button', { type: 'button', className: 'ss-pane-fk', title: 'References ' + c.fk.table + '.' + c.fk.column, onClick: function () { p.onOpenRelationships && p.onOpenRelationships(); } },
+                    h(Badge, { tone: 'fk', icon: 'link' }, c.fk.table + '.' + c.fk.column)));
+              } },
+              { key: 'actions', label: '', width: 72, sortable: false, align: 'right', render: function (c) {
+                return h('span', { className: 'ss-table-actions', onClick: stop, onDoubleClick: stop },
+                  h(IconButton, { icon: 'copy', size: 'sm', label: 'Copy column name', onClick: function () { p.onCopyColumn && p.onCopyColumn(c.name); } }),
+                  h(IconButton, { icon: 'layers', size: 'sm', label: 'Open in Diagram', onClick: function () { p.onOpenColumn && p.onOpenColumn(c.name); } }));
+              } }
+            ]
+          }))
+      ),
+      h('section', { className: 'ss-pane-group', 'aria-label': 'Indexes' },
+        h('div', { className: 'ss-row' }, h('span', { className: 'ss-caption' }, 'Indexes'), h('span', { className: 'ss-tl-count' }, indexes.length)),
+        !indexes.length
+          ? h('div', { className: 'ss-pane-none' }, (t.indexes || []).length ? 'No indexes match "' + search.trim() + '".' : t.name + ' has no indexes.')
+          : card(h(DataTable, {
+            rowKey: 'name', rows: indexes, columns: [
+              { key: 'name', label: 'Index', sortable: false, render: function (ix) { return h('span', { className: 'ss-mono', style: { fontWeight: 500, fontSize: 12 } }, ix.name); } },
+              { key: 'type', label: 'Type', width: 120, sortable: false, render: function (ix) { return h('span', { className: 'ss-mono', style: { fontSize: 12, color: 'var(--ink-2)' } }, ix.type); } },
+              { key: 'using', label: 'Using', width: 96, sortable: false, render: function (ix) { return h('span', { className: 'ss-mono', style: { fontSize: 12, color: 'var(--ink-2)' } }, ix.using); } },
+              { key: 'columns', label: 'Columns', sortable: false, render: function (ix) { return h('span', { className: 'ss-mono', style: { fontSize: 12 } }, ix.columns.join(', ')); } }
+            ]
+          }))
+      ));
   }
 
   function TableRelationships(p) {

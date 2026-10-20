@@ -12,6 +12,7 @@ import { useUiStore } from '../store/ui';
 import { startRouting } from './navigation';
 import {
   arrangeTables,
+  copyColumnName,
   copyCreateTable,
   deleteTable,
   drawForeignKey,
@@ -20,6 +21,7 @@ import {
   groupTablesAsNew,
   inferRelationships,
   newTable,
+  openColumnInDiagram,
   removeInferredRelationships,
   requestAddForeignKey,
   requestDeleteTable,
@@ -273,6 +275,23 @@ describe('drawForeignKey', () => {
     expect(selectDirty(schema())).toBe(false);
     expect(schema().selected).toBeNull();
     expect(ui().toast).toBeNull();
+  });
+});
+
+describe('openColumnInDiagram', () => {
+  it('selects the table and column then opens the diagram', () => {
+    openColumnInDiagram('orders', 'user_id');
+    expect([schema().selected, schema().selectedColumn]).toEqual(['orders', 1]);
+  });
+});
+
+describe('copyColumnName', () => {
+  it('puts the column name on the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    await copyColumnName('user_id');
+    expect(writeText).toHaveBeenCalledWith('user_id');
+    expect(ui().toast).toMatchObject({ title: 'Copied column name', description: 'user_id' });
   });
 });
 

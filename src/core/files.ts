@@ -5,8 +5,8 @@ import { versionLabel } from './versions';
 /** What a schema is exported as: its DDL, its model, its diagram as a picture, or sample rows for its tables. */
 export type ExportFormat = 'sql' | 'json' | 'svg' | 'png' | 'seed';
 
-/** The largest SQL file the import reads: 10 MB, as the drop zone says. */
-export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+/** The largest SQL file the import reads: 100 MB, as the drop zone says. */
+export const MAX_IMPORT_BYTES = 100 * 1024 * 1024;
 
 /** The name a schema starts with when the SQL it is imported from suggests none. */
 export const DEFAULT_IMPORT_NAME = 'imported_schema';

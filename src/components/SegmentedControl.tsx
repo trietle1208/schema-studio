@@ -18,11 +18,12 @@ export interface SegmentedControlProps {
   value: string;
   onChange?: (value: string) => void;
   block?: boolean;
+  className?: string;
 }
 
-export function SegmentedControl({ options, value, onChange, block }: SegmentedControlProps) {
+export function SegmentedControl({ options, value, onChange, block, className }: SegmentedControlProps) {
   return (
-    <div className={cx('ss-seg', block && 'ss-seg--block')} role="tablist">
+    <div className={cx('ss-seg', block && 'ss-seg--block', className)} role="tablist">
       {options.map((o) => (
         <button
           key={o.value}

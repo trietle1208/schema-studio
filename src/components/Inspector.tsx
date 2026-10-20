@@ -10,6 +10,7 @@ import { Badge } from './Badge';
 import { Button } from './Button';
 import { ColumnEditor } from './ColumnEditor';
 import { cx } from './cx';
+import { Field } from './Field';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { Kbd } from './Kbd';
@@ -82,10 +83,11 @@ interface GroupFieldProps {
   tables: readonly string[];
   onGroup: (tables: readonly string[], group: string | null) => void;
   onNewGroup?: (tables: readonly string[]) => void;
+  label?: string;
 }
 
 /** The group of a table, or of several when they are all in one, to be changed for another, for none or for a new one. */
-function GroupField({ groups, tables, onGroup, onNewGroup }: GroupFieldProps) {
+function GroupField({ groups, tables, onGroup, onNewGroup, label }: GroupFieldProps) {
   const own = [...new Set(tables.map((table) => groupOf(groups, table)))];
   const value = own.length === 1 ? (own[0]?.name ?? NO_GROUP) : SEVERAL_GROUPS;
   return (
@@ -94,7 +96,7 @@ function GroupField({ groups, tables, onGroup, onNewGroup }: GroupFieldProps) {
       <Select
         size="sm"
         mono
-        label={t('inspector.group')}
+        label={label ?? t('inspector.group')}
         style={{ flex: 1, minWidth: 0 }}
         value={value}
         options={[
@@ -206,9 +208,11 @@ function TableTitle({
             {table.name}
           </button>
         )}
-        <IconButton icon="pencil" label={t('inspector.rename')} onClick={() => setDraft(table.name)} />
-        <IconButton icon="copy" label={t('inspector.duplicate')} disabled={!onDuplicate} onClick={() => onDuplicate?.(table.name)} />
-        <IconButton icon="trash" label={t('inspector.delete')} disabled={!onDelete} onClick={() => onDelete?.(table.name)} />
+        <span className="ss-insp-title-actions">
+          <IconButton icon="pencil" label={t('inspector.rename')} onClick={() => setDraft(table.name)} />
+          <IconButton icon="copy" label={t('inspector.duplicate')} disabled={!onDuplicate} onClick={() => onDuplicate?.(table.name)} />
+          <IconButton icon="trash" label={t('inspector.delete')} disabled={!onDelete} onClick={() => onDelete?.(table.name)} />
+        </span>
       </div>
       {error && (
         <div className="ss-field-error" role="alert">
@@ -217,6 +221,128 @@ function TableTitle({
         </div>
       )}
     </>
+  );
+}
+
+function EmptyInspector({
+  schemaName,
+  selectedCount,
+  selection,
+  groups,
+  onGroup,
+  onNewGroup,
+  onNewTable,
+  onInferRelations,
+  onReviewInferred,
+  onRemoveInferred,
+  onGroups,
+}: {
+  schemaName?: string;
+  selectedCount?: number;
+  selection?: readonly string[];
+  groups: readonly TableGroup[];
+  onGroup?: (tables: readonly string[], group: string | null) => void;
+  onNewGroup?: (tables: readonly string[]) => void;
+  onNewTable?: () => void;
+  onInferRelations?: () => void;
+  onReviewInferred?: () => void;
+  onRemoveInferred?: () => void;
+  onGroups?: () => void;
+}) {
+  const several = selectedCount !== undefined && selectedCount > 1;
+  const hasInfer = !!(onInferRelations || onReviewInferred || onRemoveInferred);
+
+  return (
+    <aside className="ss-inspector">
+      <div className="ss-insp-head">
+        <div className="ss-insp-title">
+          <Icon name="database" size={16} />
+          <span className="ss-insp-name" style={{ cursor: 'default' }}>
+            {schemaName}
+          </span>
+        </div>
+      </div>
+      <div className="ss-insp-empty">
+        <div className="ss-insp-empty-top">
+          <p className="ss-insp-lead">{several ? t('inspector.selected', { count: selectedCount }) : t('inspector.empty')}</p>
+          {onNewTable && (
+            <Button variant="primary" size="sm" icon="plus" className="ss-insp-cta" onClick={onNewTable}>
+              {t('action.newTable')}
+            </Button>
+          )}
+        </div>
+
+        <div className="ss-insp-hints" role="list">
+          {several ? (
+            <div className="ss-insp-hint" role="listitem">
+              <Kbd keys={['⇧', 'A']} />
+              <span>{t('action.arrangeSelected')}</span>
+            </div>
+          ) : (
+            <>
+              <div className="ss-insp-hint" role="listitem">
+                <Kbd keys={['⌘', 'K']} />
+                <span>{t('inspector.jump')}</span>
+              </div>
+              <div className="ss-insp-hint" role="listitem">
+                <Kbd keys={['⇧']} />
+                <span>{t('inspector.selectSeveral')}</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {several && selection && onGroup && (
+          <section className="ss-insp-card">
+            <Field label={t('inspector.group')}>
+              <GroupField groups={groups} tables={selection} onGroup={onGroup} onNewGroup={onNewGroup} />
+            </Field>
+          </section>
+        )}
+
+        {hasInfer && (
+          <section className="ss-insp-card">
+            <div className="ss-insp-card-head">
+              <Icon name="link" size={14} />
+              <span className="ss-caption">{t('inspector.inferTitle')}</span>
+            </div>
+            <p className="ss-insp-card-text">{t('inspector.inferHint')}</p>
+            <div className="ss-insp-stack">
+              {onInferRelations && (
+                <Button size="sm" icon="link" onClick={onInferRelations}>
+                  {t('action.inferRelationships')}
+                </Button>
+              )}
+              {onReviewInferred && (
+                <Button size="sm" icon="check" onClick={onReviewInferred}>
+                  {t('inspector.reviewInferred')}
+                </Button>
+              )}
+              {onRemoveInferred && (
+                <Button size="sm" variant="ghost" icon="x" onClick={onRemoveInferred}>
+                  {t('inspector.removeInferred')}
+                </Button>
+              )}
+            </div>
+          </section>
+        )}
+
+        {onGroups && (
+          <section className="ss-insp-card">
+            <div className="ss-insp-card-head">
+              <Icon name="folder" size={14} />
+              <span className="ss-caption">{t('inspector.groupsTitle')}</span>
+            </div>
+            <p className="ss-insp-card-text">{t('inspector.groupsHint')}</p>
+            <div className="ss-insp-stack">
+              <Button size="sm" icon="folder" onClick={onGroups}>
+                {t('action.tableGroups')}
+              </Button>
+            </div>
+          </section>
+        )}
+      </div>
+    </aside>
   );
 }
 
@@ -256,96 +382,20 @@ export function Inspector({
   });
 
   if (!table) {
-    const several = selectedCount !== undefined && selectedCount > 1;
     return (
-      <aside className="ss-inspector">
-        <div className="ss-insp-head">
-          <div className="ss-insp-title">
-            <Icon name="database" size={16} />
-            <span className="ss-insp-name" style={{ cursor: 'default' }}>
-              {schemaName}
-            </span>
-          </div>
-        </div>
-        <div className="ss-insp-empty" style={{ padding: 16 }}>
-          {several ? `${t('inspector.selected', { count: selectedCount })} ` : `${t('inspector.empty')} `}
-          <br />
-          <br />
-          {several ? (
-            <span className="ss-row">
-              <Kbd keys={['⇧', 'A']} />
-              {t('action.arrangeSelected')}
-            </span>
-          ) : (
-            <>
-              <span className="ss-row">
-                <Kbd keys={['⌘', 'K']} />
-                {t('inspector.jump')}
-              </span>
-              <br />
-              <span className="ss-row">
-                <Kbd keys={['⇧']} />
-                {t('inspector.selectSeveral')}
-              </span>
-            </>
-          )}
-          {several && selection && onGroup && (
-            <>
-              <br />
-              <span className="ss-row">
-                {t('inspector.group')}
-                <GroupField groups={groups} tables={selection} onGroup={onGroup} onNewGroup={onNewGroup} />
-              </span>
-            </>
-          )}
-          {onNewTable && (
-            <>
-              <br />
-              <Button size="sm" icon="plus" onClick={onNewTable}>
-                {t('action.newTable')}
-              </Button>
-            </>
-          )}
-          {(onInferRelations || onReviewInferred || onRemoveInferred) && (
-            <>
-              <br />
-              <br />
-              {t('inspector.inferHint')}
-              <br />
-              <br />
-              <span className="ss-row" style={{ flexWrap: 'wrap' }}>
-                {onInferRelations && (
-                  <Button size="sm" icon="link" onClick={onInferRelations}>
-                    {t('action.inferRelationships')}
-                  </Button>
-                )}
-                {onReviewInferred && (
-                  <Button size="sm" icon="check" onClick={onReviewInferred}>
-                    {t('inspector.reviewInferred')}
-                  </Button>
-                )}
-                {onRemoveInferred && (
-                  <Button size="sm" variant="ghost" icon="x" onClick={onRemoveInferred}>
-                    {t('inspector.removeInferred')}
-                  </Button>
-                )}
-              </span>
-            </>
-          )}
-          {onGroups && (
-            <>
-              <br />
-              <br />
-              {t('inspector.groupsHint')}
-              <br />
-              <br />
-              <Button size="sm" icon="folder" onClick={onGroups}>
-                {t('action.tableGroups')}
-              </Button>
-            </>
-          )}
-        </div>
-      </aside>
+      <EmptyInspector
+        schemaName={schemaName}
+        selectedCount={selectedCount}
+        selection={selection}
+        groups={groups}
+        onGroup={onGroup}
+        onNewGroup={onNewGroup}
+        onNewTable={onNewTable}
+        onInferRelations={onInferRelations}
+        onReviewInferred={onReviewInferred}
+        onRemoveInferred={onRemoveInferred}
+        onGroups={onGroups}
+      />
     );
   }
 
@@ -384,6 +434,13 @@ export function Inspector({
     if (next) onSelectColumn?.(next.columns.length - 1);
   }
 
+  const meta = [
+    schema,
+    t('count.columns', { count: table.columns.length }),
+    t('count.indexes', { count: indexes.length }),
+    t('count.relations', { count: relationCount }),
+  ];
+
   return (
     <aside
       className="ss-inspector"
@@ -406,16 +463,15 @@ export function Inspector({
           onDelete={onDelete}
         />
         <div className="ss-insp-meta">
-          <span>{schema}</span>
-          {'·'}
-          <span>{t('count.columns', { count: table.columns.length })}</span>
-          {'·'}
-          <span>{t('count.indexes', { count: indexes.length })}</span>
-          {'·'}
-          <span>{t('count.relations', { count: relationCount })}</span>
+          {meta.map((part, i) => (
+            <Fragment key={i}>
+              {i > 0 && <span aria-hidden>·</span>}
+              <span>{part}</span>
+            </Fragment>
+          ))}
           {group && (
             <>
-              {'·'}
+              <span aria-hidden>·</span>
               <span className={cx('ss-row', `ss-group--${group.color}`)} style={{ gap: 4 }} title={t('group.title', { name: group.name })}>
                 <span className="ss-group-swatch" />
                 {group.name}
@@ -424,7 +480,32 @@ export function Inspector({
           )}
         </div>
       </div>
+
       <div className="ss-insp-body">
+        <InspectorSection title={t('inspector.tableSettings')} collapsed={settingsCollapsed}>
+          <div className="ss-insp-fields">
+            <Field label={t('field.comment')}>
+              <textarea
+                className="ss-input"
+                rows={2}
+                value={table.comment || ''}
+                placeholder={t('inspector.commentPlaceholder')}
+                onChange={(e) => edit((table) => ({ ...table, comment: e.target.value }), 'comment')}
+              />
+            </Field>
+            <div className="ss-insp-fields-row">
+              <Field label={t('field.schema')}>
+                <Select size="sm" mono value={schema} options={schemas} onChange={(v) => edit((table) => ({ ...table, schema: v }))} />
+              </Field>
+              {onGroup && (
+                <Field label={t('inspector.group')}>
+                  <GroupField groups={groups} tables={[table.name]} onGroup={onGroup} onNewGroup={onNewGroup} />
+                </Field>
+              )}
+            </div>
+          </div>
+        </InspectorSection>
+
         <InspectorSection title={t('inspector.columns')} count={table.columns.length} onAdd={addCol} addLabel={`${t('action.addColumn')} (⌘⏎)`}>
           <div className="ss-col-head">
             <span />
@@ -535,61 +616,74 @@ export function Inspector({
             </Button>
           </div>
         </InspectorSection>
+
         <InspectorSection
           title={t('noun.indexes')}
           count={indexes.length}
           addLabel={t('inspector.addIndex')}
           onAdd={onAddIndex && (() => onAddIndex(table.name))}
         >
-          {indexes.map((ix) => (
-            <div key={ix.name} className="ss-insp-item">
-              <Icon
-                name={ix.type === 'PRIMARY KEY' ? 'key' : 'hash'}
-                size={14}
-                style={ix.type === 'PRIMARY KEY' ? { color: 'var(--pk)' } : undefined}
-              />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ix.name}</span>
-              {ix.type !== 'INDEX' ? <Badge>{ix.type === 'PRIMARY KEY' ? 'PK' : 'UNIQUE'}</Badge> : <span />}
-              <span className="ss-insp-item-sub">{`${ix.using} (${ix.columns.join(', ')})`}</span>
-            </div>
-          ))}
+          {indexes.length === 0 ? (
+            <div className="ss-insp-none">{t('inspector.noIndexes')}</div>
+          ) : (
+            indexes.map((ix) => (
+              <div key={ix.name} className="ss-insp-item">
+                <Icon
+                  name={ix.type === 'PRIMARY KEY' ? 'key' : 'hash'}
+                  size={14}
+                  style={ix.type === 'PRIMARY KEY' ? { color: 'var(--pk)' } : undefined}
+                />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ix.name}</span>
+                {ix.type !== 'INDEX' ? <Badge>{ix.type === 'PRIMARY KEY' ? 'PK' : 'UNIQUE'}</Badge> : <span />}
+                <span className="ss-insp-item-sub">{`${ix.using} (${ix.columns.join(', ')})`}</span>
+              </div>
+            ))
+          )}
           <div className="ss-insp-add">
             <Button variant="ghost" size="sm" icon="plus" disabled={!onAddIndex} onClick={() => onAddIndex?.(table.name)}>
               {t('inspector.addIndex')}
             </Button>
           </div>
         </InspectorSection>
+
         <InspectorSection
           title={t('inspector.foreignKeys')}
           count={relationCount}
           addLabel={t('action.addForeignKey')}
           onAdd={onAddForeignKey && (() => onAddForeignKey(table.name))}
         >
-          {relationCount === 0 && <div className="ss-insp-empty">{t('inspector.noRelationships')}</div>}
-          {outgoing.map((r) => (
-            <div key={`o${qualifiedName(r.from)}`} className="ss-insp-item">
-              <Icon name="arrow-right" size={14} style={{ color: 'var(--fk)' }} />
-              <span>
-                {qualifiedName(r.from)}
-                <span className="ss-faint">{' → '}</span>
-                {qualifiedName(r.to)}
-              </span>
-              <Badge>{r.inferred ? t('relation.inferred') : r.onDelete}</Badge>
-              <span className="ss-insp-item-sub">{t('inspector.outgoing', { detail: r.inferred ? t('inspector.inferredFromName') : `ON DELETE ${r.onDelete}` })}</span>
-            </div>
-          ))}
-          {incoming.map((r) => (
-            <div key={`i${qualifiedName(r.from)}`} className="ss-insp-item">
-              <Icon name="link" size={14} style={{ color: 'var(--fk)' }} />
-              <span>
-                {qualifiedName(r.from)}
-                <span className="ss-faint">{' → '}</span>
-                {qualifiedName(r.to)}
-              </span>
-              <Badge>{r.inferred ? t('relation.inferred') : r.onDelete}</Badge>
-              <span className="ss-insp-item-sub">{t('inspector.incoming', { table: r.from.table })}</span>
-            </div>
-          ))}
+          {relationCount === 0 ? (
+            <div className="ss-insp-none">{t('inspector.noRelationships')}</div>
+          ) : (
+            <>
+              {outgoing.map((r) => (
+                <div key={`o${qualifiedName(r.from)}`} className="ss-insp-item">
+                  <Icon name="arrow-right" size={14} style={{ color: 'var(--fk)' }} />
+                  <span>
+                    {qualifiedName(r.from)}
+                    <span className="ss-faint">{' → '}</span>
+                    {qualifiedName(r.to)}
+                  </span>
+                  <Badge>{r.inferred ? t('relation.inferred') : r.onDelete}</Badge>
+                  <span className="ss-insp-item-sub">
+                    {t('inspector.outgoing', { detail: r.inferred ? t('inspector.inferredFromName') : `ON DELETE ${r.onDelete}` })}
+                  </span>
+                </div>
+              ))}
+              {incoming.map((r) => (
+                <div key={`i${qualifiedName(r.from)}`} className="ss-insp-item">
+                  <Icon name="link" size={14} style={{ color: 'var(--fk)' }} />
+                  <span>
+                    {qualifiedName(r.from)}
+                    <span className="ss-faint">{' → '}</span>
+                    {qualifiedName(r.to)}
+                  </span>
+                  <Badge>{r.inferred ? t('relation.inferred') : r.onDelete}</Badge>
+                  <span className="ss-insp-item-sub">{t('inspector.incoming', { table: r.from.table })}</span>
+                </div>
+              ))}
+            </>
+          )}
           <div className="ss-insp-add">
             <Button
               variant="ghost"
@@ -600,26 +694,6 @@ export function Inspector({
             >
               {t('action.addForeignKey')}
             </Button>
-          </div>
-        </InspectorSection>
-        <InspectorSection title={t('inspector.tableSettings')} collapsed={settingsCollapsed}>
-          <div className="ss-insp-kv">
-            <label>{t('field.comment')}</label>
-            <textarea
-              className="ss-input"
-              rows={2}
-              value={table.comment || ''}
-              placeholder={t('inspector.commentPlaceholder')}
-              onChange={(e) => edit((table) => ({ ...table, comment: e.target.value }), 'comment')}
-            />
-            <label>{t('field.schema')}</label>
-            <Select size="sm" mono value={schema} options={schemas} onChange={(v) => edit((table) => ({ ...table, schema: v }))} />
-            {onGroup && (
-              <>
-                <label>{t('inspector.group')}</label>
-                <GroupField groups={groups} tables={[table.name]} onGroup={onGroup} onNewGroup={onNewGroup} />
-              </>
-            )}
           </div>
         </InspectorSection>
       </div>

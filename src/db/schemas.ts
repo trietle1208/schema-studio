@@ -176,5 +176,17 @@ export function schemaSummary(schema: SchemaRecord, now: number): SchemaSummary 
     version: versionLabel(schema.version),
     updated: relativeTime(schema.updatedAt, now),
     updatedShort: relativeTime(schema.updatedAt, now, true),
+    ...(schema.favorite ? { favorite: true } : {}),
   };
+}
+
+/** Pins or unpins a schema in the sidebar Favorites nav. */
+export async function setSchemaFavorite(name: string, favorite: boolean): Promise<void> {
+  const schema = await db.schemas.where('name').equals(name).first();
+  if (!schema) throw new Error(t('db.schemaGone'));
+  if (!!schema.favorite === favorite) return;
+  const next: SchemaRecord = { ...schema };
+  if (favorite) next.favorite = true;
+  else delete next.favorite;
+  await db.schemas.put(next);
 }

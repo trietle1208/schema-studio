@@ -16,6 +16,7 @@ import {
   restoreVersion,
   saveVersion,
   schemaSummary,
+  setSchemaFavorite,
 } from './schemas';
 import { resetDatabase } from './testing';
 
@@ -342,5 +343,15 @@ describe('schemaSummary', () => {
       updated: '2 hours ago',
       updatedShort: '2h',
     });
+  });
+
+  it('includes favorite when the schema is pinned', async () => {
+    const schema = await createSchema(ecommerce, ecommerceSnapshot());
+    await setSchemaFavorite(schema.name, true);
+    const pinned = await db.schemas.get(schema.id);
+    expect(schemaSummary(pinned!, T0).favorite).toBe(true);
+    await setSchemaFavorite(schema.name, false);
+    const plain = await db.schemas.get(schema.id);
+    expect(schemaSummary(plain!, T0).favorite).toBeUndefined();
   });
 });

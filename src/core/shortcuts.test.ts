@@ -12,6 +12,10 @@ describe('matchShortcut', () => {
     expect(matchShortcut({ key: 'I', metaKey: true })).toBe('import');
     expect(matchShortcut({ key: ',', metaKey: true })).toBe('settings');
     expect(matchShortcut({ key: ',', ctrlKey: true })).toBe('settings');
+    expect(matchShortcut({ key: '/', metaKey: true })).toBe('shortcuts');
+    expect(matchShortcut({ key: '/', ctrlKey: true })).toBe('shortcuts');
+    expect(matchShortcut({ key: 'b', metaKey: true })).toBe('toggle-sidebar');
+    expect(matchShortcut({ key: 'B', ctrlKey: true })).toBe('toggle-sidebar');
     expect(matchShortcut({ key: 'z', metaKey: true })).toBe('undo');
     expect(matchShortcut({ key: 'z', metaKey: true, shiftKey: true })).toBe('redo');
     expect(matchShortcut({ key: 'Enter', metaKey: true })).toBe('add-column');

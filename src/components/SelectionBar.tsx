@@ -24,7 +24,7 @@ export function SelectionBar({ count, onCopy, onExport, onDelete, onClear }: Sel
         {t('selection.export')}
       </Button>
       <Button size="sm" variant="danger-ghost" icon="trash" kbd="⌫" disabled={!onDelete} onClick={onDelete}>
-        {t('selection.delete')}
+        {t('selection.delete', { count })}
       </Button>
       <span className="ss-spacer" />
       <IconButton icon="x" size="sm" label={t('selection.clear')} disabled={!onClear} onClick={onClear} />

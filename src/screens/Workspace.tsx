@@ -152,6 +152,7 @@ export function Workspace() {
         onSchemas={() => go(SCHEMAS_ROUTE)}
         onHistory={() => go({ screen: 'history', schema: name })}
         onExport={requestExport}
+        chrome="centered"
       />
       <div className="ss-work">
         <ERCanvas

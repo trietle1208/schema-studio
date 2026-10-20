@@ -332,3 +332,121 @@ export function convertedColumns(table: Table, src: RecordsSource, mapping: Impo
   }
   return out;
 }
+
+// ------------------------------------------------------------------------------------- run
+
+export interface ImportFail {
+  line: number;
+  message: string;
+}
+
+/**
+ * What `runImport` wrote (or would write): the counts, and the rows to store. A transaction that
+ * rolled back has empty `insert` / `update` lists.
+ */
+export interface ImportOutcome {
+  processed: number;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  error: ImportFail | null;
+  stopped: boolean;
+  rolledBack: boolean;
+  insert: Row[];
+  update: { match: Row | null; values: Row }[];
+}
+
+/**
+ * Plays the import over the rows of `analyzeImport` for the first `limit` rows (all when left out).
+ * `fail` makes the database refuse that row (a clash that appeared after the check). A transaction
+ * (or stopping on the first error) ends the run there; a transaction that ended on an error writes
+ * nothing. `cancelled` ends the run where it is, with the same rule for a transaction.
+ */
+export function runImport(
+  analysis: ImportAnalysis,
+  settings: Partial<ImportSettings> = {},
+  fail: ImportFail | null = null,
+  limit?: number,
+  cancelled = false,
+): ImportOutcome {
+  const set: ImportSettings = { ...IMPORT_DEFAULTS, ...settings };
+  const stop = set.oneTx || set.stopOnError;
+  const out: ImportOutcome = {
+    processed: 0,
+    inserted: 0,
+    updated: 0,
+    skipped: 0,
+    failed: 0,
+    error: null,
+    stopped: false,
+    rolledBack: false,
+    insert: [],
+    update: [],
+  };
+  const max = limit == null ? analysis.rows.length : Math.min(limit, analysis.rows.length);
+  for (let i = 0; i < max; i++) {
+    const r = analysis.rows[i];
+    out.processed++;
+    if (r.kind !== 'insert' && r.kind !== 'update') {
+      out.skipped++;
+      continue;
+    }
+    if (fail && r.line === fail.line) {
+      out.failed++;
+      out.error = fail;
+      if (stop) {
+        out.stopped = true;
+        break;
+      }
+      continue;
+    }
+    if (r.kind === 'insert') {
+      out.inserted++;
+      out.insert.push(r.values);
+    } else {
+      out.updated++;
+      out.update.push({ match: r.match, values: r.values });
+    }
+  }
+  if (set.oneTx && (out.stopped || cancelled)) {
+    out.rolledBack = out.inserted + out.updated > 0;
+    out.inserted = 0;
+    out.updated = 0;
+    out.insert = [];
+    out.update = [];
+  }
+  return out;
+}
+
+function csvCell(v: SourceCell | undefined): string {
+  const s = v == null ? '' : String(v);
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/**
+ * The error report: a CSV of every row that was left out or refused, with its line, the column and
+ * the reason. English, like any file the app writes.
+ */
+export function importReport(analysis: ImportAnalysis, outcome: ImportOutcome | null = null): string {
+  const lines = ['line,column,value,reason'];
+  const items: { line: number; column: string; value: SourceCell | undefined; message: string }[] = [];
+  for (const k of PROBLEM_KINDS) for (const it of analysis.groups[k]) items.push(it);
+  if (outcome?.error) items.push({ line: outcome.error.line, column: '', value: '', message: outcome.error.message });
+  items.sort((a, b) => a.line - b.line);
+  for (const it of items) lines.push([it.line, it.column, it.value, it.message].map(csvCell).join(','));
+  return `${lines.join('\n')}\n`;
+}
+
+/** `1,000 rows · 985 valid · 10 warnings · 5 errors` — English, for the summary line of Settings. */
+export function importSummary(c: ImportCounts): string {
+  const n = (x: number) => x.toLocaleString('en-US');
+  const parts = [
+    t('count.rows', { count: c.total, rows: n(c.total) }),
+    t('importRecords.summary.valid', { n: n(c.valid) }),
+    t('importRecords.summary.warnings', { count: c.warnings, n: n(c.warnings) }),
+    t('importRecords.summary.errors', { count: c.errors, n: n(c.errors) }),
+  ];
+  if (c.skip) parts.push(t('importRecords.summary.skipped', { n: n(c.skip) }));
+  return parts.join(' · ');
+}

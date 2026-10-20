@@ -1,4 +1,4 @@
-import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent, PointerEvent, ReactNode, Ref } from 'react';
 import {
   centreOn,
@@ -60,11 +60,10 @@ const CULL_STEP = 256;
 const LITE_ZOOM = 0.45;
 /** How long one pass looks for ways around tables, so that a diagram of hundreds of tables stays responsive while its lines are found. */
 const ROUTE_PASS_MS = 12;
-/** How long the canvas glides to where a step of the wheel puts it, and to where a drag of it has got. */
+/** How long the canvas glides to where a step of the wheel puts it. A drag of the canvas does not glide: it stays on the pointer. */
 const WHEEL_GLIDE_MS = 140;
-const DRAG_GLIDE_MS = 40;
 /** How long the canvas glides to the zoom of a step of the wheel: long enough for a wheel turned notch by notch to zoom without a stop between notches. */
-const WHEEL_ZOOM_GLIDE_MS = 260;
+const WHEEL_ZOOM_GLIDE_MS = 120;
 /** How often a large diagram is drawn again while it is panned or zoomed. */
 const MOVING_COMMIT_MS = 250;
 
@@ -180,6 +179,41 @@ interface DragState {
   ox: number;
   oy: number;
   moved: boolean;
+  /** How far the tables of `origins` have been painted from where they began, in canvas units, while a drag of them is live on the nodes. */
+  liveMx?: number;
+  liveMy?: number;
+}
+
+/** The element of a table on the canvas layer. */
+function nodeEl(root: HTMLElement, name: string): HTMLElement | null {
+  return root.querySelector(`[data-table="${CSS.escape(name)}"]`);
+}
+
+/**
+ * Paints a live drag of tables by translating their nodes, without updating `positions`. Updating
+ * React on every pointer move was what made a drag of a table stutter on a diagram of dozens of rows.
+ */
+function paintNodeDrag(root: HTMLElement | null, origins: Positions, mx: number, my: number) {
+  if (!root) return;
+  const translate = mx || my ? `translate(${mx}px, ${my}px)` : '';
+  for (const name of Object.keys(origins)) {
+    const el = nodeEl(root, name);
+    if (!el) continue;
+    if (translate) el.style.transform = translate;
+    else el.style.removeProperty('transform');
+  }
+}
+
+/** Puts the final places of a live drag onto the nodes, then clears their translate, before React takes over. */
+function commitNodeDrag(root: HTMLElement | null, moves: Positions) {
+  if (!root) return;
+  for (const [name, to] of Object.entries(moves)) {
+    const el = nodeEl(root, name);
+    if (!el) continue;
+    el.style.left = `${to.x}px`;
+    el.style.top = `${to.y}px`;
+    el.style.removeProperty('transform');
+  }
 }
 
 /** A row of a table on the canvas. */
@@ -669,17 +703,29 @@ export function ERCanvas({
       setDragged(new Set(Object.keys(origins)));
     }
     // Every table moves by what the one under the pointer does, which keeps them as they stand to each other.
+    // The nodes take the translate; `positions` waits until the pointer is up so the edges are not redrawn each step.
     const mx = snap(d.ox + dx) - d.ox;
     const my = snap(d.oy + dy) - d.oy;
-    const moves = Object.fromEntries(Object.entries(origins).map(([name, o]) => [name, { x: o.x + mx, y: o.y + my }]));
-    if (onMoveTables) onMoveTables(moves);
-    else for (const [name, to] of Object.entries(moves)) onMove?.(name, to);
+    d.liveMx = mx;
+    d.liveMy = my;
+    paintNodeDrag(layerRef.current, origins, mx, my);
   }
 
   function onNodeUp(e: PointerEvent) {
     const d = drag.current;
     if (d && d.table !== null && d.column !== undefined) return onLinkUp({ table: d.table, column: d.column }, d, e);
-    if (d && d.table !== null && d.moved) onMoveEnd?.(d.table);
+    if (d && d.table !== null && d.moved && d.side === undefined) {
+      const origins = d.origins ?? {};
+      const mx = d.liveMx ?? 0;
+      const my = d.liveMy ?? 0;
+      const moves = Object.fromEntries(Object.entries(origins).map(([name, o]) => [name, { x: o.x + mx, y: o.y + my }]));
+      commitNodeDrag(layerRef.current, moves);
+      if (onMoveTables) onMoveTables(moves);
+      else for (const [name, to] of Object.entries(moves)) onMove?.(name, to);
+      onMoveEnd?.(d.table);
+    } else if (d && d.table !== null && d.moved) {
+      onMoveEnd?.(d.table);
+    }
     drag.current = null;
     setDragged(null);
     setResized(null);
@@ -716,13 +762,14 @@ export function ERCanvas({
       return;
     }
     setPanning(true);
-    moveView({ offset: { x: d.ox + dx, y: d.oy + dy }, zoom: live.current.zoom }, DRAG_GLIDE_MS);
+    moveView({ offset: { x: d.ox + dx, y: d.oy + dy }, zoom: live.current.zoom }, 0);
   }
 
   function onBgUp() {
     const d = drag.current;
     // A press with Shift held that came to no frame leaves the selected tables as they are.
     if (d && d.table === null && !d.moved && !d.frame) onSelect?.(null);
+    if (d && d.table === null && d.moved && !d.frame) settleView();
     drag.current = null;
     setPanning(false);
     setDragged(null);
@@ -751,10 +798,20 @@ export function ERCanvas({
 
   // A drag that the browser takes away (a touch that becomes a scroll) ends without a pointer-up.
   function onCaptureLost() {
-    if (drag.current?.column !== undefined || drag.current?.frame) drag.current = null;
+    const d = drag.current;
+    if (d?.origins && d.liveMx !== undefined) paintNodeDrag(layerRef.current, d.origins, 0, 0);
+    if (d?.column !== undefined || d?.frame) drag.current = null;
     setLink(null);
     setFrame(null);
   }
+
+  // The first move of a table sets `dragged` and re-renders: put the translate back on the nodes before paint.
+  useLayoutEffect(() => {
+    if (!dragged) return;
+    const d = drag.current;
+    if (!d?.origins || !d.moved) return;
+    paintNodeDrag(layerRef.current, d.origins, d.liveMx ?? 0, d.liveMy ?? 0);
+  }, [dragged]);
 
   const closeMenu = () => setMenu(null);
   const menuSchema = (menu && tables.find((t) => t.name === menu.table)?.schema) || 'public';
@@ -880,16 +937,21 @@ export function ERCanvas({
   const isShown = (name: string) =>
     !inView || inView.has(name) || isChosen.has(name) || !!dragged?.has(name) || !!resized?.has(name) || link?.from.table === name || link?.over?.table === name;
   const shownEdges = useMemo(() => {
-    if (!culling) return edges;
-    return edges.filter((e) => {
-      const points = e.via ?? [e.a, e.b];
-      const x1 = Math.min(...points.map((p) => p.x));
-      const x2 = Math.max(...points.map((p) => p.x));
-      const y1 = Math.min(...points.map((p) => p.y));
-      const y2 = Math.max(...points.map((p) => p.y));
-      return x1 < right && x2 > left && y1 < bottom && y2 > top;
-    });
-  }, [culling, edges, left, top, right, bottom]);
+    let list = edges;
+    if (culling) {
+      list = list.filter((e) => {
+        const points = e.via ?? [e.a, e.b];
+        const x1 = Math.min(...points.map((p) => p.x));
+        const x2 = Math.max(...points.map((p) => p.x));
+        const y1 = Math.min(...points.map((p) => p.y));
+        const y2 = Math.max(...points.map((p) => p.y));
+        return x1 < right && x2 > left && y1 < bottom && y2 > top;
+      });
+    }
+    // While tables are translated live their lines would still end where they began: hide those until the drag commits.
+    if (dragged) list = list.filter((e) => !dragged.has(e.from) && !dragged.has(e.to));
+    return list;
+  }, [culling, edges, left, top, right, bottom, dragged]);
 
   // The tables that stay clear when some are selected: those and the tables one foreign key from them.
   const chosenKey = chosen.join('\u0000');

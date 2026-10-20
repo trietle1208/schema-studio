@@ -163,7 +163,7 @@ export function QueryMode() {
         left={[
           <>
             <span className="ss-status-ok" />
-            {t('data.sampleData')}
+            {t('data.localData')}
           </>,
           `${schemaName}.${tables[0]?.schema || 'public'}`,
           t('query.readOnly'),

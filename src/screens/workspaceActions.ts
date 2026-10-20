@@ -326,12 +326,39 @@ export function openInDiagram(table: string) {
   go({ screen: 'workspace', schema: schema.name });
 }
 
+/**
+ * Structure tab: open the diagram with `table` selected and its column highlighted in the
+ * inspector. `column` is the column's name.
+ */
+export function openColumnInDiagram(table: string, column: string) {
+  const schema = useSchemaStore.getState();
+  useUiStore.getState().setSearch('');
+  schema.focus(null);
+  schema.select(table);
+  const t0 = schema.tables.find((x) => x.name === table);
+  const index = t0?.columns.findIndex((c) => c.name === column) ?? -1;
+  schema.selectColumn(index >= 0 ? index : null);
+  go({ screen: 'workspace', schema: schema.name });
+}
+
 /** "Copy table name" in the menu of a table's header. */
 export async function copyTableName(name: string): Promise<void> {
   const ui = useUiStore.getState();
   try {
     await navigator.clipboard.writeText(name);
     ui.showToast({ tone: 'success', title: t('toast.copiedTableName.title'), description: name });
+  } catch (error) {
+    console.error(error);
+    ui.showToast({ tone: 'error', title: t('toast.copyFailed.title'), description: t('toast.copyFailed.description') });
+  }
+}
+
+/** Structure tab: copy a column name. */
+export async function copyColumnName(name: string): Promise<void> {
+  const ui = useUiStore.getState();
+  try {
+    await navigator.clipboard.writeText(name);
+    ui.showToast({ tone: 'success', title: t('toast.copiedColumnName.title'), description: name });
   } catch (error) {
     console.error(error);
     ui.showToast({ tone: 'error', title: t('toast.copyFailed.title'), description: t('toast.copyFailed.description') });

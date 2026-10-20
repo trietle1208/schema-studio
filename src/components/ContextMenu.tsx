@@ -1,11 +1,11 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { cx } from './cx';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 
 export interface MenuItem {
   icon?: IconName;
-  label: string;
+  label: ReactNode;
   shortcut?: string;
   danger?: boolean;
   active?: boolean;

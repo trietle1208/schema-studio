@@ -6,8 +6,8 @@ import { isJsonObject, parseJson, type JsonValue } from './json';
 
 // A CSV or JSON file read into the shape the import works from: named columns and rows of cells.
 
-/** The largest file Import Records reads: 50 MB, as the drop zone says. */
-export const MAX_RECORDS_FILE_BYTES = 50 * 1024 * 1024;
+/** The largest file Import Records reads: 100 MB, as the drop zone says. */
+export const MAX_RECORDS_FILE_BYTES = 100 * 1024 * 1024;
 
 export type SourceFormat = 'csv' | 'json';
 
