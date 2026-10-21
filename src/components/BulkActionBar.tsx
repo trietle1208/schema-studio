@@ -1,20 +1,24 @@
 import { t } from '../core/i18n';
+import type { RecordExportFormat } from '../core/records/export';
 import { Button } from './Button';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
+import { RecordExportMenu } from './RecordExportMenu';
+import { usePopover } from './usePopover';
 
 export interface BulkActionBarProps {
   /** Rows selected. Draw the bar only while it is above zero. */
   count: number;
   onEdit?: () => void;
   onDuplicate?: () => void;
-  onExport?: () => void;
+  onExport?: (format: RecordExportFormat) => void;
   onDelete?: () => void;
   onClear?: () => void;
 }
 
 /** What can be done to the rows that are ticked in the grid; replaces the left tools of `DataToolbar`. */
 export function BulkActionBar({ count, onEdit, onDuplicate, onExport, onDelete, onClear }: BulkActionBarProps) {
+  const [exportOpen, setExportOpen, exportRef] = usePopover();
   return (
     <div className="ss-bulk" role="status">
       <span className="ss-bulk-count">
@@ -29,9 +33,25 @@ export function BulkActionBar({ count, onEdit, onDuplicate, onExport, onDelete, 
         <Button size="sm" variant="ghost" icon="copy" disabled={!onDuplicate} onClick={onDuplicate}>
           {t('selection.duplicate')}
         </Button>
-        <Button size="sm" variant="ghost" icon="download" disabled={!onExport} onClick={onExport}>
-          {t('selection.exportCsv')}
-        </Button>
+        <div className="ss-anchor" ref={exportRef}>
+          <Button
+            size="sm"
+            variant="ghost"
+            icon="download"
+            active={exportOpen}
+            disabled={!onExport}
+            aria-haspopup="menu"
+            aria-expanded={exportOpen}
+            onClick={() => setExportOpen(!exportOpen)}
+          >
+            {t('selection.export')}
+          </Button>
+          {exportOpen && onExport && (
+            <div className="ss-anchor-pop">
+              <RecordExportMenu count={count} onExport={onExport} onClose={() => setExportOpen(false)} />
+            </div>
+          )}
+        </div>
       </div>
       <span className="ss-bulk-sep" aria-hidden />
       <Button size="sm" variant="danger-ghost" icon="trash" kbd="⌫" disabled={!onDelete} onClick={onDelete}>

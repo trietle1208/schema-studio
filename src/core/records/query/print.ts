@@ -1,11 +1,11 @@
-import type { Expr, Operand, Select } from './ast';
+import type { ColumnRef, Expr, Operand, Select } from './ast';
 
 // A query written out the way the Builder writes it: one clause to a line, AND / OR under the
 // first condition. The words of the SQL are the SQL's own, not the app's.
 
 /** Words that a name must be quoted for, as the reader would take them for the query's own. */
 export const RESERVED = new Set(
-  'SELECT FROM WHERE ORDER BY LIMIT OFFSET AND OR NOT IS NULL LIKE ILIKE BETWEEN IN AS ASC DESC TRUE FALSE DISTINCT ALL'.split(' '),
+  'SELECT FROM WHERE ORDER BY LIMIT OFFSET AND OR NOT IS NULL LIKE ILIKE BETWEEN IN AS ASC DESC TRUE FALSE DISTINCT ALL JOIN INNER LEFT RIGHT FULL CROSS OUTER ON USING NATURAL'.split(' '),
 );
 
 /** A name as SQL writes it: bare when it can be, else in double quotes. */
@@ -18,8 +18,12 @@ export function sqlString(text: string): string {
   return `'${text.replace(/'/g, "''")}'`;
 }
 
+function colSql(c: ColumnRef): string {
+  return c.qual ? `${sqlIdent(c.qual)}.${sqlIdent(c.name)}` : sqlIdent(c.name);
+}
+
 function operandSql(o: Operand): string {
-  if (o.t === 'col') return sqlIdent(o.name);
+  if (o.t === 'col') return colSql(o);
   switch (o.kind) {
     case 'null':
       return 'NULL';
@@ -88,11 +92,17 @@ const INLINE = 72;
 
 /** The query as SQL, ending with a semicolon. */
 export function printQuery(q: Select): string {
-  const list = q.cols ? q.cols.map((c) => sqlIdent(c.name) + (c.alias ? ` AS ${sqlIdent(c.alias)}` : '')) : ['*'];
+  const list = q.cols ? q.cols.map((c) => colSql(c) + (c.alias ? ` AS ${sqlIdent(c.alias)}` : '')) : ['*'];
   const inline = `SELECT ${list.join(', ')}`;
-  const lines = [inline.length <= INLINE ? inline : `SELECT\n${list.map((c) => `  ${c}`).join(',\n')}`, `FROM ${sqlIdent(q.table)}`];
+  const from = [`FROM ${sqlIdent(q.table)}${q.alias ? ` AS ${sqlIdent(q.alias)}` : ''}`];
+  for (const join of q.joins ?? []) {
+    const word = join.type === 'LEFT' ? 'LEFT JOIN' : 'INNER JOIN';
+    const alias = join.alias ? ` AS ${sqlIdent(join.alias)}` : '';
+    from.push(`${word} ${sqlIdent(join.table)}${alias} ON ${exprSql(join.on)}`);
+  }
+  const lines = [inline.length <= INLINE ? inline : `SELECT\n${list.map((c) => `  ${c}`).join(',\n')}`, ...from];
   if (q.where) lines.push(...whereLines(q.where));
-  if (q.order.length) lines.push(`ORDER BY ${q.order.map((o) => sqlIdent(o.col.name) + (o.dir === 'DESC' ? ' DESC' : '')).join(', ')}`);
+  if (q.order.length) lines.push(`ORDER BY ${q.order.map((o) => colSql(o.col) + (o.dir === 'DESC' ? ' DESC' : '')).join(', ')}`);
   if (q.limit !== null) lines.push(`LIMIT ${q.limit}`);
   if (q.offset !== null) lines.push(`OFFSET ${q.offset}`);
   return `${lines.join('\n')};`;

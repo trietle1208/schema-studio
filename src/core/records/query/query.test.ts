@@ -23,6 +23,7 @@ import {
   resultJson,
   runQuery,
   valueHint,
+  wherePreview,
   withColumn,
   type QueryResult,
   type QueryRun,
@@ -198,15 +199,15 @@ describe('the operators', () => {
   const labels = (name: string, table: Table) => queryOps(table.columns.find((c) => c.name === name)!).map((o) => o.label);
 
   it('follow what the column holds', () => {
-    expect(labels('email', users)).toEqual(['=', '≠', 'contains', 'starts with', 'IS NULL', 'IS NOT NULL']);
-    expect(labels('id', users)).toEqual(['=', '>', '<', 'between', 'IS NULL', 'IS NOT NULL']);
-    expect(labels('created_at', users)).toEqual(['before', 'after', 'between', 'IS NULL', 'IS NOT NULL']);
+    expect(labels('email', users)).toEqual(['=', '!=', 'contains', 'starts with', 'in', 'IS NULL', 'IS NOT NULL']);
+    expect(labels('id', users)).toEqual(['=', '!=', '>', '>=', '<', '<=', 'between', 'IS NULL', 'IS NOT NULL']);
+    expect(labels('created_at', users)).toEqual(['before', 'after', 'within last', 'IS NULL', 'IS NOT NULL']);
     expect(queryOps({ type: 'BOOLEAN' }).map((o) => o.value)).toEqual(['eq', 'null', 'notnull']);
   });
 
   it('are in the language of the app, built each time they are asked for', () => {
     setLocale('vi');
-    expect(labels('created_at', users).slice(0, 3)).toEqual(['trước', 'sau', 'trong khoảng']);
+    expect(labels('created_at', users).slice(0, 3)).toEqual(['trước', 'sau', 'trong vòng']);
     setLocale('en');
     expect(labels('created_at', users)[0]).toBe('before');
   });
@@ -225,6 +226,26 @@ describe('the operators', () => {
     expect(withColumn(cond, column('name'), column('id'))).toEqual({ column: 'id', op: 'eq', value: '', value2: '' });
     // NULL tests stay whatever the column.
     expect(withColumn({ ...cond, op: 'notnull' }, column('name'), column('created_at')).op).toBe('notnull');
+  });
+
+  it('writes >=, IN and within last into the preview', () => {
+    const where = {
+      op: 'AND' as const,
+      items: [
+        { column: 'id', op: 'gte' as const, value: '10', value2: '' },
+        { column: 'name', op: 'in' as const, value: 'An Nguyen, Phuc Do', value2: '' },
+        {
+          op: 'OR' as const,
+          items: [{ column: 'created_at', op: 'within' as const, value: '30', value2: '' }],
+        },
+      ],
+    };
+    expect(wherePreview(where, users)).toBe(
+      "WHERE id >= 10 AND name IN ('An Nguyen', 'Phuc Do') AND (created_at >= NOW() - INTERVAL '30 days')",
+    );
+    expect(buildQuery({ ...defaultQuery(users), limit: null, where }, users)).toMatch(
+      /WHERE id >= 10\n {2}AND name IN \('An Nguyen', 'Phuc Do'\)\n {2}AND created_at >= '\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}'/,
+    );
   });
 
   it('give a value box the hint of its column', () => {
@@ -588,5 +609,59 @@ describe('the Builder over every column of the fixtures', () => {
       }
     }
     expect(checked).toBeGreaterThan(10);
+  });
+});
+
+describe('joins', () => {
+  const ordersRows: Row[] = [
+    { id: 10, user_id: 1, status: 'paid', total: '12.00', created_at: '2026-03-02 11:00:00' },
+    { id: 11, user_id: 1, status: 'pending', total: '4.00', created_at: '2026-04-01 11:00:00' },
+    { id: 12, user_id: 6, status: 'paid', total: '9.00', created_at: '2026-04-08 08:00:00' },
+  ];
+  const data = { users: USERS, orders: ordersRows };
+
+  it('reads an inner join and keeps a user with no order on a left join', () => {
+    const inner = run("SELECT users.name, orders.status FROM users INNER JOIN orders ON orders.user_id = users.id WHERE orders.status = 'paid' ORDER BY orders.id", data);
+    expect(inner.rows).toEqual([
+      { name: 'An Nguyen', status: 'paid' },
+      { name: 'Phuc Do', status: 'paid' },
+    ]);
+    expect(inner.sources[0]).toBe(USERS[0]);
+    const left = run('SELECT users.id, orders.id AS order_id FROM users LEFT JOIN orders ON orders.user_id = users.id WHERE users.id = 5', data);
+    expect(left.rows).toEqual([{ id: 5, order_id: null }]);
+  });
+
+  it('names a shared column by its table when the query asks for every column', () => {
+    const r = run('SELECT * FROM users u LEFT JOIN orders o ON o.user_id = u.id WHERE u.id = 2', data);
+    expect(r.rows).toHaveLength(1);
+    expect(r.rows[0].email).toBe('binh@example.org');
+    expect(r.rows[0].status).toBeNull();
+    expect(r.rows[0]['o.id']).toBeNull();
+    expect(r.sources[0]).toBe(USERS[1]);
+  });
+
+  it('prints a join the way it was read, and the Builder writes one', () => {
+    const sql = ['SELECT users.id, orders.status', 'FROM users', 'INNER JOIN orders ON orders.user_id = users.id', 'WHERE users.id = 1;'].join('\n');
+    expect(formatQuery('select users.id, orders.status from users join orders on orders.user_id = users.id where users.id = 1')).toEqual({ ok: true, sql });
+    expect(formatQuery('SELECT * FROM users AS u LEFT OUTER JOIN orders o ON o.user_id = u.id')).toEqual({
+      ok: true,
+      sql: 'SELECT *\nFROM users AS u\nLEFT JOIN orders AS o ON o.user_id = u.id;',
+    });
+    const spec: QuerySpec = {
+      ...defaultQuery(users),
+      limit: null,
+      joins: [{ type: 'INNER', table: 'orders', leftTable: 'users', leftColumn: 'id', rightColumn: 'user_id' }],
+      where: { op: 'AND', items: [{ column: 'orders.status', op: 'eq', value: 'paid', value2: '' }] },
+    };
+    expect(buildQuery(spec, users, ecommerceTables)).toBe(
+      ["SELECT *", 'FROM users', 'INNER JOIN orders ON users.id = orders.user_id', "WHERE orders.status = 'paid';"].join('\n'),
+    );
+  });
+
+  it('refuses an ambiguous column, a repeated table and a table the join cannot see', () => {
+    expect(failure('SELECT id FROM users INNER JOIN orders ON orders.user_id = users.id')).toMatchObject({ message: 'column reference "id" is ambiguous.' });
+    expect(failure('SELECT * FROM users JOIN users ON users.id = users.id')).toMatchObject({ message: 'table name "users" specified more than once.' });
+    expect(failure('SELECT * FROM users JOIN orders ON products.id = users.id')).toMatchObject({ message: 'missing FROM-clause entry for table "products".' });
+    expect(parseQuery('SELECT * FROM users RIGHT JOIN orders ON orders.user_id = users.id').ok).toBe(false);
   });
 });

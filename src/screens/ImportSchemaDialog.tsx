@@ -150,6 +150,7 @@ export function ImportSchemaDialog() {
       tables,
       file: fromFile ? file.name : undefined,
       database: fromDatabase ? read.label : undefined,
+      connection: fromDatabase && engine === 'MySQL' ? read.connection : undefined,
     });
     // On success the dialog is closed, and this component gone.
     if (!imported) setImporting(false);

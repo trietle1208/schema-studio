@@ -57,10 +57,9 @@ export function Crumb({ onClick, className, children }: CrumbProps) {
   if (!onClick) return <span className={className}>{children}</span>;
   return (
     <span
-      className={className}
+      className={cx('ss-tb-link', className)}
       role="link"
       tabIndex={0}
-      style={{ cursor: 'pointer' }}
       onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === 'Enter') onClick();
@@ -94,10 +93,10 @@ function ColumnsMenu({ onChoose, selected }: { onChoose: (choice: ColumnsChoice)
     };
   }, [open]);
   return (
-    <div ref={box} style={{ position: 'relative' }}>
+    <div ref={box} className="ss-tb-menu">
       <IconButton icon="columns" label={selected ? t('columns.menuSelected') : t('columns.menu')} onClick={() => setOpen((o) => !o)} />
       {open && (
-        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 30 }}>
+        <div className="ss-tb-pop">
           <ContextMenu
             label={selected ? t('columns.menuSelected') : t('columns.menu')}
             onClose={() => setOpen(false)}
@@ -192,34 +191,56 @@ export function Toolbar({
   const showModes = !!onMode;
   const centered = chrome === 'centered';
 
-  const crumb = (
-    <>
+  const identity = (
+    <div className="ss-tb-identity">
       <div className="ss-tb-crumb">
         <Crumb onClick={onSchemas}>{t('common.schemas')}</Crumb>
         <Icon name="chevron-right" size={12} />
-        <span className="ss-tb-name">
+        <span className="ss-tb-name" title={schema}>
           {schema}
-          <Icon name="chevron-down" size={12} style={{ color: 'var(--ink-3)' }} />
         </span>
       </div>
-      {engine && (
-        <Badge dot title={t('toolbar.engine')}>
-          {engine}
-        </Badge>
+      {(engine || version) && (
+        <span className="ss-tb-badges">
+          {engine && (
+            <Badge tone="outline" title={t('toolbar.engine')}>
+              {engine}
+            </Badge>
+          )}
+          {version && (
+            <Badge tone="accent" title={t('toolbar.version')}>
+              {version}
+            </Badge>
+          )}
+        </span>
       )}
-      {version && (
-        <Badge tone="accent" title={t('toolbar.version')}>
-          {version}
-        </Badge>
-      )}
-      {centered && <span className="ss-tb-sep" />}
+    </div>
+  );
+
+  const save = (
+    <div className={cx('ss-tb-save', saveState === 'dirty' && 'is-dirty')}>
       <SaveStatus state={saveState} />
       {saveState === 'dirty' && (
         <Button size="sm" kbd={['⌘', 'S']} onClick={onSave}>
           {t('toolbar.save')}
         </Button>
       )}
-    </>
+    </div>
+  );
+
+  const canvasTools = mode === 'diagram' && (
+    <div className="ss-tb-tools" role="group" aria-label={t('toolbar.canvasGroup')}>
+      <IconButton icon="zoom-out" label={t('toolbar.zoomOut')} onClick={() => onZoom?.(stepZoom(zoom, -ZOOM_STEP))} />
+      <button type="button" className="ss-tb-zoom" title={t('toolbar.zoomReset')} onClick={() => onZoom?.(1)}>
+        {`${Math.round(zoom * 100)}%`}
+      </button>
+      <IconButton icon="zoom-in" label={t('toolbar.zoomIn')} onClick={() => onZoom?.(stepZoom(zoom, ZOOM_STEP))} />
+      <IconButton icon="fit" label={t('toolbar.fit')} onClick={onFit} />
+      {onArrange && (
+        <IconButton icon="sparkle" label={`${arrangeSelected ? t('action.arrangeSelected') : t('action.arrange')} (⇧A)`} onClick={onArrange} />
+      )}
+      {onShowColumns && <ColumnsMenu onChoose={onShowColumns} selected={columnsSelected} />}
+    </div>
   );
 
   const searchBox = (
@@ -247,39 +268,30 @@ export function Toolbar({
     </div>
   );
 
+  const history = (
+    <ButtonGroup label={t('toolbar.historyGroup')}>
+      <IconButton icon="undo" label={t('toolbar.undo')} disabled={canUndo === false} onClick={onUndo} />
+      <IconButton icon="redo" label={t('toolbar.redo')} disabled={canRedo === false} onClick={onRedo} />
+      <IconButton icon="history" label={t('toolbar.history')} disabled={!onHistory} onClick={onHistory} />
+    </ButtonGroup>
+  );
+
+  const share = <IconButton icon="share" label={t('toolbar.share')} disabled={!onShare} onClick={onShare} />;
+
   if (centered) {
     return (
       <header className="ss-toolbar ss-toolbar--centered">
-        <div className="ss-tb-zone ss-tb-zone--start">{crumb}</div>
+        <div className="ss-tb-zone ss-tb-zone--start">
+          {identity}
+          <span className="ss-tb-sep" />
+          {save}
+        </div>
         <div className="ss-tb-zone ss-tb-zone--center">{showModes && <ModeSwitch value={mode} onChange={onMode} dataDisabled={dataDisabled} large />}</div>
         <div className="ss-tb-zone ss-tb-zone--end">
-          {mode === 'diagram' && (
-            <>
-              <div className="ss-tb-group">
-                <IconButton icon="zoom-out" label={t('toolbar.zoomOut')} onClick={() => onZoom?.(stepZoom(zoom, -ZOOM_STEP))} />
-                <button type="button" className="ss-tb-zoom" title={t('toolbar.zoomReset')} onClick={() => onZoom?.(1)}>
-                  {`${Math.round(zoom * 100)}%`}
-                </button>
-                <IconButton icon="zoom-in" label={t('toolbar.zoomIn')} onClick={() => onZoom?.(stepZoom(zoom, ZOOM_STEP))} />
-                <IconButton icon="fit" label={t('toolbar.fit')} onClick={onFit} />
-                {onArrange && (
-                  <IconButton icon="sparkle" label={`${arrangeSelected ? t('action.arrangeSelected') : t('action.arrange')} (⇧A)`} onClick={onArrange} />
-                )}
-                {onShowColumns && <ColumnsMenu onChoose={onShowColumns} selected={columnsSelected} />}
-              </div>
-              <span className="ss-tb-sep" />
-            </>
-          )}
+          {canvasTools}
           {searchBox}
-          <ButtonGroup label={t('toolbar.historyGroup')}>
-            <IconButton icon="undo" label={t('toolbar.undo')} disabled={canUndo === false} onClick={onUndo} />
-            <IconButton icon="redo" label={t('toolbar.redo')} disabled={canRedo === false} onClick={onRedo} />
-            <IconButton icon="history" label={t('toolbar.history')} disabled={!onHistory} onClick={onHistory} />
-          </ButtonGroup>
-          <span className="ss-tb-sep" />
-          <Button icon="share" disabled={!onShare} onClick={onShare}>
-            {t('toolbar.share')}
-          </Button>
+          {history}
+          {share}
           <Button variant="primary" icon="download" disabled={!onExport} onClick={onExport}>
             {t('common.exportSchema')}
           </Button>
@@ -290,34 +302,15 @@ export function Toolbar({
 
   return (
     <header className="ss-toolbar">
-      {crumb}
+      {identity}
+      <span className="ss-tb-sep" />
+      {save}
       {showModes && <ModeSwitch value={mode} onChange={onMode} dataDisabled={dataDisabled} />}
       <span className="ss-spacer" />
-      <div className="ss-tb-group">
-        <IconButton icon="undo" label={t('toolbar.undo')} disabled={canUndo === false} onClick={onUndo} />
-        <IconButton icon="redo" label={t('toolbar.redo')} disabled={canRedo === false} onClick={onRedo} />
-      </div>
-      {mode === 'diagram' && <span className="ss-tb-sep" />}
-      {mode === 'diagram' && (
-        <div className="ss-tb-group">
-          <IconButton icon="zoom-out" label={t('toolbar.zoomOut')} onClick={() => onZoom?.(stepZoom(zoom, -ZOOM_STEP))} />
-          <button type="button" className="ss-tb-zoom" title={t('toolbar.zoomReset')} onClick={() => onZoom?.(1)}>
-            {`${Math.round(zoom * 100)}%`}
-          </button>
-          <IconButton icon="zoom-in" label={t('toolbar.zoomIn')} onClick={() => onZoom?.(stepZoom(zoom, ZOOM_STEP))} />
-          <IconButton icon="fit" label={t('toolbar.fit')} onClick={onFit} />
-          {onArrange && (
-            <IconButton icon="sparkle" label={`${arrangeSelected ? t('action.arrangeSelected') : t('action.arrange')} (⇧A)`} onClick={onArrange} />
-          )}
-          {onShowColumns && <ColumnsMenu onChoose={onShowColumns} selected={columnsSelected} />}
-        </div>
-      )}
-      <span className="ss-tb-sep" />
+      {canvasTools}
       {searchBox}
-      <IconButton icon="history" label={t('toolbar.history')} disabled={!onHistory} onClick={onHistory} />
-      <Button icon="share" disabled={!onShare} onClick={onShare}>
-        {t('toolbar.share')}
-      </Button>
+      {history}
+      {share}
       <Button variant="primary" icon="download" disabled={!onExport} onClick={onExport}>
         {t('common.export')}
       </Button>

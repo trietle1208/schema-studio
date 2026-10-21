@@ -35,6 +35,40 @@ export function saveQuery(schemaId: number, entry: { name: string; sql: string; 
 }
 
 /**
+ * Replaces the saved query of this name. Rejects, with nothing written, when the schema has no
+ * saved query of that name. A query saved from SQL, with no Builder, drops the Builder it had.
+ */
+export function overwriteSavedQuery(schemaId: number, entry: { name: string; sql: string; spec?: QuerySpec }, at = Date.now()): Promise<QueryRecord> {
+  return db.transaction('rw', db.queries, async () => {
+    const found = await ofKind(schemaId, 'saved').filter((q) => q.name === entry.name).first();
+    if (!found) throw new Error(`No saved query named "${entry.name}".`);
+    const next: QueryRecord = { ...found, sql: entry.sql, at };
+    if (entry.spec) next.spec = entry.spec;
+    else delete next.spec;
+    await db.queries.put(next);
+    return next;
+  });
+}
+
+/**
+ * Gives a saved query another name. Rejects, with nothing written, when another saved query of
+ * the schema already has that name. Answers null when this schema has no saved query with `id`.
+ */
+export function renameSavedQuery(schemaId: number, id: number, name: string, at = Date.now()): Promise<QueryRecord | null> {
+  return db.transaction('rw', db.queries, async () => {
+    const nextName = name.trim();
+    if (!nextName) throw new Error('Query name cannot be empty.');
+    const found = await db.queries.get(id);
+    if (!found || found.schemaId !== schemaId || found.kind !== 'saved') return null;
+    const taken = await ofKind(schemaId, 'saved').filter((q) => q.name === nextName && q.id !== id).count();
+    if (taken) throw new Error(`A saved query named "${nextName}" already exists.`);
+    const next: QueryRecord = { ...found, name: nextName, at };
+    await db.queries.put(next);
+    return next;
+  });
+}
+
+/**
  * Removes a saved query. Answers the query that was removed, so that it can be put back, or null
  * when the schema has no saved query with that id (it is gone already).
  */

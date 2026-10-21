@@ -4,12 +4,14 @@ import type { Column } from '../core/model';
 import type { RecordSort } from '../core/records';
 import { cellKind } from '../core/records/cells';
 import { filterOps, type RecordFilter } from '../core/records/filter';
+import type { RecordExportFormat } from '../core/records/export';
 import { Badge } from './Badge';
 import { BulkActionBar } from './BulkActionBar';
 import { Button } from './Button';
 import { ButtonGroup } from './ButtonGroup';
 import { ColumnsMenu } from './ColumnsMenu';
 import { ContextMenu, type MenuItem } from './ContextMenu';
+import { RecordExportMenu } from './RecordExportMenu';
 import { Field } from './Field';
 import { IconButton } from './IconButton';
 import { Input } from './Input';
@@ -20,6 +22,8 @@ export interface DataToolbarProps {
   columns: readonly Column[];
   /** Table name, for the search placeholder. */
   table?: string;
+  /** Replaces the search placeholder. Live data uses it to say the filter covers this page. */
+  searchPlaceholder?: string;
   search?: string;
   onSearch?: (q: string) => void;
   filters?: readonly RecordFilter[];
@@ -31,14 +35,17 @@ export interface DataToolbarProps {
   onRefresh?: () => void;
   loading?: boolean;
   onImport?: () => void;
-  onExport?: () => void;
+  /** CSV, JSON or INSERT of the rows that match the search and filters. */
+  onExport?: (format: RecordExportFormat) => void;
+  /** How many rows `onExport` writes. Shown on the menu. */
+  exportCount?: number;
   onAdd?: () => void;
   menuItems?: (MenuItem | '-')[];
   /** When above zero, the left tools become the bulk bar. */
   selectedCount?: number;
   onEditSelected?: () => void;
   onDuplicateSelected?: () => void;
-  onExportSelected?: () => void;
+  onExportSelected?: (format: RecordExportFormat) => void;
   onDeleteSelected?: () => void;
   onClearSelection?: () => void;
 }
@@ -146,6 +153,7 @@ function sortItems(cols: readonly Column[], sort: RecordSort | null | undefined,
 export function DataToolbar({
   columns,
   table,
+  searchPlaceholder,
   search = '',
   onSearch,
   filters = [],
@@ -158,6 +166,7 @@ export function DataToolbar({
   loading,
   onImport,
   onExport,
+  exportCount = 0,
   onAdd,
   menuItems,
   selectedCount = 0,
@@ -171,6 +180,7 @@ export function DataToolbar({
   const [sortOpen, setSortOpen, sortRef] = usePopover();
   const [colsOpen, setColsOpen, colsRef] = usePopover();
   const [moreOpen, setMoreOpen, moreRef] = usePopover();
+  const [exportOpen, setExportOpen, exportRef] = usePopover();
   const shown = columns.length - hidden.length;
   const items: (MenuItem | '-')[] = menuItems ?? [
     { icon: 'layers', label: t('action.openInDiagram') },
@@ -196,7 +206,7 @@ export function DataToolbar({
         <div className="ss-dt-search">
           <Input
             icon="search"
-            placeholder={t('dataToolbar.search', { table: table || '' })}
+            placeholder={searchPlaceholder ?? t('dataToolbar.search', { table: table || '' })}
             aria-label={t('dataToolbar.searchLabel')}
             value={search}
             onChange={onSearch ? (e) => onSearch(e.target.value) : undefined}
@@ -272,14 +282,28 @@ export function DataToolbar({
             )}
           </div>
         </ButtonGroup>
-        <ButtonGroup label={t('dataToolbar.ioGroup')}>
-          <Button icon="upload" disabled={!onImport} onClick={onImport}>
-            {t('action.import')}
-          </Button>
-          <Button icon="download" disabled={!onExport} onClick={onExport}>
-            {t('action.export')}
-          </Button>
-        </ButtonGroup>
+        <div className="ss-anchor" ref={exportRef}>
+          <ButtonGroup label={t('dataToolbar.ioGroup')}>
+            <Button icon="upload" disabled={!onImport} onClick={onImport}>
+              {t('action.import')}
+            </Button>
+            <Button
+              icon="download"
+              active={exportOpen}
+              disabled={!onExport}
+              aria-haspopup="menu"
+              aria-expanded={exportOpen}
+              onClick={() => setExportOpen(!exportOpen)}
+            >
+              {t('action.export')}
+            </Button>
+          </ButtonGroup>
+          {exportOpen && onExport && (
+            <div className="ss-anchor-pop ss-anchor-pop--end">
+              <RecordExportMenu count={exportCount} onExport={onExport} onClose={() => setExportOpen(false)} />
+            </div>
+          )}
+        </div>
         <Button variant="primary" icon="plus" kbd={['⌘', '⏎']} disabled={!onAdd} onClick={onAdd}>
           {t('action.addRecord')}
         </Button>

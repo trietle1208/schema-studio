@@ -8,6 +8,7 @@ import {
   buildQuery,
   defaultQuery,
   formatQuery,
+  queryFailure,
   queryPlan,
   queryProblems,
   QUERY_MAX_ROWS,
@@ -73,8 +74,16 @@ export interface QueryConsoleProps {
   onRun?: (entry: QueryRunEntry) => void;
   /** Keeps a query under a name. Rejects when it could not be kept: the form stays open. */
   onSaveQuery?: (entry: { name: string; sql: string; spec?: QuerySpec }) => Promise<void>;
+  /** Replaces the saved query of this name. Rejects when it could not be written. */
+  onOverwriteQuery?: (entry: { name: string; sql: string; spec?: QuerySpec }) => Promise<void>;
+  /** Gives a saved query another name. Resolves with a message when the name cannot be used. */
+  onRenameQuery?: (entry: QueryEntry, name: string) => Promise<string | void>;
   /** Removes a saved query. The host tells the person and offers Undo. */
   onDeleteQuery?: (entry: QueryEntry) => void;
+  /** Runs the SQL on a live database. Left out, the query runs over `data`. */
+  execute?: (sql: string) => Promise<QueryResult>;
+  /** The schema's rows are read from MySQL. The badge says so, and a result row is not edited. */
+  live?: boolean;
   /** Saves a file: the result as CSV or JSON. */
   onExportFile?: (fileName: string, text: string) => void;
   /** Writes the values of a row of a result back to its table. Rejects when it could not be written: the editor stays open. */
@@ -89,16 +98,28 @@ const RESULTS_MAX = 640;
 
 const clamp = (n: number) => Math.round(Math.min(RESULTS_MAX, Math.max(RESULTS_MIN, n)));
 
-function QuerySaveForm({ names, onSave }: { names: readonly string[]; onSave: (name: string) => Promise<void> }) {
+function QuerySaveForm({
+  names,
+  onSave,
+  onOverwrite,
+}: {
+  names: readonly string[];
+  onSave: (name: string) => Promise<void>;
+  onOverwrite?: (name: string) => Promise<void>;
+}) {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => input.current?.focus(), []);
+  const taken = name.trim() !== '' && names.includes(name.trim());
   const submit = () => {
     const v = name.trim();
     if (!v) setError(t('query.save.empty'));
-    else if (names.includes(v)) setError(t('query.save.exists', { name: v }));
+    else if (taken) overwrite();
     else onSave(v).catch(() => setError(t('query.save.failed.description')));
+  };
+  const overwrite = () => {
+    onOverwrite?.(name.trim()).catch(() => setError(t('query.save.failed.description')));
   };
   return (
     <div
@@ -114,7 +135,7 @@ function QuerySaveForm({ names, onSave }: { names: readonly string[]; onSave: (n
     >
       <div className="ss-menu-label">{t('query.save')}</div>
       <div className="ss-dt-form">
-        <Field error={error} hint={t('query.save.hint')}>
+        <Field error={error} hint={taken ? t('query.save.exists', { name: name.trim() }) : t('query.save.hint')}>
           <Input
             placeholder={t('query.save.placeholder')}
             aria-label={t('query.save.nameLabel')}
@@ -128,9 +149,15 @@ function QuerySaveForm({ names, onSave }: { names: readonly string[]; onSave: (n
           />
         </Field>
         <div className="ss-dt-form-foot">
-          <Button variant="primary" size="sm" kbd="⏎" onClick={submit}>
-            {t('query.save')}
-          </Button>
+          {taken ? (
+            <Button variant="primary" size="sm" onClick={overwrite}>
+              {t('query.save.overwrite')}
+            </Button>
+          ) : (
+            <Button variant="primary" size="sm" kbd="⏎" onClick={submit}>
+              {t('query.save')}
+            </Button>
+          )}
         </div>
       </div>
     </div>
@@ -143,15 +170,38 @@ function QueryList({
   entries,
   onPick,
   onDelete,
+  onRename,
 }: {
   kind: 'saved' | 'recent';
   entries: readonly QueryEntry[];
   onPick: (entry: QueryEntry) => void;
   onDelete?: (entry: QueryEntry) => void;
+  onRename?: (entry: QueryEntry, name: string) => Promise<string | void>;
 }) {
   // When the list opened: the times beside the recent queries are told from it.
   const [now] = useState(() => Date.now());
+  const [editing, setEditing] = useState<number | null>(null);
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const isSaved = kind === 'saved';
+  const rename = async (entry: QueryEntry) => {
+    const name = draft.trim();
+    if (!name) {
+      setError(t('query.save.empty'));
+      return;
+    }
+    if (name === entry.name) {
+      setEditing(null);
+      return;
+    }
+    try {
+      const message = await onRename?.(entry, name);
+      if (message) setError(message);
+      else setEditing(null);
+    } catch {
+      setError(t('query.renameFailed.description'));
+    }
+  };
   const item = (x: QueryEntry, i: number) => {
     const line = x.sql.replace(/\s+/g, ' ');
     const meta = [x.ok === false ? t('query.history.failed') : x.ms !== undefined ? t('query.history.ms', { ms: x.ms }) : null, x.at !== undefined ? relativeTime(x.at, now) : null]
@@ -171,11 +221,60 @@ function QueryList({
         )}
       </button>
     );
-    if (!isSaved || !onDelete) return <div key={`${kind}${i}`}>{pick}</div>;
+    if (!isSaved || (!onDelete && !onRename)) return <div key={`${kind}${i}`}>{pick}</div>;
+    const renaming = editing === i;
     return (
       <div key={`s${x.id ?? i}`} className="ss-qh-row">
-        {pick}
-        <Button variant="ghost" size="sm" icon="trash" title={t('query.history.delete')} aria-label={t('query.history.delete')} onClick={() => onDelete(x)} />
+        {renaming ? (
+          <form
+            className="ss-qh-rename"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void rename(x);
+            }}
+          >
+            <Input
+              size="sm"
+              value={draft}
+              aria-label={t('query.save.nameLabel')}
+              error={!!error}
+              autoFocus
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setEditing(null);
+                }
+              }}
+            />
+            <Button size="sm" variant="primary" type="submit">
+              {t('query.rename.action')}
+            </Button>
+            {error && <span className="ss-field-error">{error}</span>}
+          </form>
+        ) : (
+          pick
+        )}
+        {!renaming && onRename && (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="pencil"
+            title={t('query.rename')}
+            aria-label={t('query.rename')}
+            onClick={() => {
+              setDraft(x.name ?? '');
+              setError(null);
+              setEditing(i);
+            }}
+          />
+        )}
+        {!renaming && onDelete && (
+          <Button variant="ghost" size="sm" icon="trash" title={t('query.history.delete')} aria-label={t('query.history.delete')} onClick={() => onDelete(x)} />
+        )}
       </div>
     );
   };
@@ -218,7 +317,22 @@ const OWN_KEYS = 'aside, [aria-modal="true"]';
  * Results / Messages / Plan below, divided by a line that is dragged. It keeps the query and its
  * results; the host keeps the rows, the saved and recent queries and hears what is run and saved.
  */
-export function QueryConsole({ tables, data, saved, recent, table: startTable, onRun, onSaveQuery, onDeleteQuery, onExportFile, onSaveRecord }: QueryConsoleProps) {
+export function QueryConsole({
+  tables,
+  data,
+  saved,
+  recent,
+  table: startTable,
+  onRun,
+  onSaveQuery,
+  onOverwriteQuery,
+  onRenameQuery,
+  onDeleteQuery,
+  onExportFile,
+  onSaveRecord,
+  execute,
+  live,
+}: QueryConsoleProps) {
   const [mode, setMode] = useState<'builder' | 'sql'>('builder');
   const [spec, setSpec] = useState<QuerySpec>(() => defaultQuery(tables.find((x) => x.name === startTable) ?? tables[0]));
   const [sql, setSql] = useState('');
@@ -243,36 +357,58 @@ export function QueryConsole({ tables, data, saved, recent, table: startTable, o
   const [savedOpen, setSavedOpen, savedRef] = usePopover();
   const [saveOpen, setSaveOpen, saveRef] = usePopover();
   const [exportOpen, setExportOpen, exportRef] = usePopover();
+  const [remote, setRemote] = useState<QueryResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
 
   const builderTable = tables.find((x) => x.name === spec.table) ?? tables[0];
-  const currentSql = mode === 'builder' ? buildQuery(spec, builderTable) : sql;
+  const currentSql = mode === 'builder' ? buildQuery(spec, builderTable, tables) : sql;
   // The results follow the rows: a row saved from the editor changes what the last query shows.
-  const result: QueryResult | null = useMemo(() => (ran ? runQuery(ran.sql, tables, data) : null), [ran, tables, data]);
+  // A live query keeps the rows the bridge returned until it is run again.
+  const local = useMemo(() => (live || !ran ? null : runQuery(ran.sql, tables, data)), [live, ran, tables, data]);
+  const result = live ? remote : local;
   const ok = result?.ok ? result : null;
 
   // ---- running
-  const runSql = (text: string, from?: QuerySpec) => {
+  const runSql = async (text: string, from?: QuerySpec) => {
+    if (busyRef.current) return;
     const start = performance.now();
-    const r = runQuery(text, tables, data);
-    const ms = Math.max(1, Math.round(performance.now() - start));
-    setRan({ sql: text, ms });
     setNotes([]);
     setActive(null);
     setCleared(null);
     setFormatError(null);
+    let r: QueryResult;
+    if (execute) {
+      busyRef.current = true;
+      setBusy(true);
+      try {
+        r = await execute(text);
+      } catch (error) {
+        console.error(error);
+        r = queryFailure(1, t('query.liveFailed'));
+      } finally {
+        busyRef.current = false;
+        setBusy(false);
+      }
+      setRemote(r);
+    } else {
+      r = runQuery(text, tables, data);
+    }
+    const ms = Math.max(1, Math.round(performance.now() - start));
+    setRan({ sql: text, ms });
     setTab(r.ok ? (tab === 'plan' ? 'plan' : 'results') : 'messages');
     onRun?.({ sql: text, spec: from, ok: r.ok, ms: r.ok ? ms : undefined });
   };
   const run = () => {
     if (mode === 'builder') {
-      if (queryProblems(spec, builderTable).length) {
+      if (queryProblems(spec, builderTable, tables).length) {
         setTried(true);
         return;
       }
       setTried(false);
-      runSql(buildQuery(spec, builderTable), spec);
+      void runSql(buildQuery(spec, builderTable, tables), spec);
     } else if (sql.trim()) {
-      runSql(sql);
+      void runSql(sql);
     }
   };
 
@@ -292,7 +428,7 @@ export function QueryConsole({ tables, data, saved, recent, table: startTable, o
   const switchMode = (next: string) => {
     if (next === mode) return;
     // Going to SQL carries over what the Builder writes, unless the editor was already written in by hand.
-    if (next === 'sql' && !sqlEdited.current) setSql(buildQuery(spec, builderTable));
+    if (next === 'sql' && !sqlEdited.current) setSql(buildQuery(spec, builderTable, tables));
     setMode(next as 'builder' | 'sql');
   };
   const load = (entry: QueryEntry) => {
@@ -313,6 +449,10 @@ export function QueryConsole({ tables, data, saved, recent, table: startTable, o
   };
   const saveQuery = async (name: string) => {
     await onSaveQuery?.({ name, sql: currentSql, ...(mode === 'builder' ? { spec } : null) });
+    setSaveOpen(false);
+  };
+  const overwriteQuery = async (name: string) => {
+    await onOverwriteQuery?.({ name, sql: currentSql, ...(mode === 'builder' ? { spec } : null) });
     setSaveOpen(false);
   };
   const format = () => {
@@ -392,8 +532,8 @@ export function QueryConsole({ tables, data, saved, recent, table: startTable, o
   const header = (
     <div className="ss-qc-head">
       <h2 className="ss-rec-title">{t('query.title')}</h2>
-      <Badge dot title={t('query.sampleHint')}>
-        {t('data.localData')}
+      <Badge dot title={live ? t('data.liveReadOnly') : t('query.sampleHint')}>
+        {live ? t('data.liveData') : t('data.localData')}
       </Badge>
       <SegmentedControl
         options={[
@@ -422,7 +562,7 @@ export function QueryConsole({ tables, data, saved, recent, table: startTable, o
         </Button>
         {saveOpen && (
           <div className="ss-anchor-pop ss-anchor-pop--end">
-            <QuerySaveForm names={saved.flatMap((x) => (x.name ? [x.name] : []))} onSave={saveQuery} />
+            <QuerySaveForm names={saved.flatMap((x) => (x.name ? [x.name] : []))} onSave={saveQuery} onOverwrite={onOverwriteQuery ? overwriteQuery : undefined} />
           </div>
         )}
       </div>
@@ -444,7 +584,7 @@ export function QueryConsole({ tables, data, saved, recent, table: startTable, o
         </Button>
         {savedOpen && (
           <div className="ss-anchor-pop ss-anchor-pop--end">
-            <QueryList kind="saved" entries={saved} onPick={load} onDelete={onDeleteQuery} />
+            <QueryList kind="saved" entries={saved} onPick={load} onDelete={onDeleteQuery} onRename={onRenameQuery} />
           </div>
         )}
       </div>
@@ -474,8 +614,8 @@ export function QueryConsole({ tables, data, saved, recent, table: startTable, o
 
   // ---- the top: the Builder or the SQL
   const runButton = (
-    <Button variant="primary" icon="play" disabled={mode === 'sql' && !sql.trim()} kbd={['⌘', '⏎']} onClick={run}>
-      {t('query.run')}
+    <Button variant="primary" icon="play" disabled={busy || (mode === 'sql' && !sql.trim())} kbd={['⌘', '⏎']} onClick={run}>
+      {busy ? t('query.running') : t('query.run')}
     </Button>
   );
   let status: ReactNode = null;
@@ -520,13 +660,14 @@ export function QueryConsole({ tables, data, saved, recent, table: startTable, o
         tables={tables}
         value={spec}
         showErrors={tried}
+        rows={data[builderTable.name]?.length ?? 0}
         onChange={setSpec}
         onEditSql={(text) => {
           setSql(text);
           sqlEdited.current = true;
           setMode('sql');
         }}
-        actions={runButton}
+        onApply={run}
       />
     ) : (
       <div className="ss-qc-sql">
@@ -719,7 +860,7 @@ export function QueryConsole({ tables, data, saved, recent, table: startTable, o
         label={t('query.tab.results')}
         activeCell={active}
         onActiveCell={setActive}
-        onOpenRow={openRow}
+        onOpenRow={ok.sources.length ? openRow : undefined}
         empty={
           ok.rows.length ? (
             false

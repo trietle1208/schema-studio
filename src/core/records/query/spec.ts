@@ -2,13 +2,28 @@ import { t } from '../../i18n';
 import type { Column, Table } from '../../model';
 import { cellKind } from '../cells';
 import { MOMENTS, momentKind, type Moment } from '../fields';
-import type { Expr, Literal, Select } from './ast';
-import { printQuery } from './print';
+import type { ColumnRef, Expr, Literal, Select } from './ast';
+import { printQuery, sqlIdent, sqlString } from './print';
 
 // The Builder: a filter written by choosing instead of typing. `QuerySpec` is what the Builder
 // holds; `buildQuery` writes it as SQL, which is what runs.
 
-export type QueryOp = 'eq' | 'ne' | 'gt' | 'lt' | 'before' | 'after' | 'between' | 'contains' | 'starts' | 'null' | 'notnull';
+export type QueryOp =
+  | 'eq'
+  | 'ne'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'before'
+  | 'after'
+  | 'between'
+  | 'contains'
+  | 'starts'
+  | 'in'
+  | 'within'
+  | 'null'
+  | 'notnull';
 
 /** One condition, with what was typed in it as text. */
 export interface QueryCondition {
@@ -29,8 +44,21 @@ export interface QuerySort {
   dir: 'asc' | 'desc';
 }
 
+/** One more table. `leftTable.leftColumn = table.rightColumn`. */
+export interface QueryJoin {
+  type: 'INNER' | 'LEFT';
+  table: string;
+  /** A table already in the query: the FROM table, or an earlier join. */
+  leftTable: string;
+  leftColumn: string;
+  /** A column of `table`. */
+  rightColumn: string;
+}
+
 export interface QuerySpec {
   table: string;
+  /** Left out when the query reads one table, including a query saved before joins. */
+  joins?: QueryJoin[];
   where: QueryGroup;
   /** The columns to select; null for all of them. */
   columns: string[] | null;
@@ -74,12 +102,21 @@ const NULL_OPS = (): OperatorOption[] => [
 export function queryOps(column: Pick<Column, 'type'>): OperatorOption[] {
   switch (cellKind(column.type)) {
     case 'number':
-      return [{ value: 'eq', label: '=' }, { value: 'gt', label: '>' }, { value: 'lt', label: '<' }, { value: 'between', label: t('query.op.between') }, ...NULL_OPS()];
+      return [
+        { value: 'eq', label: '=' },
+        { value: 'ne', label: '!=' },
+        { value: 'gt', label: '>' },
+        { value: 'gte', label: '>=' },
+        { value: 'lt', label: '<' },
+        { value: 'lte', label: '<=' },
+        { value: 'between', label: t('query.op.between') },
+        ...NULL_OPS(),
+      ];
     case 'time':
       return [
         { value: 'before', label: t('query.op.before') },
         { value: 'after', label: t('query.op.after') },
-        { value: 'between', label: t('query.op.between') },
+        { value: 'within', label: t('query.op.within') },
         ...NULL_OPS(),
       ];
     case 'boolean':
@@ -87,9 +124,10 @@ export function queryOps(column: Pick<Column, 'type'>): OperatorOption[] {
     default:
       return [
         { value: 'eq', label: '=' },
-        { value: 'ne', label: '≠' },
+        { value: 'ne', label: '!=' },
         { value: 'contains', label: t('query.op.contains') },
         { value: 'starts', label: t('query.op.startsWith') },
+        { value: 'in', label: 'in' },
         ...NULL_OPS(),
       ];
   }
@@ -169,25 +207,97 @@ export function valueHint(column: Column): string {
   return kind === 'number' ? t('query.hint.number') : t('query.hint.value');
 }
 
-function conditionProblem(c: QueryCondition, table: Pick<Table, 'columns'>): string | null {
-  const column = table.columns.find((x) => x.name === c.column);
+function listed(text: string): string[] {
+  return text.split(',').map((part) => part.trim()).filter(Boolean);
+}
+
+type ScopeTable = Pick<Table, 'name' | 'columns'>;
+
+/** `orders.status`, or a bare name when the query has one table. */
+function splitRef(text: string): { qual?: string; name: string } {
+  const dot = text.indexOf('.');
+  if (dot <= 0) return { name: text };
+  return { qual: text.slice(0, dot), name: text.slice(dot + 1) };
+}
+
+/** The tables a query reads, the FROM table first. `table` is that one when the list is not given. */
+function scopeTables(spec: QuerySpec, table: ScopeTable, tables?: readonly ScopeTable[]): ScopeTable[] {
+  const known = new Map<string, ScopeTable>();
+  for (const item of tables ?? []) known.set(item.name, item);
+  known.set(table.name, table);
+  const out: ScopeTable[] = [];
+  for (const name of [spec.table, ...(spec.joins ?? []).map((join) => join.table)]) {
+    const found = known.get(name);
+    if (found && !out.includes(found)) out.push(found);
+  }
+  return out.length ? out : [table];
+}
+
+/**
+ * The column a condition names. A bare name that several tables have is the FROM table's.
+ * Qualified names name that table only.
+ */
+function locateColumn(text: string, scope: readonly ScopeTable[], primary: string): { table: string; column: Column } | null {
+  const ref = splitRef(text);
+  if (ref.qual) {
+    const host = scope.find((item) => item.name === ref.qual);
+    const column = host?.columns.find((item) => item.name === ref.name);
+    return host && column ? { table: host.name, column } : null;
+  }
+  const hits = scope.flatMap((item) => {
+    const column = item.columns.find((c) => c.name === ref.name);
+    return column ? [{ table: item.name, column }] : [];
+  });
+  if (!hits.length) return null;
+  return hits.find((hit) => hit.table === primary) ?? (hits.length === 1 ? hits[0] : null);
+}
+
+function conditionProblem(c: QueryCondition, table: ScopeTable, scope: readonly ScopeTable[] = [table]): string | null {
+  const found = locateColumn(c.column, scope, table.name);
+  const column = found?.column;
   if (!column) return t('query.problem.noColumn');
   if (isBare(c.op)) return null;
+  if (c.op === 'within') {
+    const days = c.value.trim();
+    if (days === '') return t('query.problem.empty');
+    return /^\d+$/.test(days) && Number(days) > 0 ? null : t('query.problem.number');
+  }
+  if (c.op === 'in') {
+    const parts = listed(c.value);
+    if (!parts.length) return t('query.problem.empty');
+    if (cellKind(column.type) === 'number' && parts.some((part) => Number.isNaN(Number(part)))) return t('query.problem.number');
+    return null;
+  }
   return valueProblem(column, c.value) ?? (c.op === 'between' ? valueProblem(column, c.value2) : null);
 }
 
-/** The conditions that cannot be written yet, with where each is. */
-export function queryProblems(spec: QuerySpec, table: Pick<Table, 'columns'>): QueryProblem[] {
+/** `YYYY-MM-DD HH:mm:ss` of the moment `days` ago, so `within last` can run as a comparison. */
+function cutoffStamp(days: number): string {
+  const d = new Date(Date.now() - days * 86_400_000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/** The conditions that cannot be written yet, with where each is. A join that names a missing column is path `[-1, i]`. */
+export function queryProblems(spec: QuerySpec, table: ScopeTable, tables?: readonly ScopeTable[]): QueryProblem[] {
+  const scope = scopeTables(spec, table, tables);
   const out: QueryProblem[] = [];
   const walk = (group: QueryGroup, path: number[]) =>
     group.items.forEach((item, i) => {
       if (isGroup(item)) walk(item, [...path, i]);
       else {
-        const message = conditionProblem(item, table);
+        const message = conditionProblem(item, table, scope);
         if (message) out.push({ path: [...path, i], message });
       }
     });
   walk(spec.where, []);
+  (spec.joins ?? []).forEach((join, i) => {
+    const left = scope.find((item) => item.name === join.leftTable);
+    const right = scope.find((item) => item.name === join.table);
+    if (!left?.columns.some((column) => column.name === join.leftColumn) || !right?.columns.some((column) => column.name === join.rightColumn)) {
+      out.push({ path: [-1, i], message: t('query.problem.noColumn') });
+    }
+  });
   return out;
 }
 
@@ -205,12 +315,13 @@ function likeText(text: string): string {
   return text.replace(/[\\%_]/g, '\\$&');
 }
 
-function conditionExpr(c: QueryCondition, table: Pick<Table, 'columns'>): Expr | null {
-  const column = table.columns.find((x) => x.name === c.column);
-  if (!column || conditionProblem(c, table)) return null;
+function conditionExpr(c: QueryCondition, table: ScopeTable, scope: readonly ScopeTable[]): Expr | null {
+  const found = locateColumn(c.column, scope, table.name);
+  if (!found || conditionProblem(c, table, scope)) return null;
+  const column = found.column;
   const kind = cellKind(column.type);
-  const ref = { t: 'col', name: column.name } as const;
-  const cmp = (op: '=' | '<>' | '<' | '>', v: string): Expr => ({ t: 'cmp', op, l: ref, r: literalOf(v, kind) });
+  const ref = (scope.length > 1 ? { t: 'col', qual: found.table, name: column.name } : { t: 'col', name: column.name }) as ColumnRef;
+  const cmp = (op: '=' | '<>' | '<' | '>' | '<=' | '>=', v: string): Expr => ({ t: 'cmp', op, l: ref, r: literalOf(v, kind) });
   const like = (pattern: string): Expr => ({ t: 'like', ci: true, neg: false, l: ref, r: { t: 'lit', kind: 'str', v: pattern } });
   switch (c.op) {
     case 'null':
@@ -224,40 +335,138 @@ function conditionExpr(c: QueryCondition, table: Pick<Table, 'columns'>): Expr |
     case 'gt':
     case 'after':
       return cmp('>', c.value);
+    case 'gte':
+      return cmp('>=', c.value);
     case 'lt':
     case 'before':
       return cmp('<', c.value);
+    case 'lte':
+      return cmp('<=', c.value);
     case 'contains':
       return like(`%${likeText(c.value)}%`);
     case 'starts':
       return like(`${likeText(c.value)}%`);
     case 'between':
       return { t: 'between', neg: false, l: ref, a: literalOf(c.value, kind), b: literalOf(c.value2, kind) };
+    case 'in': {
+      const parts = listed(c.value);
+      if (!parts.length) return null;
+      return { t: 'in', neg: false, l: ref, list: parts.map((part) => literalOf(part, kind)) };
+    }
+    case 'within': {
+      const days = Number(c.value.trim());
+      if (!Number.isInteger(days) || days <= 0) return null;
+      return cmp('>=', cutoffStamp(days));
+    }
   }
 }
 
-function groupExpr(group: QueryGroup, table: Pick<Table, 'columns'>): Expr | null {
-  const nodes = group.items.map((item) => (isGroup(item) ? groupExpr(item, table) : conditionExpr(item, table))).filter((e): e is Expr => e !== null);
+function groupExpr(group: QueryGroup, table: ScopeTable, scope: readonly ScopeTable[]): Expr | null {
+  const nodes = group.items.map((item) => (isGroup(item) ? groupExpr(item, table, scope) : conditionExpr(item, table, scope))).filter((e): e is Expr => e !== null);
   const t = group.op === 'OR' ? 'or' : 'and';
   return nodes.length ? nodes.reduce((a, b) => ({ t, a, b })) : null;
 }
 
+function colRef(text: string, table: ScopeTable, scope: readonly ScopeTable[]): ColumnRef {
+  const found = locateColumn(text, scope, table.name);
+  if (!found) return { t: 'col', name: splitRef(text).name };
+  return scope.length > 1 ? { t: 'col', qual: found.table, name: found.column.name } : { t: 'col', name: found.column.name };
+}
+
 /** What the Builder holds as the query it stands for. A condition that is not complete is left out. */
-export function specQuery(spec: QuerySpec, table: Pick<Table, 'columns'>): Select {
+export function specQuery(spec: QuerySpec, table: ScopeTable, tables?: readonly ScopeTable[]): Select {
+  const scope = scopeTables(spec, table, tables);
   const some = spec.columns && spec.columns.length > 0 && spec.columns.length < table.columns.length;
+  const joins = (spec.joins ?? []).map((join) => ({
+    type: join.type,
+    table: join.table,
+    on: {
+      t: 'cmp' as const,
+      op: '=' as const,
+      l: { t: 'col' as const, qual: join.leftTable, name: join.leftColumn },
+      r: { t: 'col' as const, qual: join.table, name: join.rightColumn },
+    },
+  }));
   return {
     table: spec.table,
-    cols: some ? spec.columns!.map((name) => ({ t: 'col', name })) : null,
-    where: groupExpr(spec.where, table),
-    order: spec.sort ? [{ col: { t: 'col', name: spec.sort.column }, dir: spec.sort.dir === 'desc' ? 'DESC' : 'ASC' }] : [],
+    ...(joins.length ? { joins } : {}),
+    cols: some ? spec.columns!.map((name) => colRef(name, table, scope)) : null,
+    where: groupExpr(spec.where, table, scope),
+    order: spec.sort ? [{ col: colRef(spec.sort.column, table, scope), dir: spec.sort.dir === 'desc' ? 'DESC' : 'ASC' }] : [],
     limit: spec.limit,
     offset: null,
   };
 }
 
 /** The SQL the Builder writes. Conditions that are not complete are not in it (see `queryProblems`). */
-export function buildQuery(spec: QuerySpec, table: Pick<Table, 'columns'>): string {
-  return printQuery(specQuery(spec, table));
+export function buildQuery(spec: QuerySpec, table: ScopeTable, tables?: readonly ScopeTable[]): string {
+  return printQuery(specQuery(spec, table, tables));
+}
+
+function previewLiteral(text: string, kind: ReturnType<typeof cellKind>): string {
+  const v = text.trim();
+  if (kind === 'number') return String(Number(v));
+  if (kind === 'boolean') return text !== 'false' ? 'TRUE' : 'FALSE';
+  return sqlString(kind === 'time' ? v : text);
+}
+
+function previewCondition(c: QueryCondition, table: ScopeTable, scope: readonly ScopeTable[]): string | null {
+  const found = locateColumn(c.column, scope, table.name);
+  if (!found || conditionProblem(c, table, scope)) return null;
+  const column = found.column;
+  const name = scope.length > 1 ? `${sqlIdent(found.table)}.${sqlIdent(column.name)}` : sqlIdent(column.name);
+  const kind = cellKind(column.type);
+  const lit = (text: string) => previewLiteral(text, kind);
+  switch (c.op) {
+    case 'null':
+      return `${name} IS NULL`;
+    case 'notnull':
+      return `${name} IS NOT NULL`;
+    case 'eq':
+      return `${name} = ${lit(c.value)}`;
+    case 'ne':
+      return `${name} <> ${lit(c.value)}`;
+    case 'gt':
+    case 'after':
+      return `${name} > ${lit(c.value)}`;
+    case 'gte':
+      return `${name} >= ${lit(c.value)}`;
+    case 'lt':
+    case 'before':
+      return `${name} < ${lit(c.value)}`;
+    case 'lte':
+      return `${name} <= ${lit(c.value)}`;
+    case 'contains':
+      return `${name} ILIKE ${sqlString(`%${likeText(c.value)}%`)}`;
+    case 'starts':
+      return `${name} ILIKE ${sqlString(`${likeText(c.value)}%`)}`;
+    case 'between':
+      return `${name} BETWEEN ${lit(c.value)} AND ${lit(c.value2)}`;
+    case 'in':
+      return `${name} IN (${listed(c.value).map(lit).join(', ')})`;
+    case 'within':
+      return `${name} >= NOW() - INTERVAL '${Number(c.value.trim())} days'`;
+  }
+}
+
+function previewGroup(group: QueryGroup, table: ScopeTable, scope: readonly ScopeTable[], nested: boolean): string | null {
+  const parts = group.items
+    .map((item) => (isGroup(item) ? previewGroup(item, table, scope, true) : previewCondition(item, table, scope)))
+    .filter((part): part is string => part !== null);
+  if (!parts.length) return null;
+  const text = parts.join(` ${group.op} `);
+  return nested ? `(${text})` : text;
+}
+
+/** The WHERE clause under the filter, on one line. `within last` reads as `NOW() - INTERVAL`. */
+export function wherePreview(group: QueryGroup, table: ScopeTable, tables?: readonly ScopeTable[], joins?: QueryJoin[]): string {
+  const text = previewGroup(
+    group,
+    table,
+    scopeTables({ table: table.name, ...(joins?.length ? { joins } : {}), where: group, columns: null, sort: null, limit: null }, table, tables),
+    false,
+  );
+  return text ? `WHERE ${text}` : '';
 }
 
 // ------------------------------------------------------------------------------------- editing

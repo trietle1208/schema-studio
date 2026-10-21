@@ -22,7 +22,7 @@ import {
   type ConnectionField,
   type ConnectionForm,
 } from '../core/introspect';
-import type { BridgeError } from '../core/introspect/catalog';
+import type { BridgeError, Connection } from '../core/introspect/catalog';
 import { knownHostKey, trustHost } from '../db/knownHosts';
 import { Marked } from './Marked';
 
@@ -35,6 +35,8 @@ export interface DatabaseRead {
   /** The DDL of its tables, in the dialect of its engine. */
   sql: string;
   tables: number;
+  /** The connection that was read, password included. The password stays in memory. */
+  connection: Connection;
 }
 
 export interface ConnectDatabaseProps {
@@ -130,7 +132,7 @@ export function ConnectDatabase({ engine, form, onForm, read, onRead }: ConnectD
       });
       return;
     }
-    onRead({ label: connectionLabel(connection), database: connection.database, sql: catalogDdl(answer.catalog), tables });
+    onRead({ label: connectionLabel(connection), database: connection.database, sql: catalogDdl(answer.catalog), tables, connection });
   };
 
   const trust = async ({ host, port, fingerprint }: UntrustedHost) => {

@@ -1,105 +1,144 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { t } from '../core/i18n';
-import { highlightSql } from '../core/highlight';
 import type { Table } from '../core/model';
-import { cellKind } from '../core/records/cells';
+import { rowsText } from '../core/records/cells';
 import {
   buildQuery,
-  countConditions,
   defaultQuery,
-  isBare,
-  isGroup,
-  mapAt,
   newCondition,
-  QUERY_LIMITS,
-  queryOps,
   queryProblems,
-  removeAt,
-  valueHint,
-  valueProblem,
-  withColumn,
+  wherePreview,
   type QueryCondition,
-  type QueryGroup,
+  type QueryJoin,
   type QuerySpec,
 } from '../core/records/query';
+import { searchTableNames } from '../core/search';
 import { Button } from './Button';
-import { ColumnsMenu } from './ColumnsMenu';
+import { ConditionGroup } from './filter/ConditionGroup';
+import { SqlPreview } from './filter/SqlPreview';
+import { isFilterGroup, toFilterGroup, toQueryGroup, type FilterGroup } from './filter/types';
 import { cx } from './cx';
-import { Field } from './Field';
 import { Icon } from './Icon';
-import { IconButton } from './IconButton';
 import { Input } from './Input';
-import { SegmentedControl } from './SegmentedControl';
 import { Select } from './Select';
-import { SqlTokens } from './SqlTokens';
+import { ConfirmDialog } from './Modal';
 import { usePopover } from './usePopover';
 
-const GROUP_OPS = [
-  { value: 'AND', label: 'AND' },
-  { value: 'OR', label: 'OR' },
-];
-const DIRS = [
-  { value: 'asc', label: 'ASC' },
-  { value: 'desc', label: 'DESC' },
-];
-const BOOLEANS = ['true', 'false'];
-
-function QueryConditionRow({
-  condition,
-  table,
-  error,
-  onChange,
-  onRemove,
-}: {
-  condition: QueryCondition;
-  table: Table;
-  /** What is wrong with the condition, shown under it. */
-  error: string | null;
-  onChange: (next: QueryCondition) => void;
-  onRemove: () => void;
-}) {
-  const column = table.columns.find((x) => x.name === condition.column) ?? table.columns[0];
-  const kind = cellKind(column.type);
-  const set = (patch: Partial<QueryCondition>) => onChange({ ...condition, ...patch });
-  const input = (field: 'value' | 'value2', label: string) => (
-    <Input
-      mono
-      placeholder={valueHint(column)}
-      aria-label={label}
-      error={!!error && !!valueProblem(column, condition[field])}
-      value={condition[field]}
-      onChange={(e) => set({ [field]: e.target.value })}
-    />
-  );
-  const value = isBare(condition.op) ? (
-    <span className="ss-qb-bare">{t('builder.noValue')}</span>
-  ) : kind === 'boolean' ? (
-    <Select mono label={t('builder.value')} value={condition.value || 'true'} onChange={(v) => set({ value: v })} options={BOOLEANS} />
-  ) : condition.op === 'between' ? (
-    <div className="ss-qb-pair">
-      {input('value', t('builder.valueFrom'))}
-      <span className="ss-qb-and">{t('builder.and')}</span>
-      {input('value2', t('builder.valueTo'))}
-    </div>
-  ) : (
-    input('value', t('builder.value'))
-  );
+/** The part of a table name that matches what was typed, so the list can mark it. */
+function markedName(name: string, query: string): ReactNode {
+  const needle = query.trim();
+  const at = needle ? name.toLowerCase().indexOf(needle.toLowerCase()) : -1;
+  if (at < 0) return name;
   return (
-    <div className="ss-qb-cond">
-      <Select
-        mono
-        label={t('builder.column')}
-        value={column.name}
-        onChange={(name) => onChange(withColumn(condition, column, table.columns.find((x) => x.name === name)!))}
-        options={table.columns.map((x) => x.name)}
-      />
-      <Select mono label={t('builder.operator')} value={condition.op} onChange={(op) => set({ op: op as QueryCondition['op'] })} options={queryOps(column)} />
-      <div className="ss-qb-value">{value}</div>
-      <IconButton icon="x" size="sm" label={t('builder.removeCondition')} onClick={onRemove} />
-      {error && (
-        <div className="ss-field-error ss-qb-err" role="alert">
-          <Icon name="alert" size={13} />
-          {error}
+    <>
+      {name.slice(0, at)}
+      <mark>{name.slice(at, at + needle.length)}</mark>
+      {name.slice(at + needle.length)}
+    </>
+  );
+}
+
+/** The FROM table, picked from a list that can be searched by name. */
+function TablePicker({ tables, value, onChange }: { tables: readonly Table[]; value: string; onChange: (name: string) => void }) {
+  const [open, setOpen, ref] = usePopover(false);
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState(0);
+  const list = useRef<HTMLDivElement>(null);
+  const listId = useId();
+  const shown = searchTableNames(tables, query);
+  const at = shown.length === 0 ? 0 : Math.min(active, shown.length - 1);
+
+  useEffect(() => {
+    if (!open) return;
+    list.current?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' });
+  }, [at, open, query]);
+
+  const choose = (name: string) => {
+    setOpen(false);
+    if (name !== value) onChange(name);
+  };
+  const onKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (!shown.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActive(Math.min(shown.length - 1, at + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActive(Math.max(0, at - 1));
+    } else if (e.key === 'Enter' && !(e.metaKey || e.ctrlKey) && !e.shiftKey) {
+      e.preventDefault();
+      const table = shown[at];
+      if (table) choose(table.name);
+    }
+  };
+
+  return (
+    <div className="ss-fkpick" ref={ref}>
+      <button
+        type="button"
+        className={cx('ss-fkpick-btn', open && 'is-open')}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title={value}
+        onClick={() => {
+          if (!open) {
+            setQuery('');
+            const index = tables.findIndex((table) => table.name === value);
+            setActive(index < 0 ? 0 : index);
+          }
+          setOpen(!open);
+        }}
+      >
+        <Icon name="table" size={15} className="ss-fb-table-icon" />
+        <span className="ss-fkpick-key">{value}</span>
+        <Icon name="chevron-down" size={14} />
+      </button>
+      {open && (
+        <div className="ss-pop ss-fkpick-pop ss-qb-tables">
+          <div className="ss-fkpick-search">
+            <Input
+              icon="search"
+              size="sm"
+              placeholder={t('builder.searchTables')}
+              aria-label={t('builder.searchTablesLabel')}
+              aria-controls={listId}
+              aria-activedescendant={shown[at] ? `${listId}-${at}` : undefined}
+              role="combobox"
+              aria-expanded={open}
+              aria-autocomplete="list"
+              value={query}
+              autoFocus
+              spellCheck={false}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setActive(0);
+              }}
+              onKeyDown={onKey}
+            />
+          </div>
+          {shown.length ? (
+            <div role="listbox" id={listId} aria-label={t('builder.table')} ref={list}>
+              {shown.map((table, i) => (
+                <div
+                  key={table.name}
+                  id={`${listId}-${i}`}
+                  role="option"
+                  aria-selected={table.name === value}
+                  className={cx('ss-pop-item', i === at && 'is-active')}
+                  title={table.name}
+                  onMouseEnter={() => setActive(i)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    choose(table.name);
+                  }}
+                >
+                  <span>{markedName(table.name, query)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="ss-fkpick-none">{t('builder.noTables', { query: query.trim() })}</div>
+          )}
         </div>
       )}
     </div>
@@ -111,181 +150,295 @@ export interface FilterBuilderProps {
   /** The query: the Builder keeps nothing of its own. `defaultQuery(table)` makes an empty one. */
   value: QuerySpec;
   onChange: (spec: QuerySpec) => void;
-  /** Puts each problem under its row, and the count in the side. */
+  /** How many rows the table has, shown next to the column count. */
+  rows?: number;
+  /** Puts each problem under its row. */
   showErrors?: boolean;
-  /** Under the SQL: the console's Run. */
+  /** Kept so a host can still pass the old Run button. It sits with Reset. */
   actions?: ReactNode;
-  /** Shows Edit as SQL, which hands over the SQL the Builder writes. */
+  /** View SQL hands over the SQL the Builder writes. */
   onEditSql?: (sql: string) => void;
-  /** Starts with the Columns menu open. */
+  /** Apply filter. Disabled while a condition is unfinished. */
+  onApply?: () => void;
+  /** Starts with the Columns menu open. The menu is no longer in this layout. */
   columnsOpen?: boolean;
 }
 
-/** A filter written by choosing instead of typing: the table, groups of conditions that nest, the columns, a sort and a limit, with the SQL it writes as the summary. */
-export function FilterBuilder({ tables, value: spec, onChange, showErrors, actions, onEditSql, columnsOpen }: FilterBuilderProps) {
-  const table = tables.find((x) => x.name === spec.table) ?? tables[0];
-  const [columnsShown, setColumnsShown, columnsRef] = usePopover(!!columnsOpen);
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), 1400);
-    return () => clearTimeout(timer);
-  }, [copied]);
+/** A filter written by choosing: the table, groups of conditions that nest, and the WHERE it writes. */
+export function FilterBuilder({ tables, value: spec, onChange, rows, showErrors, actions, onEditSql, onApply }: FilterBuilderProps) {
+  const table = tables.find((item) => item.name === spec.table) ?? tables[0];
+  const group = toFilterGroup(spec.where);
+  const [clearing, setClearing] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const baseline = useRef(spec);
+  const baselineTable = useRef(spec.table);
+  if (baselineTable.current !== spec.table) {
+    baselineTable.current = spec.table;
+    baseline.current = spec;
+  }
 
-  const problems = queryProblems(spec, table);
-  const shown = new Map(problems.map((x) => [x.path.join('.'), x.message]));
-  const sql = buildQuery(spec, table);
-  const total = countConditions(spec.where);
-  const change = (patch: Partial<QuerySpec>) => onChange({ ...spec, ...patch });
-  const edit = (path: number[], fn: (g: QueryGroup) => QueryGroup) => change({ where: mapAt(spec.where, path, fn) });
-  const copy = () => {
-    try {
-      navigator.clipboard.writeText(sql).then(
-        () => setCopied(true),
-        () => undefined,
-      );
-    } catch {
-      // No clipboard here.
+  const joins = spec.joins ?? [];
+  const scope = [table, ...joins.flatMap((join) => {
+    const found = tables.find((item) => item.name === join.table);
+    return found ? [found] : [];
+  })];
+  const choices = scope.flatMap((item) => item.columns.map((column) => ({ value: scope.length > 1 ? `${item.name}.${column.name}` : column.name, column })));
+  const problems = queryProblems(spec, table, tables);
+  const reveal = !!showErrors || attempted;
+  const errors = new Map(problems.filter(() => reveal).map((item) => [item.path.join('.'), item.message]));
+  // A value that is filled in and still wrong shows at once, before Apply.
+  if (!reveal) {
+    for (const item of problems) {
+      const node = nodeAt(group, item.path);
+      if (node && !isFilterGroup(node) && (node.value.trim() !== '' || node.value2.trim() !== '')) errors.set(item.path.join('.'), item.message);
+    }
+  }
+  const blocked = problems.length > 0;
+  const sql = buildQuery(spec, table, tables);
+  const preview = wherePreview(spec.where, table, tables, spec.joins);
+  const total = problems.length;
+  const changeWhere = (next: FilterGroup) => onChange({ ...spec, where: toQueryGroup(next) });
+
+  const apply = () => {
+    if (blocked) {
+      setAttempted(true);
+      return;
+    }
+    setAttempted(false);
+    onApply?.();
+  };
+  const addAt = (path: number[]) => {
+    const next = insertCondition(group, path, table);
+    changeWhere(next.group);
+    setFocusKey(next.focus);
+  };
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (document.querySelector('[role="dialog"]')) return;
+    const meta = e.metaKey || e.ctrlKey;
+    if (e.key === 'Enter' && meta && !e.shiftKey && !e.altKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      const raw = e.target instanceof Element ? e.target.closest('[data-filter-group]')?.getAttribute('data-filter-path') : '';
+      addAt(raw ? raw.split('.').map(Number) : []);
+    } else if (e.key === 'Enter' && e.shiftKey && !meta && !e.altKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      apply();
     }
   };
 
-  const group = (g: QueryGroup, path: number[]): ReactNode => {
-    const nested = path.length > 0;
-    return (
-      <div key={path.join('.') || 'root'} className={cx('ss-qb-group', nested && 'is-nested')} role="group" aria-label={nested ? t('builder.group') : t('builder.conditions')}>
-        <div className="ss-qb-ghead">
-          <SegmentedControl options={GROUP_OPS} value={g.op} onChange={(v) => edit(path, (x) => ({ ...x, op: v as 'AND' | 'OR' }))} />
-          <span className="ss-qb-gtext">{g.op === 'AND' ? t('builder.allMatch') : t('builder.anyMatch')}</span>
-          {nested && <span className="ss-spacer" />}
-          {nested && <IconButton icon="x" size="sm" label={t('builder.removeGroup')} onClick={() => change({ where: removeAt(spec.where, path) })} />}
-        </div>
-        {g.items.length ? (
-          g.items.map((item, i) => {
-            const at = [...path, i];
-            return isGroup(item) ? (
-              group(item, at)
-            ) : (
-              <QueryConditionRow
-                key={at.join('.')}
-                condition={item}
-                table={table}
-                error={showErrors ? (shown.get(at.join('.')) ?? null) : null}
-                onChange={(next) => edit(path, (x) => ({ ...x, items: x.items.map((y, k) => (k === i ? next : y)) }))}
-                onRemove={() => change({ where: removeAt(spec.where, at) })}
-              />
-            );
-          })
-        ) : (
-          <div className="ss-pane-none">{nested ? t('builder.emptyGroup') : t('builder.noConditions', { table: table.name })}</div>
-        )}
-        <div className="ss-qb-add">
-          <Button variant="ghost" size="sm" icon="plus" onClick={() => edit(path, (x) => ({ ...x, items: [...x.items, newCondition(table)] }))}>
-            {t('builder.addCondition')}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon="layers"
-            onClick={() => edit(path, (x) => ({ ...x, items: [...x.items, { op: x.op === 'AND' ? 'OR' : 'AND', items: [newCondition(table)] }] }))}
-          >
-            {t('builder.addGroup')}
-          </Button>
-        </div>
-      </div>
-    );
-  };
-
-  const hidden = spec.columns ? table.columns.filter((c) => !spec.columns!.includes(c.name)).map((c) => c.name) : [];
-  const visible = table.columns.length - hidden.length;
-  const sortOptions = [{ value: '', label: t('common.none') }, ...table.columns.map((c) => ({ value: c.name, label: c.name }))];
-  const limits = [...new Set([...QUERY_LIMITS, ...(spec.limit !== null ? [spec.limit] : [])])].sort((a, b) => a - b);
-  const limitOptions = [{ value: '', label: t('builder.noLimit') }, ...limits.map((n) => ({ value: String(n), label: String(n) }))];
-
   return (
-    <div className="ss-qb">
-      <div className="ss-qb-main">
-        <div className="ss-qb-from">
+    <div className="ss-fb" onKeyDown={onKeyDown}>
+      <div className="ss-fb-head">
+        <div className="ss-fb-from">
           <span className="ss-caption">{t('builder.from')}</span>
-          <div className="ss-qb-table">
-            <Select
-              mono
-              label={t('builder.table')}
-              value={table.name}
-              onChange={(name) => onChange(defaultQuery(tables.find((x) => x.name === name)!))}
-              options={tables.map((x) => x.name)}
-            />
+          <div className="ss-fb-table">
+            <TablePicker tables={tables} value={table.name} onChange={(name) => onChange(defaultQuery(tables.find((item) => item.name === name)!))} />
           </div>
-          <span className="ss-spacer" />
-          <Button variant="ghost" size="sm" disabled={!total} onClick={() => change({ where: { op: 'AND', items: [] } })}>
-            {t('builder.clearAll')}
-          </Button>
+          <span className="ss-fb-meta">
+            {rows != null && (
+              <>
+                {rowsText(rows)}
+                <span className="ss-fb-dot"> · </span>
+              </>
+            )}
+            {t('count.columns', { count: table.columns.length })}
+          </span>
         </div>
-        {group(spec.where, [])}
+        <span className="ss-spacer" />
+        <Button variant="secondary" icon="code" onClick={() => onEditSql?.(sql)}>
+          {t('builder.viewSql')}
+        </Button>
+        <Button variant="danger-ghost" icon="trash" disabled={!group.items.length} onClick={() => setClearing(true)}>
+          {t('builder.clearAll')}
+        </Button>
       </div>
-      <aside className="ss-qb-side" aria-label={t('builder.output')}>
-        <div className="ss-qb-fields">
-          <Field label={t('builder.columns')}>
-            <div className="ss-anchor ss-qb-anchor" ref={columnsRef}>
-              <Button icon="columns" active={columnsShown} aria-haspopup="dialog" aria-expanded={columnsShown} onClick={() => setColumnsShown(!columnsShown)}>
-                {visible === table.columns.length ? t('builder.allColumns', { count: table.columns.length }) : t('builder.someColumns', { shown: visible, count: table.columns.length })}
-              </Button>
-              {columnsShown && (
-                <div className="ss-anchor-pop">
-                  <ColumnsMenu
-                    columns={table.columns}
-                    hidden={hidden}
-                    onHidden={(list) => {
-                      const keep = table.columns.filter((c) => !list.includes(c.name)).map((c) => c.name);
-                      change({ columns: keep.length === table.columns.length ? null : keep });
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          </Field>
-          <Field label={t('builder.limit')}>
-            <Select mono label={t('builder.limit')} value={spec.limit === null ? '' : String(spec.limit)} onChange={(v) => change({ limit: v === '' ? null : Number(v) })} options={limitOptions} />
-          </Field>
-          <Field label={t('builder.sort')} className="ss-qb-sort">
-            <div className="ss-qb-sortrow">
-              <Select
-                mono
-                label={t('builder.sortBy')}
-                value={spec.sort ? spec.sort.column : ''}
-                onChange={(v) => change({ sort: v ? { column: v, dir: spec.sort ? spec.sort.dir : 'asc' } : null })}
-                options={sortOptions}
-              />
-              <SegmentedControl
-                options={spec.sort ? DIRS : DIRS.map((d) => ({ ...d, disabled: true }))}
-                value={spec.sort ? spec.sort.dir : 'asc'}
-                onChange={(v) => spec.sort && change({ sort: { ...spec.sort, dir: v as 'asc' | 'desc' } })}
-              />
-            </div>
-          </Field>
-        </div>
-        <div className="ss-qb-sqlbar">
-          <span className="ss-caption">{t('builder.sql')}</span>
-          <span className="ss-spacer" />
-          <Button variant="ghost" size="sm" icon={copied ? 'check' : 'copy'} onClick={copy}>
-            {copied ? t('builder.copied') : t('common.copy')}
+      {tables.length > 1 && (
+        <div className="ss-fb-joins">
+          {joins.map((join, index) => (
+            <JoinRow
+              key={`${index}${join.table}`}
+              join={join}
+              tables={tables}
+              earlier={scope.slice(0, index + 1)}
+              taken={new Set([spec.table, ...joins.filter((_, i) => i !== index).map((item) => item.table)])}
+              onChange={(next) => onChange({ ...spec, joins: joins.map((item, i) => (i === index ? next : item)) })}
+              onRemove={() => onChange({ ...spec, joins: joins.filter((_, i) => i !== index) })}
+            />
+          ))}
+          <Button variant="ghost" size="sm" icon="plus" disabled={scope.length >= tables.length} onClick={() => addJoin(spec, tables, onChange)}>
+            {t('builder.addJoin')}
           </Button>
-          {onEditSql && (
-            <Button variant="ghost" size="sm" icon="code" onClick={() => onEditSql(sql)}>
-              {t('builder.editAsSql')}
-            </Button>
-          )}
         </div>
-        <pre className="ss-qb-sql" aria-label={t('builder.generatedSql')}>
-          <SqlTokens tokens={highlightSql(sql)} />
-        </pre>
-        {showErrors && problems.length > 0 && (
-          <div className="ss-field-error" role="alert">
-            <Icon name="alert" size={13} />
-            {t('builder.complete', { conditions: t('count.conditions', { count: problems.length }) })}
-          </div>
-        )}
-        {actions && <div className="ss-qb-actions">{actions}</div>}
-      </aside>
+      )}
+      <ConditionGroup
+        group={group}
+        table={table}
+        choices={choices}
+        path={[]}
+        focusKey={focusKey}
+        onFocused={() => setFocusKey(null)}
+        errors={errors}
+        onChange={changeWhere}
+        onFocus={setFocusKey}
+      />
+      <div className="ss-fb-foot">
+        <SqlPreview sql={preview} />
+        <div className="ss-fb-foot-actions">
+          {actions}
+          <Button variant="secondary" onClick={() => onChange(baseline.current)}>
+            {t('builder.reset')}
+          </Button>
+          <span className="ss-fb-apply" title={blocked ? t('builder.fixErrors', { count: total }) : undefined}>
+            <Button variant="primary" icon="play" kbd={['⇧', '⏎']} disabled={blocked} onClick={apply}>
+              {t('builder.apply')}
+            </Button>
+            {blocked && (
+              <span className="ss-fb-apply-hit" title={t('builder.fixErrors', { count: total })} onClick={() => setAttempted(true)} />
+            )}
+          </span>
+        </div>
+      </div>
+      {clearing && (
+        <ConfirmDialog
+          danger
+          title={t('builder.clearTitle')}
+          confirmLabel={t('builder.clearConfirm')}
+          onCancel={() => setClearing(false)}
+          onConfirm={() => {
+            setClearing(false);
+            changeWhere({ logic: 'AND', items: [] });
+          }}
+        >
+          {t('builder.clearBody')}
+        </ConfirmDialog>
+      )}
     </div>
   );
+}
+
+/** The equality a new join starts from: a foreign key between the tables, or the first column of each. */
+function suggestJoin(joined: Table, earlier: readonly Table[]): Pick<QueryJoin, 'leftTable' | 'leftColumn' | 'rightColumn'> {
+  for (const column of joined.columns) {
+    const left = column.fk && earlier.find((item) => item.name === column.fk?.table && item.columns.some((c) => c.name === column.fk?.column));
+    if (left && column.fk) return { leftTable: left.name, leftColumn: column.fk.column, rightColumn: column.name };
+  }
+  for (const left of earlier) {
+    const column = left.columns.find((item) => item.fk?.table === joined.name && joined.columns.some((c) => c.name === item.fk?.column));
+    if (column?.fk) return { leftTable: left.name, leftColumn: column.name, rightColumn: column.fk.column };
+  }
+  const left = earlier[earlier.length - 1];
+  return { leftTable: left.name, leftColumn: left.columns[0]?.name ?? '', rightColumn: joined.columns[0]?.name ?? '' };
+}
+
+function addJoin(spec: QuerySpec, tables: readonly Table[], onChange: (spec: QuerySpec) => void) {
+  const used = new Set([spec.table, ...(spec.joins ?? []).map((join) => join.table)]);
+  const next = tables.find((item) => !used.has(item.name));
+  const earlier = [spec.table, ...(spec.joins ?? []).map((join) => join.table)].flatMap((name) => {
+    const found = tables.find((item) => item.name === name);
+    return found ? [found] : [];
+  });
+  if (!next || !earlier.length) return;
+  onChange({ ...spec, joins: [...(spec.joins ?? []), { type: 'INNER', table: next.name, ...suggestJoin(next, earlier) }] });
+}
+
+function JoinRow({
+  join,
+  tables,
+  earlier,
+  taken,
+  onChange,
+  onRemove,
+}: {
+  join: QueryJoin;
+  tables: readonly Table[];
+  earlier: readonly Table[];
+  /** Tables already in the query, apart from this join, so a table is not joined twice. */
+  taken: ReadonlySet<string>;
+  onChange: (join: QueryJoin) => void;
+  onRemove: () => void;
+}) {
+  const joined = tables.find((item) => item.name === join.table) ?? tables[0];
+  const left = earlier.find((item) => item.name === join.leftTable) ?? earlier[0];
+  const available = tables.filter((item) => item.name === join.table || !taken.has(item.name));
+  const setTable = (name: string) => {
+    const next = tables.find((item) => item.name === name);
+    if (!next) return;
+    onChange({ ...join, table: name, ...suggestJoin(next, earlier) });
+  };
+  return (
+    <div className="ss-fb-join">
+      <Select
+        size="sm"
+        label={t('builder.join')}
+        value={join.type}
+        onChange={(type) => onChange({ ...join, type: type === 'LEFT' ? 'LEFT' : 'INNER' })}
+        options={[
+          { value: 'INNER', label: t('builder.join.inner') },
+          { value: 'LEFT', label: t('builder.join.left') },
+        ]}
+      />
+      <div className="ss-fb-table">
+        <TablePicker tables={available} value={joined.name} onChange={setTable} />
+      </div>
+      <span className="ss-caption">{t('builder.join.on')}</span>
+      <Select
+        mono
+        size="sm"
+        label={t('builder.join.leftTable')}
+        value={left.name}
+        onChange={(name) => {
+          const next = earlier.find((item) => item.name === name);
+          onChange({ ...join, leftTable: name, leftColumn: next?.columns[0]?.name ?? '' });
+        }}
+        options={earlier.map((item) => item.name)}
+      />
+      <Select
+        mono
+        size="sm"
+        label={t('builder.join.leftColumn')}
+        value={join.leftColumn}
+        onChange={(leftColumn) => onChange({ ...join, leftColumn })}
+        options={left.columns.map((column) => column.name)}
+      />
+      <span className="ss-fb-and">=</span>
+      <Select
+        mono
+        size="sm"
+        label={t('builder.join.rightColumn')}
+        value={join.rightColumn}
+        onChange={(rightColumn) => onChange({ ...join, rightColumn })}
+        options={joined.columns.map((column) => column.name)}
+      />
+      <button type="button" className="ss-fb-x" aria-label={t('builder.join.remove')} onClick={onRemove}>
+        <Icon name="x" size={16} />
+      </button>
+    </div>
+  );
+}
+
+function nodeAt(group: FilterGroup, path: readonly number[]): QueryCondition | FilterGroup | null {
+  const [head, ...rest] = path;
+  const item = group.items[head];
+  if (!item) return null;
+  if (!rest.length) return item;
+  return isFilterGroup(item) ? nodeAt(item, rest) : null;
+}
+
+/** A new condition inside the group at `path`, and the key of the row that should take focus. */
+function insertCondition(group: FilterGroup, path: number[], table: Table): { group: FilterGroup; focus: string } {
+  if (!path.length) {
+    const focus = String(group.items.length);
+    return { group: { ...group, items: [...group.items, newCondition(table)] }, focus };
+  }
+  const [head, ...rest] = path;
+  let focus = '';
+  const items = group.items.map((item, index) => {
+    if (index !== head || !isFilterGroup(item)) return item;
+    const next = insertCondition(item, rest, table);
+    focus = `${head}.${next.focus}`;
+    return next.group;
+  });
+  return { group: { ...group, items }, focus };
 }

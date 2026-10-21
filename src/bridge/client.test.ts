@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mysqlCatalog } from '../core/fixtures/catalogs';
 import type { Connection } from '../core/introspect/catalog';
-import { BRIDGE_URL, bridgeRunning, readCatalog } from './client';
+import { BRIDGE_URL, bridgeRunning, readCatalog, readRows } from './client';
 
 const connection: Connection = { engine: 'MySQL', host: 'localhost', port: 3306, database: 'shop', user: 'reader', password: 'secret' };
 
@@ -68,5 +68,24 @@ describe('readCatalog', () => {
       const answer = await readCatalog(connection);
       expect(answer).toMatchObject({ ok: false, error: { message: 'The connection bridge gave no answer.' } });
     }
+  });
+});
+
+describe('readRows', () => {
+  const request = { connection, table: 'users', columns: ['id', 'email'], limit: 50, offset: 100, orderBy: { column: 'id' as const, dir: 'asc' as const } };
+
+  it('asks for one page and gives the rows and the total', async () => {
+    const fetched = answering({ ok: true, rows: [{ id: 1, email: 'a@example.com' }], total: 269 });
+    expect(await readRows(request)).toEqual({ ok: true, rows: [{ id: 1, email: 'a@example.com' }], total: 269 });
+    const [url, init] = fetched.mock.calls[0];
+    expect(url).toBe('http://127.0.0.1:4577/rows');
+    expect(JSON.parse(init?.body as string)).toEqual({ ...connection, table: 'users', columns: ['id', 'email'], limit: 50, offset: 100, orderBy: { column: 'id', dir: 'asc' } });
+  });
+
+  it('says the rows could not be read, and how to start the bridge when it is not running', async () => {
+    answering({ ok: false, error: { message: 'Could not read the rows of the table.', code: 'read', detail: 'denied' } }, 502);
+    expect(await readRows(request)).toEqual({ ok: false, error: { message: 'Could not read the rows.', code: 'read', detail: 'denied' } });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    expect(await readRows(request)).toMatchObject({ ok: false, error: { message: 'The connection bridge is not running.' } });
   });
 });

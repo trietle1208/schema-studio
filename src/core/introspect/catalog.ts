@@ -106,6 +106,20 @@ export interface BridgeError {
 
 export type BridgeAnswer = { ok: true; catalog: Catalog } | { ok: false; error: BridgeError };
 
+/** A cell of a live row: the bridge has already turned dates and binary into text. */
+export type LiveValue = string | number | boolean | null;
+
+/** One row of a table, keyed by the column names the app asked for. */
+export type LiveRow = Record<string, LiveValue>;
+
+/** One page of a table, with how many rows the table has. */
+export type RowsAnswer = { ok: true; rows: LiveRow[]; total: number } | { ok: false; error: BridgeError };
+
+/** The rows a live SELECT returned. `plan` is MySQL's EXPLAIN, one line per step. `capped` means 1,000 rows cut it. */
+export type QueryAnswer =
+  | { ok: true; columns: string[]; rows: LiveRow[]; capped: boolean; plan: string[] }
+  | { ok: false; error: BridgeError };
+
 /** What the bridge says of itself at `/`, by which the app knows it is running. */
 export interface BridgeInfo {
   name: string;

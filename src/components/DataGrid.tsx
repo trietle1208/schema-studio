@@ -42,6 +42,8 @@ export interface DataGridProps {
   /** `false` leaves out the checkboxes of the gutter, which then only numbers the rows. */
   selectable?: boolean;
   onRowAction?: (action: RowAction, row: number) => void;
+  /** Hides edit, duplicate and delete. Copy stays in the row menu. */
+  readOnly?: boolean;
   /** Marks the header of the column. The grid never sorts by itself. */
   sort?: RecordSort | null;
   loading?: boolean;
@@ -93,6 +95,7 @@ export function DataGrid({
   openOnClick,
   selectable: selectableProp,
   onRowAction,
+  readOnly,
   sort,
   loading,
   empty,
@@ -177,7 +180,7 @@ export function DataGrid({
         c = Math.max(0, Math.min(columns.length - 1, c + arrow[1]));
       }
       activate(r, columns[c].name);
-    } else if (activeCell && e.key === 'Enter') {
+    } else if (activeCell && e.key === 'Enter' && !readOnly) {
       e.preventDefault();
       onOpenRow?.(r);
     } else if (activeCell && e.key === ' ') {
@@ -197,7 +200,7 @@ export function DataGrid({
               : e.key === 'Backspace' || e.key === 'Delete'
                 ? 'delete'
                 : null;
-      if (action) {
+      if (action && !(readOnly && action !== 'copy')) {
         e.preventDefault();
         onRowAction(action, r);
       }
@@ -301,7 +304,7 @@ export function DataGrid({
               </td>
             );
           })}
-          {onRowAction && (
+          {onRowAction && !readOnly && (
             <td className="ss-grid-actions" aria-hidden={!on}>
               <RowActions
                 onEdit={() => onRowAction('edit', r)}
@@ -359,7 +362,7 @@ export function DataGrid({
               <span className="ss-grid-n">#</span>
             </th>
             {columns.map(head)}
-            {onRowAction && <th className="ss-grid-actions" aria-hidden />}
+            {onRowAction && !readOnly && <th className="ss-grid-actions" aria-hidden />}
           </tr>
         </thead>
         <tbody>{body()}</tbody>
@@ -380,7 +383,7 @@ export function DataGrid({
   );
   if (!menu || !onRowAction) return grid;
 
-  const items: (MenuItem | '-')[] = ROW_ACTIONS.map((a) =>
+  const items: (MenuItem | '-')[] = (readOnly ? ROW_ACTIONS.filter((a) => a !== '-' && a.action === 'copy') : ROW_ACTIONS).map((a) =>
     a === '-'
       ? a
       : {

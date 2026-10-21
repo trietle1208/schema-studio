@@ -1,10 +1,10 @@
 import { t } from '../../i18n';
-import type { ColumnRef, Expr, Operand, OrderBy, Select } from './ast';
+import type { ColumnRef, Expr, Join, Operand, OrderBy, Select } from './ast';
 import { printQuery, RESERVED } from './print';
 
-// Reading a SELECT. It is the same small language as the Builder writes and the console runs: one
-// table, a column list, WHERE, ORDER BY, LIMIT and OFFSET. Everything else is refused with a
-// message that says where.
+// Reading a SELECT. It is the same small language as the Builder writes and the console runs: a
+// column list, FROM with INNER JOIN and LEFT JOIN, WHERE, ORDER BY, LIMIT and OFFSET. Everything
+// else is refused with a message that says where.
 
 export interface QueryFailure {
   ok: false;
@@ -271,10 +271,57 @@ export function parseQuery(sql: string): ParsedQuery {
       } while (eatOp(','));
     }
     needWord('FROM');
-    const t1 = name();
-    const t2 = eatOp('.') ? name() : null;
-    const table = t2 ?? t1;
-    const query: Select = { cols, table: table.text, tableLine: table.line, schema: t2 ? t1.text : null, where: null, order: [], limit: null, offset: null };
+    /** A word that ends the table, so it is not read as its alias. */
+    const ALIAS_STOP = new Set(['WHERE', 'ORDER', 'GROUP', 'LIMIT', 'OFFSET', 'JOIN', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS', 'OUTER', 'ON', 'USING', 'NATURAL', 'UNION', 'EXCEPT', 'INTERSECT', 'HAVING']);
+    const alias = (): string | undefined => {
+      if (eatWord('AS')) return name().text;
+      const tok = tokens[p];
+      if (tok.t === 'id') {
+        p++;
+        return tok.text;
+      }
+      if (tok.t === 'w' && !ALIAS_STOP.has(tok.upper) && !RESERVED.has(tok.upper)) {
+        p++;
+        return tok.text.toLowerCase();
+      }
+      return undefined;
+    };
+    const relation = () => {
+      const t1 = name();
+      const t2 = eatOp('.') ? name() : null;
+      const named = t2 ?? t1;
+      return { table: named.text, tableLine: named.line, schema: t2 ? t1.text : null, alias: alias() };
+    };
+    const from = relation();
+    const joins: Join[] = [];
+    for (;;) {
+      if (isWord('RIGHT') || isWord('FULL') || isWord('CROSS') || isWord('NATURAL')) fail();
+      let type: Join['type'] | null = null;
+      if (eatWord('JOIN')) type = 'INNER';
+      else if (eatWord('INNER')) {
+        needWord('JOIN');
+        type = 'INNER';
+      } else if (eatWord('LEFT')) {
+        eatWord('OUTER');
+        needWord('JOIN');
+        type = 'LEFT';
+      } else break;
+      const rel = relation();
+      needWord('ON');
+      joins.push({ type, table: rel.table, tableLine: rel.tableLine, schema: rel.schema, ...(rel.alias ? { alias: rel.alias } : {}), on: expr() });
+    }
+    const query: Select = {
+      cols,
+      table: from.table,
+      tableLine: from.tableLine,
+      schema: from.schema,
+      ...(from.alias ? { alias: from.alias } : {}),
+      ...(joins.length ? { joins } : {}),
+      where: null,
+      order: [],
+      limit: null,
+      offset: null,
+    };
     if (eatWord('WHERE')) query.where = expr();
     if (eatWord('ORDER')) {
       needWord('BY');

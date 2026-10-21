@@ -75,6 +75,33 @@ export interface QueryRecord {
   at: number;
 }
 
+/**
+ * How a schema reaches its MySQL database, saved after Connect. The password is not here: it stays
+ * in memory for the browser session (`store/session`). SSH keeps the host, the user and the key
+ * path, and not the password or the passphrase.
+ */
+export interface ConnectionSshRecord {
+  host: string;
+  port: number;
+  user: string;
+  auth: 'password' | 'key' | 'agent';
+  /** `key`: where the private key is, on the machine of the bridge. */
+  keyPath?: string;
+}
+
+/** One row per schema that was imported from a live MySQL database. */
+export interface ConnectionRecord {
+  schemaId: number;
+  /** MySQL only: row reads of other engines are not done. */
+  engine: 'MySQL';
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  ssl?: boolean;
+  ssh?: ConnectionSshRecord;
+}
+
 /** An SSH server whose key was trusted, so the bridge logs in to it without asking again. One row per `host:port`. */
 export interface KnownHostRecord {
   /** The server as it is named in the connection form, in lower case: `bastion.example.com:22`. */
@@ -91,6 +118,7 @@ export type Database = Dexie & {
   records: Table<RecordsRecord, [number, string]>;
   knownHosts: EntityTable<KnownHostRecord, 'id'>;
   queries: EntityTable<QueryRecord, 'id'>;
+  connections: EntityTable<ConnectionRecord, 'schemaId'>;
 };
 
 export const db = new Dexie('schema-studio') as Database;
@@ -128,3 +156,8 @@ db.version(5).stores({
 db.version(6)
   .stores({})
   .upgrade((tx) => tx.table('records').clear());
+
+// Version 7 adds the connection profile of a schema imported from MySQL. The password is not stored.
+db.version(7).stores({
+  connections: 'schemaId',
+});

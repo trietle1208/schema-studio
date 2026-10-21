@@ -34,6 +34,8 @@ export interface QueryRun {
   all: number;
   query: Select;
   sql: string;
+  /** Set when the plan came from the database. `queryPlan` prints it instead of building one. */
+  plan?: string[];
 }
 
 export type QueryResult = QueryRun | QueryFailure;
@@ -54,27 +56,75 @@ function typeWord(type: string): string {
 }
 
 /** ORDER BY may name a column as the query renamed it: `SELECT name AS n … ORDER BY n`. */
-function aliasOf(q: Select, ref: ColumnRef): string | null {
-  const c = !ref.qual && q.cols?.find((x) => x.alias === ref.name);
-  return c ? c.name : null;
+function aliasOf(q: Select, ref: ColumnRef): ColumnRef | null {
+  if (ref.qual) return null;
+  return q.cols?.find((x) => x.alias === ref.name) ?? null;
+}
+
+/** One table of the FROM list. `key` is the alias, or the table name when it has none. */
+interface Bound {
+  key: string;
+  table: Table;
+  line?: number;
+}
+
+type Frame = (Row | null)[];
+
+/** The tables the query reads, or the first name that is not a table or is used twice. */
+function boundsOf(q: Select, tables: readonly Table[]): Bound[] | { line: number; message: string } {
+  const used = new Set<string>();
+  const one = (name: string, alias: string | undefined, line?: number): Bound | { line: number; message: string } => {
+    const table = tables.find((item) => item.name === name);
+    if (!table) return { line: line ?? 1, message: t('query.error.noRelation', { name }) };
+    const key = alias ?? table.name;
+    if (used.has(key)) return { line: line ?? 1, message: t('query.error.duplicateAlias', { name: key }) };
+    used.add(key);
+    return { key, table, line };
+  };
+  const from = one(q.table, q.alias, q.tableLine);
+  if ('message' in from) return from;
+  const bounds: Bound[] = [from];
+  for (const join of q.joins ?? []) {
+    const next = one(join.table, join.alias, join.tableLine);
+    if ('message' in next) return next;
+    bounds.push(next);
+  }
+  return bounds;
 }
 
 const BOOLEAN_WORDS = /^(true|false|t|f|yes|no|on|off|0|1)$/i;
 const TRUE_WORDS = /^(t|true|yes|on|1)$/i;
 
-/** The table the query reads, with every name in it checked: or the first thing wrong, with its line. */
-function check(q: Select, tables: readonly Table[]): { table: Table } | { line: number; message: string } {
-  const table = tables.find((x) => x.name === q.table);
-  if (!table) return { line: q.tableLine ?? 1, message: t('query.error.noRelation', { name: q.table }) };
+interface Hit {
+  bound: Bound;
+  index: number;
+  column: Column;
+}
 
-  const resolve = (ref: ColumnRef): Column => {
+/** The table the query reads, with every name in it checked: or the first thing wrong, with its line. */
+function check(q: Select, tables: readonly Table[]): { bounds: Bound[] } | { line: number; message: string } {
+  const bounds = boundsOf(q, tables);
+  if (!Array.isArray(bounds)) return bounds;
+  // An ON clause only sees the tables joined so far. WHERE and the select list see all of them.
+  let seen = bounds;
+
+  const resolve = (ref: ColumnRef): Hit => {
     const line = ref.line ?? 1;
-    if (ref.qual && ref.qual !== table.name) throw new Mistake(line, t('query.error.missingFrom', { name: ref.qual }));
-    const column = table.columns.find((c) => c.name === ref.name);
-    if (!column) {
-      throw new Mistake(line, ref.qual ? t('query.error.noQualifiedColumn', { name: `${ref.qual}.${ref.name}` }) : t('query.error.noColumn', { name: ref.name }));
+    if (ref.qual) {
+      const index = seen.findIndex((bound) => bound.key === ref.qual);
+      const bound = seen[index];
+      if (!bound) throw new Mistake(line, t('query.error.missingFrom', { name: ref.qual }));
+      const column = bound.table.columns.find((c) => c.name === ref.name);
+      if (!column) throw new Mistake(line, t('query.error.noQualifiedColumn', { name: `${ref.qual}.${ref.name}` }));
+      return { bound, index, column };
     }
-    return column;
+    const hits = seen.flatMap((bound, index) => {
+      const column = bound.table.columns.find((c) => c.name === ref.name);
+      return column ? [{ bound, index, column }] : [];
+    });
+    if (!hits.length) throw new Mistake(line, t('query.error.noColumn', { name: ref.name }));
+    if (hits.length > 1) throw new Mistake(line, t('query.error.ambiguous', { name: ref.name }));
+    return hits[0];
   };
   /** A literal that the column cannot take: `id = 'abc'`. */
   const fits = (column: Column, lit: Operand) => {
@@ -89,7 +139,7 @@ function check(q: Select, tables: readonly Table[]): { table: Table } | { line: 
   };
   const side = (a: Operand, others: readonly Operand[] = []) => {
     if (a.t === 'col') {
-      const column = resolve(a);
+      const column = resolve(a).column;
       others.forEach((x) => fits(column, x));
     }
   };
@@ -127,6 +177,11 @@ function check(q: Select, tables: readonly Table[]): { table: Table } | { line: 
   };
   try {
     q.cols?.forEach(resolve);
+    (q.joins ?? []).forEach((join, i) => {
+      seen = bounds.slice(0, i + 2);
+      walk(join.on);
+    });
+    seen = bounds;
     if (q.where) walk(q.where);
     q.order.forEach((o) => {
       if (!aliasOf(q, o.col)) resolve(o.col);
@@ -135,7 +190,7 @@ function check(q: Select, tables: readonly Table[]): { table: Table } | { line: 
     if (e instanceof Mistake) return { line: e.line, message: e.message };
     throw e;
   }
-  return { table };
+  return { bounds };
 }
 
 const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/g;
@@ -166,32 +221,23 @@ function order(x: RecordValue, y: RecordValue, kind: CellKind): number | null {
 }
 
 /** SQL's three values: true, false and null (unknown). */
-function evalWhere(e: Expr, row: Row, table: Table): Truth {
-  const val = (o: Operand): RecordValue => (o.t === 'col' ? (row[o.name] ?? null) : o.v);
-  const kindOf = (a: Operand, b: Operand): CellKind => {
-    const c = a.t === 'col' ? a : b.t === 'col' ? b : null;
-    if (c) {
-      const column = table.columns.find((x) => x.name === c.name);
-      return column ? cellKind(column.type) : 'text';
-    }
-    return a.t === 'lit' && b.t === 'lit' && a.kind === 'num' && b.kind === 'num' ? 'number' : 'text';
-  };
+function evalWhere(e: Expr, val: (o: Operand) => RecordValue, kindOf: (a: Operand, b: Operand) => CellKind): Truth {
   const flip = (r: boolean, neg: boolean) => (neg ? !r : r);
   switch (e.t) {
     case 'and': {
-      const a = evalWhere(e.a, row, table);
+      const a = evalWhere(e.a, val, kindOf);
       if (a === false) return false;
-      const b = evalWhere(e.b, row, table);
+      const b = evalWhere(e.b, val, kindOf);
       return b === false ? false : a === null || b === null ? null : true;
     }
     case 'or': {
-      const a = evalWhere(e.a, row, table);
+      const a = evalWhere(e.a, val, kindOf);
       if (a === true) return true;
-      const b = evalWhere(e.b, row, table);
+      const b = evalWhere(e.b, val, kindOf);
       return b === true ? true : a === null || b === null ? null : false;
     }
     case 'not': {
-      const n = evalWhere(e.e, row, table);
+      const n = evalWhere(e.e, val, kindOf);
       return n === null ? null : !n;
     }
     case 'cmp': {
@@ -228,13 +274,13 @@ function evalWhere(e: Expr, row: Row, table: Table): Truth {
 }
 
 /** The rows ordered by the keys of an ORDER BY, ties in the order they had; NULL last when ascending, first when descending, as PostgreSQL has it. */
-function sorted(rows: Row[], keys: { name: string; kind: CellKind; desc: boolean }[]): Row[] {
-  return rows
-    .map((row, index) => ({ row, index }))
+function sortFrames(frames: Frame[], cell: (frame: Frame, key: { index: number; name: string }) => RecordValue, keys: { index: number; name: string; kind: CellKind; desc: boolean }[]): Frame[] {
+  return frames
+    .map((frame, index) => ({ frame, index }))
     .sort((x, y) => {
       for (const key of keys) {
-        const a = x.row[key.name] ?? null;
-        const b = y.row[key.name] ?? null;
+        const a = cell(x.frame, key);
+        const b = cell(y.frame, key);
         let d: number;
         if (a === null || b === null) d = a === null && b === null ? 0 : a === null ? 1 : -1;
         else if (key.kind === 'number') d = Number(a) - Number(b);
@@ -247,45 +293,139 @@ function sorted(rows: Row[], keys: { name: string; kind: CellKind; desc: boolean
       }
       return x.index - y.index;
     })
-    .map((x) => x.row);
+    .map((x) => x.frame);
+}
+
+interface Picked {
+  column: Column;
+  /** The name the grid shows. An alias, or `table.column` when the bare name is used twice. */
+  out: string;
+  index: number;
+  name: string;
+  /** True when the output name is not the column's own, so the key marks stay off. */
+  renamed: boolean;
+}
+
+/** The columns the query shows, in order. A bare name that two tables share becomes `table.column`. */
+function pickedColumns(q: Select, bounds: Bound[]): Picked[] {
+  const raw = q.cols
+    ? q.cols.map((ref) => {
+        const hit = hitOf(ref, bounds);
+        return { column: hit.column, index: hit.index, name: hit.column.name, preferred: ref.alias ?? ref.name, qual: hit.bound.key, aliased: !!ref.alias };
+      })
+    : bounds.flatMap((bound, index) =>
+        bound.table.columns.map((column) => ({ column, index, name: column.name, preferred: column.name, qual: bound.key, aliased: false })),
+      );
+  const counts = new Map<string, number>();
+  for (const item of raw) counts.set(item.preferred, (counts.get(item.preferred) ?? 0) + 1);
+  const used = new Set<string>();
+  return raw.map((item) => {
+    let out = (counts.get(item.preferred) ?? 0) > 1 ? `${item.qual}.${item.preferred}` : item.preferred;
+    if (used.has(out)) {
+      const base = `${item.qual}.${item.name}`;
+      out = base;
+      let n = 2;
+      while (used.has(out)) out = `${base}_${n++}`;
+    }
+    used.add(out);
+    return { column: item.column, out, index: item.index, name: item.name, renamed: item.aliased || out !== item.column.name };
+  });
+}
+
+function hitOf(ref: ColumnRef, bounds: Bound[]): Hit {
+  if (ref.qual) {
+    const index = bounds.findIndex((bound) => bound.key === ref.qual);
+    const bound = bounds[index];
+    const column = bound?.table.columns.find((c) => c.name === ref.name);
+    if (!bound || !column) throw new Mistake(ref.line ?? 1, t('query.error.noColumn', { name: ref.name }));
+    return { bound, index, column };
+  }
+  const hits = bounds.flatMap((bound, index) => {
+    const column = bound.table.columns.find((c) => c.name === ref.name);
+    return column ? [{ bound, index, column }] : [];
+  });
+  if (hits.length !== 1) throw new Mistake(ref.line ?? 1, t('query.error.ambiguous', { name: ref.name }));
+  return hits[0];
 }
 
 /**
  * Runs `sql` over `data`, the rows of every table by name, as PostgreSQL would answer it: the rows,
- * or the first thing wrong with the query and the line it is on.
+ * or the first thing wrong with the query and the line it is on. A join is a nested loop. The row a
+ * result opens is the row of the FROM table.
  */
 export function runQuery(sql: string, tables: readonly Table[], data: Readonly<Record<string, readonly Row[]>>): QueryResult {
   const parsed = parseQuery(sql);
   if (!parsed.ok) return parsed;
   const q = parsed.query;
   const checked = check(q, tables);
-  if (!('table' in checked)) return queryFailure(checked.line, checked.message);
-  const { table } = checked;
+  if (!('bounds' in checked)) return queryFailure(checked.line, checked.message);
+  const { bounds } = checked;
+  const table = bounds[0].table;
 
-  const all = data[table.name] ?? [];
-  let matched = q.where ? all.filter((r) => evalWhere(q.where!, r, table) === true) : all.slice();
-  const removed = all.length - matched.length;
+  const valueOf = (frame: Frame, ref: ColumnRef): RecordValue => {
+    const hit = hitOf(ref, bounds);
+    const row = frame[hit.index];
+    return row ? (row[hit.column.name] ?? null) : null;
+  };
+  const kindOf = (a: Operand, b: Operand): CellKind => {
+    const c = a.t === 'col' ? a : b.t === 'col' ? b : null;
+    if (!c) return a.t === 'lit' && b.t === 'lit' && a.kind === 'num' && b.kind === 'num' ? 'number' : 'text';
+    return cellKind(hitOf(c, bounds).column.type);
+  };
+  const holds = (frame: Frame, e: Expr) => evalWhere(e, (o) => (o.t === 'col' ? valueOf(frame, o) : o.v), kindOf) === true;
+
+  let frames: Frame[] = (data[table.name] ?? []).map((row) => [row]);
+  (q.joins ?? []).forEach((join, i) => {
+    const right = bounds[i + 1];
+    const rows = data[right.table.name] ?? [];
+    const next: Frame[] = [];
+    for (const frame of frames) {
+      const matched = rows.filter((row) => holds([...frame, row], join.on));
+      if (matched.length) matched.forEach((row) => next.push([...frame, row]));
+      else if (join.type === 'LEFT') next.push([...frame, null]);
+    }
+    frames = next;
+  });
+  const joined = frames.length;
+  if (q.where) frames = frames.filter((frame) => holds(frame, q.where!));
+  const removed = joined - frames.length;
   if (q.order.length) {
-    matched = sorted(
-      matched,
+    frames = sortFrames(
+      frames,
+      (frame, key) => {
+        const row = frame[key.index];
+        return row ? (row[key.name] ?? null) : null;
+      },
       q.order.map((o) => {
-        const c = table.columns.find((x) => x.name === (aliasOf(q, o.col) ?? o.col.name))!;
-        return { name: c.name, kind: cellKind(c.type), desc: o.dir === 'DESC' };
+        const ref = aliasOf(q, o.col) ?? o.col;
+        const hit = hitOf(ref, bounds);
+        return { index: hit.index, name: hit.column.name, kind: cellKind(hit.column.type), desc: o.dir === 'DESC' };
       }),
     );
   }
   const from = q.offset ?? 0;
-  const to = q.limit === null ? matched.length : from + q.limit;
+  const to = q.limit === null ? frames.length : from + q.limit;
   const cap = Math.min(to, from + QUERY_MAX_ROWS);
-  const sources = matched.slice(from, cap);
-
-  const refs: ColumnRef[] = q.cols ?? table.columns.map((c) => ({ t: 'col', name: c.name }));
-  const columns = refs.map((ref) => {
-    const column = table.columns.find((x) => x.name === ref.name)!;
-    return ref.alias ? { ...column, name: ref.alias, pk: false, fk: null } : column;
-  });
-  const rows = sources.map((r) => Object.fromEntries(refs.map((ref, i) => [columns[i].name, r[ref.name] ?? null])) as Row);
-  return { ok: true, table, columns, rows, sources, total: matched.length, shown: rows.length, capped: cap < to && cap < matched.length, removed, all: all.length, query: q, sql };
+  const shown = frames.slice(from, cap);
+  const picked = pickedColumns(q, bounds);
+  const columns = picked.map((item) => (item.renamed ? { ...item.column, name: item.out, pk: false, fk: null } : item.column));
+  const rows = shown.map((frame) => Object.fromEntries(picked.map((item, i) => [columns[i].name, frame[item.index]?.[item.name] ?? null])) as Row);
+  const sources = shown.map((frame) => frame[0] as Row);
+  const all = data[table.name] ?? [];
+  return {
+    ok: true,
+    table,
+    columns,
+    rows,
+    sources,
+    total: frames.length,
+    shown: rows.length,
+    capped: cap < to && cap < frames.length,
+    removed,
+    all: all.length,
+    query: q,
+    sql,
+  };
 }
 
 /**
@@ -293,12 +433,19 @@ export function runQuery(sql: string, tables: readonly Table[], data: Readonly<R
  * step holds, in the way EXPLAIN writes it. Its words are the database's and are not translated.
  */
 export function queryPlan(r: QueryRun, ms?: number): string[] {
+  if (r.plan) return ms === undefined ? r.plan : [...r.plan, t('query.plan.time', { ms })];
   const q = r.query;
   const nodes: { text: string; details: string[] }[] = [];
   if (q.limit !== null || q.offset !== null) nodes.push({ text: t('query.plan.limit', { rows: formatNumber(r.shown) }), details: [] });
   if (q.order.length) {
     const keys = q.order.map((o) => o.col.name + (o.dir === 'DESC' ? ' DESC' : '')).join(', ');
     nodes.push({ text: t('query.plan.sort', { rows: formatNumber(r.total) }), details: [t('query.plan.sortKey', { keys })] });
+  }
+  if (q.joins?.length) {
+    nodes.push({
+      text: t('query.plan.join', { rows: formatNumber(r.total) }),
+      details: q.joins.map((join) => t('query.plan.joinFilter', { filter: exprSql(join.on) })),
+    });
   }
   const scan = { text: t('query.plan.scan', { table: q.table, rows: formatNumber(r.total) }), details: [] as string[] };
   if (q.where) {

@@ -20,18 +20,21 @@ import { planDelete, type DeletePlan } from '../core/records/delete';
 import type { RecordFilter } from '../core/records/filter';
 import { filterRows } from '../core/records/filter';
 import type { RecordData, RecordValues } from '../core/records/fields';
-import { resultCsv } from '../core/records/query';
+import { recordFile, type RecordExportFormat } from '../core/records/export';
 import { completeRecord, duplicateValues, mergeRecord, recordLabel, rowKey } from '../core/records/record';
 import { insertRow, replaceRow } from '../core/records/rows';
 import type { RecordSort } from '../core/records';
 import { incomingRelations, outgoingRelations } from '../core/relations';
 import { searchTableNames } from '../core/search';
 import { useSchemaStore } from '../store/schema';
+import { useSessionStore } from '../store/session';
 import { useUiStore } from '../store/ui';
 import { DeleteRecordsDialog } from './DeleteRecordsDialog';
+import { LivePasswordForm } from './LivePasswordForm';
 import { ModeToolbar } from './ModeToolbar';
 import { go } from './navigation';
 import { announceRecords, copyRowsAsJson, recordsFailed } from './recordActions';
+import { requestImport as requestSchemaImport } from './schemaActions';
 import { useRecords } from './useRecords';
 import { useWorkspaceShortcuts } from './useWorkspaceShortcuts';
 import {
@@ -100,8 +103,14 @@ const NO_CHANGES: Changed[] = [];
 /** The keys that type text: ⌘⏎ is theirs there, not the one that adds a record. */
 const TYPING = 'input, textarea, select, [contenteditable]';
 
-function downloadCsv(filename: string, text: string) {
-  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+const EXPORT_TYPE: Record<RecordExportFormat, string> = {
+  csv: 'text/csv;charset=utf-8',
+  json: 'application/json',
+  sql: 'application/sql',
+};
+
+function downloadText(filename: string, text: string, type: string) {
+  const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -118,13 +127,18 @@ export function DataMode({ table: name }: { table: string }) {
   const tables = useSchemaStore((s) => s.tables);
   const search = useUiStore((s) => s.search);
   const table = tables.find((x) => x.name === name);
-  const records = useRecords(schemaId, name);
   const searchRef = useRef<HTMLInputElement>(null);
   useWorkspaceShortcuts(searchRef, 'data');
 
   // The view is the table's own: when the route names another table it starts from nothing again.
   const [kept, setKept] = useState(fresh(name));
   const view = kept.table === name ? kept : fresh(name);
+  const records = useRecords(schemaId, name, {
+    columns: table?.columns.map((column) => column.name) ?? [],
+    limit: view.pageSize,
+    offset: Math.max(0, view.page - 1) * view.pageSize,
+    orderBy: view.sort,
+  });
   const change = (patch: Partial<TableView>) => setKept((cur) => ({ ...(cur.table === name ? cur : fresh(name)), ...patch }));
   const resetPage = (patch: Partial<TableView> = {}) => change({ page: 1, selected: [], active: null, ...patch });
 
@@ -144,18 +158,29 @@ export function DataMode({ table: name }: { table: string }) {
   const rows = records.rows;
   const filtered = useMemo(() => {
     if (!table || !rows) return null;
-    return sortRows(filterRows(searchRows(rows, view.search, table), view.filters), view.sort, table);
-  }, [rows, table, view.search, view.filters, view.sort]);
-  const page = useMemo(
-    () => pageOf(filtered ?? [], { page: view.page, size: view.pageSize }),
-    [filtered, view.page, view.pageSize],
-  );
+    const matched = filterRows(searchRows(rows, view.search, table), view.filters);
+    // A live page is already ordered by the database. Search and filters cover this page only.
+    return records.live ? matched : sortRows(matched, view.sort, table);
+  }, [rows, table, view.search, view.filters, view.sort, records.live]);
+  const page = useMemo(() => {
+    if (!records.live) return pageOf(filtered ?? [], { page: view.page, size: view.pageSize });
+    const total = records.counts[name] ?? 0;
+    const size = view.pageSize;
+    const pages = Math.max(1, Math.ceil(total / size));
+    const at = Math.min(pages, Math.max(1, view.page));
+    const start = (at - 1) * size;
+    const shown = filtered ?? [];
+    return { rows: shown, page: at, size, pages, total, from: shown.length ? start + 1 : 0, to: start + shown.length };
+  }, [records.live, records.counts, name, view.page, view.pageSize, filtered]);
   const shownColumns = useMemo(
     () => (table ? table.columns.filter((c) => !view.hidden.includes(c.name)) : []),
     [table, view.hidden],
   );
   // The list shows the count of the table on screen as it is, ahead of the counts read with it.
-  const counts = useMemo(() => (rows ? { ...records.counts, [name]: rows.length } : records.counts), [records.counts, rows, name]);
+  const counts = useMemo(
+    () => (records.live ? records.counts : rows ? { ...records.counts, [name]: rows.length } : records.counts),
+    [records.live, records.counts, rows, name],
+  );
   const modified = useMemo(
     () =>
       table
@@ -206,7 +231,7 @@ export function DataMode({ table: name }: { table: string }) {
     leave(() => void begin(options.duplicate ? { index: -1, row: null, draft: duplicateValues(table, row), focus: true } : { index, row, focus: !!options.focus }));
   };
   const addRecord = () => {
-    if (!table || !rows || view.tab !== 'data' || open?.row === null) return;
+    if (!records.writable || !table || !rows || view.tab !== 'data' || open?.row === null) return;
     leave(() => void begin({ index: -1, row: null, focus: true }));
   };
 
@@ -260,7 +285,7 @@ export function DataMode({ table: name }: { table: string }) {
 
   // ---- deleting rows
   const requestDelete = async (list: Row[]) => {
-    if (!table || !list.length) return;
+    if (!records.writable || !table || !list.length) return;
     try {
       const data = await records.readData();
       setDeleting({ rows: list, plan: planDelete(tables, data, name, list) });
@@ -323,15 +348,17 @@ export function DataMode({ table: name }: { table: string }) {
       recordsFailed(error);
     }
   };
-  const exportSelected = (list: Row[]) => {
+  const exportRows = (list: Row[], format: RecordExportFormat) => {
     if (!table || !list.length) return;
-    downloadCsv(`${name}.csv`, resultCsv(table.columns, list));
-    useUiStore.getState().showToast({ tone: 'success', title: t('data.exportedCsv', { count: list.length }) });
-  };
-  const exportAll = () => {
-    if (!table || !filtered) return;
-    downloadCsv(`${name}.csv`, resultCsv(table.columns, filtered));
-    useUiStore.getState().showToast({ tone: 'success', title: t('data.exportedCsv', { count: filtered.length }) });
+    const ext = format === 'sql' ? 'sql' : format;
+    downloadText(`${name}.${ext}`, recordFile(format, engine, table, list), EXPORT_TYPE[format]);
+    const title =
+      format === 'csv'
+        ? t('data.exportedCsv', { count: list.length })
+        : format === 'json'
+          ? t('data.exportedJson', { count: list.length })
+          : t('data.exportedSql', { count: list.length });
+    useUiStore.getState().showToast({ tone: 'success', title });
   };
 
   // ---- the menu and the keys of a row
@@ -340,6 +367,7 @@ export function DataMode({ table: name }: { table: string }) {
     if (!table || !row) return;
     // A row that is one of several selected stands for all of them.
     const picked = view.selected.includes(r) ? view.selected.map((i) => page.rows[i]) : [row];
+    if (!records.writable && action !== 'copy') return;
     if (action === 'view') openRow(row);
     else if (action === 'edit') openRow(row, { focus: true });
     else if (action === 'duplicate') openRow(row, { duplicate: true });
@@ -438,6 +466,38 @@ export function DataMode({ table: name }: { table: string }) {
         }
       />
     );
+  } else if (records.needsPassword) {
+    body = (
+      <LivePasswordForm
+        database={records.label ?? name}
+        onSubmit={(password) => {
+          if (schemaId === null) return;
+          const current = useSessionStore.getState().secrets[schemaId];
+          useSessionStore.getState().setSecrets(schemaId, {
+            password,
+            ...(current?.sshPassword !== undefined ? { sshPassword: current.sshPassword } : {}),
+            ...(current?.sshPassphrase ? { sshPassphrase: current.sshPassphrase } : {}),
+          });
+        }}
+      />
+    );
+  } else if (records.error) {
+    body = (
+      <EmptyState
+        compact
+        title={records.error.message}
+        description={records.error.detail}
+        actions={
+          <>
+            <Button variant="primary" onClick={refresh}>
+              {t('tableHeader.refresh')}
+            </Button>
+            <Button onClick={() => schemaId !== null && useSessionStore.getState().clear(schemaId)}>{t('data.enterPassword')}</Button>
+            <Button onClick={requestSchemaImport}>{t('data.openConnection')}</Button>
+          </>
+        }
+      />
+    );
   } else if (records.failed) {
     body = (
       <EmptyState
@@ -450,19 +510,22 @@ export function DataMode({ table: name }: { table: string }) {
   } else {
     const emptyNode =
       rows !== null && filtered !== null && filtered.length === 0 ? (
-        rows.length === 0 ? (
+        (records.live ? (records.counts[name] ?? 0) === 0 : rows.length === 0) ? (
           <EmptyState
             compact
             title={t('grid.emptyTitle')}
+            description={records.live ? t('data.liveReadOnly') : undefined}
             actions={
-              <>
-                <Button variant="primary" icon="plus" kbd={['⌘', '⏎']} onClick={addRecord}>
-                  {t('action.addRecord')}
-                </Button>
-                <Button icon="upload" onClick={requestImport}>
-                  {t('action.importRecords')}
-                </Button>
-              </>
+              records.live ? undefined : (
+                <>
+                  <Button variant="primary" icon="plus" kbd={['⌘', '⏎']} onClick={addRecord}>
+                    {t('action.addRecord')}
+                  </Button>
+                  <Button icon="upload" onClick={requestImport}>
+                    {t('action.importRecords')}
+                  </Button>
+                </>
+              )
             }
           />
         ) : (
@@ -496,37 +559,53 @@ export function DataMode({ table: name }: { table: string }) {
         <DataToolbar
           columns={table.columns}
           table={name}
+          searchPlaceholder={records.live ? t('dataToolbar.searchPage', { table: name }) : undefined}
           search={view.search}
-          onSearch={(q) => resetPage({ search: q })}
+          onSearch={(q) => (records.live ? change({ search: q, selected: [], active: null }) : resetPage({ search: q }))}
           filters={view.filters}
-          onAddFilter={(f) => resetPage({ filters: [...view.filters, f] })}
+          onAddFilter={(f) =>
+            records.live ? change({ filters: [...view.filters, f], selected: [], active: null }) : resetPage({ filters: [...view.filters, f] })
+          }
           sort={view.sort}
           onSort={(sort) => resetPage({ sort })}
           hidden={view.hidden}
           onHidden={(hidden) => change({ hidden })}
           onRefresh={refresh}
           loading={rows === null}
-          onImport={requestImport}
-          onExport={exportAll}
-          onAdd={addRecord}
+          onImport={records.writable ? requestImport : undefined}
+          onExport={filtered?.length ? (format) => exportRows(filtered, format) : undefined}
+          exportCount={filtered?.length ?? 0}
+          onAdd={records.writable ? addRecord : undefined}
           menuItems={menuItems}
           selectedCount={view.selected.length}
-          onEditSelected={() => {
-            const row = selectedRows()[0];
-            if (row) openRow(row, { focus: true });
-          }}
-          onDuplicateSelected={() => {
-            const row = selectedRows()[0];
-            if (row) openRow(row, { duplicate: true });
-          }}
-          onExportSelected={() => exportSelected(selectedRows())}
-          onDeleteSelected={() => void requestDelete(selectedRows())}
+          onEditSelected={
+            records.writable
+              ? () => {
+                  const row = selectedRows()[0];
+                  if (row) openRow(row, { focus: true });
+                }
+              : undefined
+          }
+          onDuplicateSelected={
+            records.writable
+              ? () => {
+                  const row = selectedRows()[0];
+                  if (row) openRow(row, { duplicate: true });
+                }
+              : undefined
+          }
+          onExportSelected={(format) => exportRows(selectedRows(), format)}
+          onDeleteSelected={records.writable ? () => void requestDelete(selectedRows()) : undefined}
           onClearSelection={() => change({ selected: [] })}
         />
         <FilterChips
           filters={view.filters}
-          onRemove={(i) => resetPage({ filters: view.filters.filter((_, k) => k !== i) })}
-          onClear={() => resetPage({ filters: [] })}
+          onRemove={(i) => {
+            const filters = view.filters.filter((_, k) => k !== i);
+            if (records.live) change({ filters, selected: [], active: null });
+            else resetPage({ filters });
+          }}
+          onClear={() => (records.live ? change({ filters: [], selected: [], active: null }) : resetPage({ filters: [] }))}
         />
         <DataGrid
           columns={shownColumns}
@@ -536,9 +615,10 @@ export function DataMode({ table: name }: { table: string }) {
           activeCell={view.active}
           onActiveCell={(active) => change({ active })}
           modified={modified}
-          openOnClick
-          onOpenRow={(r) => page.rows[r] && openRow(page.rows[r])}
+          openOnClick={!records.live}
+          onOpenRow={records.live ? undefined : (r) => page.rows[r] && openRow(page.rows[r])}
           onRowAction={onRowAction}
+          readOnly={records.live}
           sort={view.sort}
           label={name}
           loading={rows === null}
@@ -556,7 +636,7 @@ export function DataMode({ table: name }: { table: string }) {
     );
   }
 
-  const total = rows?.length ?? counts[name];
+  const total = records.live ? counts[name] : (rows?.length ?? counts[name]);
   const relationships = table ? outgoingRelations(table).length + incomingRelations(table, tables).length : 0;
   const selected = view.selected.length ? t('data.selected', { count: view.selected.length }) : t('data.nothingSelected');
 
@@ -624,14 +704,15 @@ export function DataMode({ table: name }: { table: string }) {
         left={[
           <>
             <span className="ss-status-ok" />
-            {t('data.localData')}
+            {records.live ? t('data.liveData') : t('data.localData')}
           </>,
           ...(table
             ? [
-                `${table.schema || 'public'}.${table.name}`,
+                records.live && records.label ? records.label : `${table.schema || 'public'}.${table.name}`,
                 total === undefined
                   ? t('count.columns', { count: table.columns.length })
                   : t('data.rowsOfColumns', { rows: rowsText(total), columns: t('count.columns', { count: table.columns.length }) }),
+                ...(records.live ? [t('data.liveReadOnly')] : []),
                 selected,
               ]
             : []),

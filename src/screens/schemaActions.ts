@@ -4,9 +4,12 @@ import { t } from '../core/i18n';
 import type { SchemaSnapshot, Table } from '../core/model';
 import { SCHEMAS_ROUTE } from '../core/routes';
 import { summarize } from '../core/summary';
+import type { Connection } from '../core/introspect/catalog';
 import type { SchemaRecord } from '../db/db';
+import { connectionRecord, saveConnection } from '../db/connections';
 import { createSchema, deleteSchema as removeSchema, type NewSchema } from '../db/schemas';
 import { ecommerceSample, selectDirty, useSchemaStore } from '../store/schema';
+import { secretsOf, useSessionStore } from '../store/session';
 import { useUiStore } from '../store/ui';
 import { go, openStored } from './navigation';
 
@@ -30,18 +33,18 @@ export interface NewSchemaInput extends NewSchema {
  * Stores a new schema with `snapshot` as its v1 and opens it in the workspace. Resolves with
  * whether it did; a failure is reported in a toast titled `failure` and leaves the dialog open.
  */
-async function createAndOpen(schema: NewSchema, snapshot: SchemaSnapshot, message: string, failure: string): Promise<boolean> {
+async function createAndOpen(schema: NewSchema, snapshot: SchemaSnapshot, message: string, failure: string): Promise<SchemaRecord | null> {
   const ui = useUiStore.getState();
   try {
     const stored = await createSchema(schema, snapshot, message);
     ui.closeDialog();
     openStored({ schema: stored, snapshot });
     go({ screen: 'workspace', schema: stored.name });
-    return true;
+    return stored;
   } catch (error) {
     console.error(error);
     ui.showToast({ tone: 'error', title: failure, description: error instanceof Error ? error.message : undefined });
-    return false;
+    return null;
   }
 }
 
@@ -49,11 +52,11 @@ async function createAndOpen(schema: NewSchema, snapshot: SchemaSnapshot, messag
  * The confirmed New Schema dialog: stores the schema as its v1 and opens it in the workspace.
  * Resolves with whether it did; a failure is reported in a toast and leaves the dialog open.
  */
-export function createNewSchema({ sample, ...schema }: NewSchemaInput): Promise<boolean> {
+export async function createNewSchema({ sample, ...schema }: NewSchemaInput): Promise<boolean> {
   const snapshot: SchemaSnapshot = sample
     ? { tables: ecommerceTables, positions: ecommercePositions }
     : { tables: [], positions: {} };
-  return createAndOpen(schema, snapshot, sample ? t('version.message.sample') : t('version.message.new'), t('toast.createFailed.title'));
+  return (await createAndOpen(schema, snapshot, sample ? t('version.message.sample') : t('version.message.new'), t('toast.createFailed.title'))) !== null;
 }
 
 /** ⌘I and the Import buttons: asks for the SQL of a schema to import. */
@@ -68,6 +71,8 @@ export interface ImportInput extends NewSchema {
   file?: string;
   /** The database the tables were read from, as it is named: `shop @ localhost:5432`. */
   database?: string;
+  /** The MySQL connection the tables were read from. A file import leaves this out, and the password is not stored. */
+  connection?: Connection;
 }
 
 /**
@@ -75,7 +80,7 @@ export interface ImportInput extends NewSchema {
  * there are none), stores them as v1 of a new schema and opens it in the workspace, fitted to the
  * screen. Resolves with whether it did; a failure is reported in a toast and leaves the dialog open.
  */
-export async function importSchema({ tables, file, database, ...schema }: ImportInput): Promise<boolean> {
+export async function importSchema({ tables, file, database, connection, ...schema }: ImportInput): Promise<boolean> {
   const ui = useUiStore.getState();
   const snapshot: SchemaSnapshot = { tables, positions: arrangeTables(tables) };
   const message = file
@@ -83,7 +88,15 @@ export async function importSchema({ tables, file, database, ...schema }: Import
     : database
       ? t('version.message.importedDatabase', { database })
       : t('version.message.importedPasted');
-  if (!(await createAndOpen(schema, snapshot, message, t('toast.importFailed.title')))) return false;
+  const stored = await createAndOpen(schema, snapshot, message, t('toast.importFailed.title'));
+  if (!stored) return false;
+  if (connection) {
+    const profile = connectionRecord(stored.id, connection);
+    if (profile) {
+      await saveConnection(profile);
+      useSessionStore.getState().setSecrets(stored.id, secretsOf(connection));
+    }
+  }
   ui.setFitPending(true);
   ui.showToast({ title: t('toast.imported.title', { name: schema.name }), description: summarize(tables) });
   return true;
@@ -102,6 +115,7 @@ export async function deleteSchema(id: number): Promise<void> {
   ui.closeDialog();
   try {
     await removeSchema(id);
+    useSessionStore.getState().clear(id);
   } catch (error) {
     console.error(error);
     ui.showToast({

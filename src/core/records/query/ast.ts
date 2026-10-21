@@ -34,14 +34,30 @@ export interface OrderBy {
   dir: 'ASC' | 'DESC';
 }
 
-/** `SELECT cols FROM table WHERE … ORDER BY … LIMIT … OFFSET …`. `cols` is null for `*`. */
+/** One more table, read with the first: `INNER JOIN orders ON orders.user_id = users.id`. */
+export interface Join {
+  type: 'INNER' | 'LEFT';
+  table: string;
+  alias?: string;
+  tableLine?: number;
+  schema?: string | null;
+  on: Expr;
+}
+
+/**
+ * `SELECT cols FROM table [JOIN …] WHERE … ORDER BY … LIMIT … OFFSET …`. `cols` is null for `*`.
+ * `joins` is left out when the query reads one table.
+ */
 export interface Select {
   cols: ColumnRef[] | null;
   table: string;
+  /** The name the FROM table is given: `users u`. When it is set, columns are qualified with it. */
+  alias?: string;
   /** The line the table is named on. */
   tableLine?: number;
   /** The schema in `public.users`. */
   schema?: string | null;
+  joins?: Join[];
   where: Expr | null;
   order: OrderBy[];
   limit: number | null;

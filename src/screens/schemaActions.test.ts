@@ -9,6 +9,7 @@ import { db, type SchemaRecord } from '../db/db';
 import { createSchema, listSchemas, listVersions } from '../db/schemas';
 import { resetDatabase } from '../db/testing';
 import { selectDirty, useSchemaStore } from '../store/schema';
+import { useSessionStore } from '../store/session';
 import { memoryAddress, type MemoryAddress } from '../store/testing';
 import { useUiStore, type Dialog } from '../store/ui';
 import { go, startRouting } from './navigation';
@@ -39,6 +40,7 @@ beforeEach(async () => {
   blog = await createSchema({ name: 'blog', engine: 'MySQL' }, { tables: ecommerceSnapshot().tables.slice(0, 2), positions: {} });
   shop = await createSchema({ name: 'ecommerce', engine: 'PostgreSQL' }, ecommerceSnapshot());
   useUiStore.setState({ dialog: null, toast: null, search: '', fitPending: false });
+  useSessionStore.setState({ secrets: {} });
   address = memoryAddress();
   await startRouting(address);
 });
@@ -188,6 +190,40 @@ describe('importSchema', () => {
     expect(ui().fitPending).toBe(true);
     const stored = (await listSchemas()).find((s) => s.name === 'shop_prod');
     expect((await listVersions(stored!.id))[0].snapshot.positions).toEqual(schema().positions);
+  });
+
+  it('keeps a MySQL connection profile without the password, and the password in the session', async () => {
+    const connection = {
+      engine: 'MySQL',
+      host: 'db.internal',
+      port: 3306,
+      database: 'atad5s',
+      user: 'reader',
+      password: 's3cret-db',
+      ssh: { host: 'bastion', port: 22, user: 'deploy', auth: 'key' as const, keyPath: '~/.ssh/id_ed25519', passphrase: 's3cret-key' },
+    };
+    expect(
+      await importSchema({
+        name: 'atad5s',
+        engine: 'MySQL',
+        tables: parsedTables().slice(0, 1),
+        database: 'atad5s @ db.internal:3306',
+        connection,
+      }),
+    ).toBe(true);
+
+    const stored = (await listSchemas()).find((s) => s.name === 'atad5s');
+    const profile = await db.connections.get(stored!.id);
+    expect(JSON.stringify(profile)).not.toContain('s3cret');
+    expect(profile).toMatchObject({ engine: 'MySQL', host: 'db.internal', database: 'atad5s', user: 'reader' });
+    expect(profile?.ssh).toEqual({ host: 'bastion', port: 22, user: 'deploy', auth: 'key', keyPath: '~/.ssh/id_ed25519' });
+    expect(useSessionStore.getState().secrets[stored!.id]).toEqual({ password: 's3cret-db', sshPassphrase: 's3cret-key' });
+  });
+
+  it('does not keep a connection for a file import', async () => {
+    await importSchema({ name: 'from_file', engine: 'MySQL', tables: parsedTables().slice(0, 1), file: 'shop.sql' });
+    expect(await db.connections.count()).toBe(0);
+    expect(useSessionStore.getState().secrets).toEqual({});
   });
 
   it('names pasted SQL as the source when there is no file', async () => {

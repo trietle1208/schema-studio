@@ -1,4 +1,7 @@
 import type { Connection, SshTunnel } from '../src/core/introspect/catalog.ts';
+import type { Select } from '../src/core/records/query/ast.ts';
+import { mysqlSelectSql, selectOf, tablesOf, type QueryTable } from './query.ts';
+import { mysqlRowsSql, type RowsQuery } from './rows.ts';
 
 // What the bridge takes from a request before it does anything: who may ask, and what a
 // connection looks like. Nothing here touches the network.
@@ -58,14 +61,8 @@ function sshOf(value: unknown): SshTunnel | null {
   };
 }
 
-/** The connection the body of a request asks for, or null when it does not describe one for an engine of `engines`. */
-export function connectionOf(text: string, engines: readonly string[]): Connection | null {
-  let value: unknown;
-  try {
-    value = JSON.parse(text);
-  } catch {
-    return null;
-  }
+/** The connection an already parsed body asks for, or null when it does not describe one for an engine of `engines`. */
+function connectionFrom(value: unknown, engines: readonly string[]): Connection | null {
   if (typeof value !== 'object' || value === null) return null;
   const { engine, host, port, database, user, password, schema, ssl, ssh } = value as Record<string, unknown>;
   if (typeof engine !== 'string' || !engines.includes(engine)) return null;
@@ -86,4 +83,70 @@ export function connectionOf(text: string, engines: readonly string[]): Connecti
     ...(ssl === true ? { ssl: true } : {}),
     ...(tunnel ? { ssh: tunnel } : {}),
   };
+}
+
+/** The connection the body of a request asks for, or null when it does not describe one for an engine of `engines`. */
+export function connectionOf(text: string, engines: readonly string[]): Connection | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  return connectionFrom(value, engines);
+}
+
+const MYSQL = ['MySQL'];
+
+function queryFrom(value: Record<string, unknown>): RowsQuery | null {
+  const { table, columns, limit, offset, orderBy } = value;
+  if (typeof table !== 'string' || !Array.isArray(columns) || !columns.every((column) => typeof column === 'string')) return null;
+  if (typeof limit !== 'number' || typeof offset !== 'number') return null;
+  let order: RowsQuery['orderBy'];
+  if (orderBy !== undefined) {
+    if (typeof orderBy !== 'object' || orderBy === null) return null;
+    const spec = orderBy as Record<string, unknown>;
+    if (typeof spec.column !== 'string' || (spec.dir !== 'asc' && spec.dir !== 'desc')) return null;
+    order = { column: spec.column, dir: spec.dir };
+  }
+  const query: RowsQuery = { table, columns, limit, offset, ...(order ? { orderBy: order } : {}) };
+  return mysqlRowsSql(query) ? query : null;
+}
+
+/**
+ * The page of rows a request asks for. `error` names which part was refused: the connection
+ * (including an engine other than MySQL, or a missing password) or the table page.
+ */
+export function rowsOf(text: string): { connection: Connection; query: RowsQuery } | { error: 'connection' | 'query' } {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { error: 'connection' };
+  }
+  const connection = connectionFrom(value, MYSQL);
+  if (!connection || typeof value !== 'object' || value === null) return { error: 'connection' };
+  const query = queryFrom(value as Record<string, unknown>);
+  if (!query) return { error: 'query' };
+  return { connection, query };
+}
+
+/**
+ * The query a request asks to run. `error` names which part was refused: the connection
+ * (including an engine other than MySQL, or a missing password) or the query.
+ */
+export function queryOf(text: string): { connection: Connection; select: Select; tables: QueryTable[] } | { error: 'connection' | 'query' } {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { error: 'connection' };
+  }
+  const connection = connectionFrom(value, MYSQL);
+  if (!connection || typeof value !== 'object' || value === null) return { error: 'connection' };
+  const body = value as Record<string, unknown>;
+  const select = selectOf(body.select);
+  const tables = tablesOf(body.tables);
+  if (!select || !tables || !mysqlSelectSql(select, tables)) return { error: 'query' };
+  return { connection, select, tables };
 }

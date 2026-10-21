@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addressedHere, allowsOrigin, connectionOf } from './requests.ts';
+import { addressedHere, allowsOrigin, connectionOf, queryOf, rowsOf } from './requests.ts';
 
 const ENGINES = ['PostgreSQL', 'MySQL'];
 const request = (changes: Record<string, unknown> = {}) =>
@@ -125,5 +125,72 @@ describe('connectionOf through SSH', () => {
     ]) {
       expect(connectionOf(request({ ssh: bad }), ENGINES)).toBeNull();
     }
+  });
+});
+
+describe('rowsOf', () => {
+  const page = (changes: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      engine: 'MySQL',
+      host: 'localhost',
+      port: 3306,
+      database: 'shop',
+      user: 'reader',
+      password: 'secret',
+      table: 'users',
+      columns: ['id', 'email'],
+      limit: 50,
+      offset: 0,
+      ...changes,
+    });
+
+  it('reads a MySQL page and drops anything that is not the connection or the page', () => {
+    const parsed = rowsOf(page({ sql: 'DROP TABLE users', orderBy: { column: 'id', dir: 'asc' } }));
+    expect(parsed).toEqual({
+      connection: { engine: 'MySQL', host: 'localhost', port: 3306, database: 'shop', user: 'reader', password: 'secret' },
+      query: { table: 'users', columns: ['id', 'email'], limit: 50, offset: 0, orderBy: { column: 'id', dir: 'asc' } },
+    });
+  });
+
+  it('refuses an engine other than MySQL, a missing password, a bad table and a limit past the cap', () => {
+    expect(rowsOf(page({ engine: 'PostgreSQL' }))).toEqual({ error: 'connection' });
+    expect(rowsOf(page({ password: undefined }))).toEqual({ error: 'connection' });
+    expect(rowsOf(page({ table: 'users; DROP TABLE users' }))).toEqual({ error: 'query' });
+    expect(rowsOf(page({ columns: ['id', 'e mail'] }))).toEqual({ error: 'query' });
+    expect(rowsOf(page({ limit: 201 }))).toEqual({ error: 'query' });
+    expect(rowsOf(page({ limit: 0 }))).toEqual({ error: 'query' });
+    expect(rowsOf(page({ offset: -1 }))).toEqual({ error: 'query' });
+    expect(rowsOf(page({ orderBy: { column: 'password', dir: 'asc' } }))).toEqual({ error: 'query' });
+    expect(rowsOf('not json')).toEqual({ error: 'connection' });
+  });
+});
+
+describe('queryOf', () => {
+  const query = (changes: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      engine: 'MySQL',
+      host: 'localhost',
+      port: 3306,
+      database: 'shop',
+      user: 'reader',
+      password: 'secret',
+      select: {
+        cols: [{ t: 'col', name: 'id' }],
+        table: 'users',
+        where: null,
+        order: [],
+        limit: 10,
+        offset: null,
+      },
+      tables: [{ name: 'users', columns: ['id', 'email'] }],
+      ...changes,
+    });
+
+  it('reads a SELECT and refuses SQL text, a bad name and a missing password', () => {
+    const parsed = queryOf(query({ sql: 'DROP TABLE users' }));
+    expect(parsed).toMatchObject({ connection: { engine: 'MySQL', database: 'shop' }, select: { table: 'users', limit: 10 } });
+    expect(queryOf(query({ select: { cols: [{ t: 'col', name: 'id' }], table: 'users;drop', where: null, order: [], limit: 10, offset: null } }))).toEqual({ error: 'query' });
+    expect(queryOf(query({ engine: 'PostgreSQL' }))).toEqual({ error: 'connection' });
+    expect(queryOf(query({ password: undefined }))).toEqual({ error: 'connection' });
   });
 });

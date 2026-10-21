@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ecommerceSnapshot } from '../core/fixtures/testing';
 import { defaultQuery } from '../core/records/query';
 import { db } from './db';
-import { clearQueries, deleteSavedQuery, listQueries, RECENT_QUERIES, recordRun, saveQuery } from './queries';
+import { clearQueries, deleteSavedQuery, listQueries, overwriteSavedQuery, RECENT_QUERIES, recordRun, renameSavedQuery, saveQuery } from './queries';
 import { createSchema, deleteSchema } from './schemas';
 import { resetDatabase } from './testing';
 
@@ -32,6 +32,33 @@ describe('saved queries', () => {
     await saveQuery(b, { name: 'Same', sql: 'SELECT 3' });
     expect((await listQueries(a)).saved).toHaveLength(1);
     expect((await listQueries(b)).saved.map((q) => q.sql)).toEqual(['SELECT 3']);
+  });
+});
+
+describe('renaming and overwriting a saved query', () => {
+  it('gives a query another name, and refuses a name another query has', async () => {
+    const a = await ids('a');
+    const first = await saveQuery(a, { name: 'First', sql: 'SELECT 1' }, 1000);
+    await saveQuery(a, { name: 'Second', sql: 'SELECT 2' }, 2000);
+
+    const renamed = await renameSavedQuery(a, first.id, 'Everyone', 3000);
+    expect(renamed?.name).toBe('Everyone');
+    expect((await listQueries(a)).saved.map((q) => q.name)).toEqual(['Everyone', 'Second']);
+    await expect(renameSavedQuery(a, first.id, 'Second')).rejects.toThrow('A saved query named "Second" already exists.');
+    await expect(renameSavedQuery(a, first.id, '   ')).rejects.toThrow('Query name cannot be empty.');
+    expect(await renameSavedQuery(a, 9999, 'Gone')).toBeNull();
+  });
+
+  it('replaces the SQL of a query kept under that name, and drops the Builder when the new one has none', async () => {
+    const a = await ids('a');
+    const spec = defaultQuery({ name: 'users' });
+    await saveQuery(a, { name: 'Same', sql: 'SELECT 1', spec }, 1000);
+
+    const next = await overwriteSavedQuery(a, { name: 'Same', sql: 'SELECT 2' }, 2000);
+    expect(next.sql).toBe('SELECT 2');
+    expect(next).not.toHaveProperty('spec');
+    expect((await listQueries(a)).saved).toHaveLength(1);
+    await expect(overwriteSavedQuery(a, { name: 'Missing', sql: 'SELECT 3' })).rejects.toThrow('No saved query named "Missing".');
   });
 });
 
