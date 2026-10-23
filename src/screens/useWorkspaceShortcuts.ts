@@ -1,7 +1,7 @@
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { stepZoom, ZOOM_STEP } from '../core/layout';
 import type { WorkspaceMode } from '../core/routes';
-import { matchShortcut, type Shortcut } from '../core/shortcuts';
+import { matchShortcut, matchViewIndex, type Shortcut } from '../core/shortcuts';
 import { redo, undo, useSchemaStore } from '../store/schema';
 import { useUiStore } from '../store/ui';
 import { go } from './navigation';
@@ -30,23 +30,37 @@ function leave(target: Element | null) {
 }
 
 /**
- * The workspace keyboard shortcuts: ⌘S, ⌘Z, ⇧⌘Z, ⌘K, ⌘⏎, ⌘D, ⇧⌘C, ⌘H, ⌘+, ⌘−, ⌘0, ⇧1, ⇧A, F2, ⌫
- * and Esc (Ctrl in place of ⌘ outside macOS). Outside the diagram only save, undo, redo, search and
- * history are the workspace's.
+ * The workspace keyboard shortcuts: ⌘S, ⌘Z, ⇧⌘Z, ⌘K, ⌘⏎, ⌘D, ⇧⌘C, ⌘H, ⌘+, ⌘−, ⌘0, ⌘1–⌘9, ⇧1, ⇧A,
+ * F2, ⌫ and Esc (Ctrl in place of ⌘ outside macOS). Outside the diagram only save, undo, redo,
+ * search and history are the workspace's. ⌘1 to ⌘9 open the first nine saved views.
  */
-export function useWorkspaceShortcuts(searchRef: RefObject<HTMLInputElement | null>, mode: WorkspaceMode = 'diagram') {
+export function useWorkspaceShortcuts(
+  searchRef: RefObject<HTMLInputElement | null>,
+  mode: WorkspaceMode = 'diagram',
+  extras?: { onSavedView?: (index: number) => void },
+) {
+  const extrasRef = useRef(extras);
+  extrasRef.current = extras;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const shortcut = matchShortcut(e);
-      if (!shortcut) return;
-      // The browser's own ⌘S, ⌘K, ⌘D, ⌘H and zoom stay off, under a dialog all the same.
-      if (TAKEN.includes(shortcut)) e.preventDefault();
+      const viewIndex = mode === 'diagram' ? matchViewIndex(e) : null;
+      if (!shortcut && !viewIndex) return;
+      // The browser's own ⌘S, ⌘K, ⌘D, ⌘H, zoom and ⌘1–⌘9 stay off, under a dialog all the same.
+      if (shortcut && TAKEN.includes(shortcut)) e.preventDefault();
+      if (viewIndex) e.preventDefault();
       const ui = useUiStore.getState();
       // An open dialog owns the keyboard, Esc included. This listener is added before any dialog's,
       // so it still sees the dialog as open on the key press that closes it.
       if (ui.dialog) return;
-      if (mode !== 'diagram' && !EVERY_MODE.includes(shortcut)) return;
+      if (mode !== 'diagram' && shortcut && !EVERY_MODE.includes(shortcut)) return;
       const target = e.target instanceof Element ? e.target : null;
+      if (viewIndex) {
+        if (target?.closest(TYPING)) return;
+        extrasRef.current?.onSavedView?.(viewIndex);
+        return;
+      }
+      if (!shortcut) return;
       const local = !!target?.closest(LOCAL_EDIT);
       const schema = useSchemaStore.getState();
 
@@ -119,6 +133,12 @@ export function useWorkspaceShortcuts(searchRef: RefObject<HTMLInputElement | nu
           break;
         case 'cancel':
           if (local) return;
+          // Esc clears the Explorer's filter before it closes a column or ends a focus.
+          if (ui.explorerQuery) {
+            e.preventDefault();
+            ui.setExplorerQuery('');
+            return;
+          }
           // Esc first closes the column that is open, then ends the focus.
           if (schema.selectedColumn !== null) schema.selectColumn(null);
           else showAllTables();

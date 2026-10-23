@@ -71,6 +71,7 @@ export function ShortcutsDialog() {
             { label: t('shortcuts.zoomReset'), keys: ['⌘', '0'] },
             { label: t('shortcuts.fit'), keys: ['⇧', '1'] },
             { label: t('shortcuts.arrange'), keys: ['⇧', 'A'] },
+            { label: t('shortcuts.savedViews'), keys: ['⌘', '1–9'] },
           ]}
         />
       </div>

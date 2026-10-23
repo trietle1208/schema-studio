@@ -67,3 +67,15 @@ export function matchShortcut(e: KeyStroke): Shortcut | null {
   if (key === 'Escape') return 'cancel';
   return null;
 }
+
+/**
+ * ⌘1 to ⌘9: the first nine saved views, 1-based. ⌘0 stays the zoom reset. Shift and Alt are not
+ * this, so ⇧1 still fits the diagram.
+ */
+export function matchViewIndex(e: KeyStroke): number | null {
+  if (e.altKey || e.shiftKey || !(e.ctrlKey || e.metaKey)) return null;
+  if (e.key.length === 1 && e.key >= '1' && e.key <= '9') return Number(e.key);
+  const pad = e.code?.startsWith('Numpad') ? e.code.slice('Numpad'.length) : '';
+  if (pad >= '1' && pad <= '9') return Number(pad);
+  return null;
+}

@@ -369,13 +369,14 @@ ALTER TABLE payments
 });
 
 describe('focusRelatedTables', () => {
-  it('focuses the canvas on the table, selects it and asks for the related tables to be fitted', () => {
+  it('opens Focus on the table, selects it and clears a search that would hide its neighbours', () => {
     ui().setSearch('pay');
     focusRelatedTables('orders');
 
     expect(selectFocused(schema())).toBe('orders');
     expect(schema().selected).toBe('orders');
-    expect(ui().fitPending).toBe(true);
+    expect(ui().diagramView).toBe('focus');
+    expect(ui().focusTrail).toEqual(['orders']);
     // The search would hide users and order_items.
     expect(ui().search).toBe('');
     expect(ui().toast).toBeNull();
@@ -383,21 +384,21 @@ describe('focusRelatedTables', () => {
     expect(selectDirty(schema())).toBe(false);
   });
 
-  it('moves from one table to another', () => {
+  it('moves from one table to another and keeps both in the trail', () => {
     focusRelatedTables('orders');
     focusRelatedTables('products');
     expect(selectFocused(schema())).toBe('products');
     expect(schema().selected).toBe('products');
+    expect(ui().focusTrail).toEqual(['orders', 'products']);
   });
 
-  it('says so and shows every table when the table is related to none', () => {
+  it('focuses a table that is related to none, as the centre of an empty view', () => {
     newTable({ x: 0, y: 0 });
-    useUiStore.setState({ fitPending: false });
     focusRelatedTables('new_table');
 
-    expect(selectFocused(schema())).toBeNull();
-    expect(ui().fitPending).toBe(false);
-    expect(ui().toast).toMatchObject({ tone: 'info', title: 'No related tables', description: 'new_table has no relationship with another table.' });
+    expect(selectFocused(schema())).toBe('new_table');
+    expect(ui().diagramView).toBe('focus');
+    expect(ui().toast).toBeNull();
   });
 
   it('ignores a table that does not exist', () => {
@@ -413,6 +414,8 @@ describe('showAllTables', () => {
     showAllTables();
     expect(selectFocused(schema())).toBeNull();
     expect(schema().selected).toBe('orders');
+    expect(ui().diagramView).toBe('tables');
+    expect(ui().focusTrail).toEqual([]);
   });
 });
 

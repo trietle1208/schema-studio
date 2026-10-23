@@ -21,6 +21,12 @@ export interface TableNodeProps {
   /** A click on the table or on one of its rows. The event tells a click with Shift held from a plain one. */
   onSelect?: (name: string, e: MouseEvent) => void;
   onSelectColumn?: (index: number, e: MouseEvent) => void;
+  /** Pointed at from the Explorer: an accent border and a soft ring. */
+  pointed?: boolean;
+  /** Column names the Explorer's filter matched, drawn with the modified colour. */
+  markedColumns?: ReadonlySet<string>;
+  /** Hub tables that are not drawn: a foreign key to one is a tag instead of a line. */
+  hubTags?: ReadonlySet<string>;
   dimmed?: boolean;
   dragging?: boolean;
   /** A side of the table is being dragged. */
@@ -60,11 +66,14 @@ interface NodeRowProps {
   invalid?: boolean;
   linked?: boolean;
   refused?: boolean;
+  marked?: boolean;
+  /** The hub this column references, drawn as a tag when that table is not on the canvas. */
+  hub?: string;
   onClick: (e: MouseEvent) => void;
   onPointerDown?: (e: PointerEvent<HTMLDivElement>) => void;
 }
 
-function NodeRow({ column: c, index, selected, invalid, linked, refused, onClick, onPointerDown }: NodeRowProps) {
+function NodeRow({ column: c, index, selected, invalid, linked, refused, marked, hub, onClick, onPointerDown }: NodeRowProps) {
   const empty = !c.name;
   return (
     <div
@@ -74,6 +83,7 @@ function NodeRow({ column: c, index, selected, invalid, linked, refused, onClick
         c.draft && 'is-draft',
         invalid && 'is-invalid',
         linked && (refused ? 'is-link-refused' : 'is-link-end'),
+        marked && 'is-match',
       )}
       onClick={onClick}
       onPointerDown={(e) => {
@@ -96,14 +106,21 @@ function NodeRow({ column: c, index, selected, invalid, linked, refused, onClick
         <span />
       )}
       <span className={cx('ss-node-col', empty && 'is-empty')}>{empty ? t('common.unnamed') : c.name}</span>
-      <span className="ss-node-type">
-        {c.type || '—'}
-        {c.nullable && (
-          <span className="ss-node-null" title={t('flag.nullable')}>
-            ?
-          </span>
-        )}
-      </span>
+      {hub ? (
+        <span className="ss-hub-tag" title={hub}>
+          <Icon name="hub" size={9} />
+          {hub}
+        </span>
+      ) : (
+        <span className="ss-node-type">
+          {c.type || '—'}
+          {c.nullable && (
+            <span className="ss-node-null" title={t('flag.nullable')}>
+              ?
+            </span>
+          )}
+        </span>
+      )}
       <span className="ss-node-flag" title={c.unique ? t('flag.unique') : undefined}>
         {c.unique ? 'UQ' : ''}
       </span>
@@ -123,6 +140,9 @@ export const TableNode = memo(function TableNode({
   selectedColumn,
   onSelect,
   onSelectColumn,
+  pointed,
+  markedColumns,
+  hubTags,
   dimmed,
   dragging,
   resizing,
@@ -150,6 +170,7 @@ export const TableNode = memo(function TableNode({
         cols === 'none' && 'is-bare',
         isStatic && 'ss-node--static',
         selected && 'is-selected',
+        pointed && 'is-pointed',
         dimmed && 'is-dimmed',
         dragging && 'is-dragging',
         resizing && 'is-resizing',
@@ -193,6 +214,8 @@ export const TableNode = memo(function TableNode({
               invalid={!!invalidColumns && invalidColumns.includes(i)}
               linked={linkColumn === i}
               refused={linkRefused}
+              marked={markedColumns?.has(table.columns[i].name)}
+              hub={table.columns[i].fk && hubTags?.has(table.columns[i].fk.table) ? table.columns[i].fk.table : undefined}
               onPointerDown={onColumnPointerDown && ((e) => onColumnPointerDown(i, e))}
               onClick={(e) => {
                 e.stopPropagation();

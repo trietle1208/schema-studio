@@ -21,6 +21,12 @@ export interface SidebarProps {
   onShortcuts?: () => void;
   onCollapse?: () => void;
   collapsed?: boolean;
+  /**
+   * On the diagram the sidebar is the icon rail and the panel beside it is the Explorer.
+   * `explorer` and `views` are that panel; Schemas leaves the diagram.
+   */
+  rail?: 'explorer' | 'views';
+  onRail?: (id: 'schemas' | 'explorer' | 'views') => void;
   empty?: boolean;
   workspace?: string;
   userName?: string;
@@ -39,6 +45,8 @@ export function Sidebar({
   onShortcuts,
   onCollapse,
   collapsed = false,
+  rail,
+  onRail,
   empty,
   workspace = t('sidebar.workspace'),
   userName = 'Luong Hoang',
@@ -61,19 +69,29 @@ export function Sidebar({
           ? t('sidebar.emptyFavorites')
           : t('sidebar.empty');
 
-  const nav: { id: SidebarNav; icon: IconName; label: string; count?: number }[] = [
-    { id: 'schemas', icon: 'layers', label: t('common.schemas'), count: isEmpty ? 0 : schemas.length },
-    { id: 'recent', icon: 'clock', label: t('sidebar.recent') },
-    { id: 'favorites', icon: 'star', label: t('sidebar.favorites'), count: favorites || undefined },
-  ];
+  const nav: { id: string; icon: IconName; label: string; count?: number }[] = rail
+    ? [
+        { id: 'schemas', icon: 'layers', label: t('common.schemas') },
+        { id: 'explorer', icon: 'database', label: t('explorer.title') },
+        { id: 'views', icon: 'bookmark', label: t('explorer.views') },
+      ]
+    : [
+        { id: 'schemas', icon: 'layers', label: t('common.schemas'), count: isEmpty ? 0 : schemas.length },
+        { id: 'recent', icon: 'clock', label: t('sidebar.recent') },
+        { id: 'favorites', icon: 'star', label: t('sidebar.favorites'), count: favorites || undefined },
+      ];
 
-  const goNav = (id: SidebarNav) => {
-    setActive(id);
-    onNavigate?.(id);
+  const goNav = (id: string) => {
+    if (rail) {
+      onRail?.(id as 'schemas' | 'explorer' | 'views');
+      return;
+    }
+    setActive(id as SidebarNav);
+    onNavigate?.(id as SidebarNav);
   };
 
   return (
-    <nav className={cx('ss-sidebar', collapsed && 'is-collapsed')} aria-label={t('sidebar.label')}>
+    <nav className={cx('ss-sidebar', (collapsed || rail) && 'is-collapsed', rail && 'is-rail')} aria-label={t('sidebar.label')}>
       <div className="ss-sb-brand">
         <Logo markOnly={collapsed} />
         <span className="ss-spacer" />
@@ -96,8 +114,8 @@ export function Sidebar({
           <button
             key={n.id}
             type="button"
-            className={cx('ss-nav-item', active === n.id && 'is-active')}
-            title={collapsed ? n.label : undefined}
+            className={cx('ss-nav-item', (rail ? rail === n.id : active === n.id) && 'is-active')}
+            title={collapsed || rail ? n.label : undefined}
             onClick={() => goNav(n.id)}
           >
             <Icon name={n.icon} size={16} />

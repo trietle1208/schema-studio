@@ -217,7 +217,7 @@ const LANE_GAP = 4;
 const LANES = 3;
 
 /** The height of a row of a table at `position`; of the head for the row -1, a column the table does not show. */
-function rowY(position: Position, row: number): number {
+export function rowCenter(position: Position, row: number): number {
   if (row < 0) return position.y + NODE_HEAD_HEIGHT / 2 + 1;
   return position.y + NODE_HEAD_HEIGHT + row * NODE_ROW_HEIGHT + NODE_ROW_HEIGHT / 2 + 1;
 }
@@ -234,8 +234,8 @@ export interface Ends {
  * side of both tables when one is over the other.
  */
 export function edgeEnds(pt: Placement, row: number, pr: Placement, referencedRow: number): Ends {
-  const fy = rowY(pt, row);
-  const ry = rowY(pr, referencedRow);
+  const fy = rowCenter(pt, row);
+  const ry = rowCenter(pr, referencedRow);
   const tRight = pt.x + nodeWidth(pt);
   const rRight = pr.x + nodeWidth(pr);
   if (rRight + 24 <= pt.x) {
@@ -255,7 +255,7 @@ export function edgeEnds(pt: Placement, row: number, pr: Placement, referencedRo
  */
 export function drawnEnds(pt: Placement, row: number, to: Position): Ends {
   const right = pt.x + nodeWidth(pt);
-  const y = rowY(pt, row);
+  const y = rowCenter(pt, row);
   if (to.x < pt.x) return { a: { x: to.x, y: to.y, side: 1 }, b: { x: pt.x, y, side: -1 } };
   return { a: { x: to.x, y: to.y, side: to.x < right ? 1 : -1 }, b: { x: right, y, side: 1 } };
 }
@@ -428,22 +428,124 @@ export interface View {
   offset: Position;
 }
 
-/**
- * The zoom and pan that centre every placed table in a canvas of `view` screen px, `pad` px from its edges.
- * Small diagrams are not enlarged past 100%. With no placed table the view resets.
- */
-export function fitView(tables: readonly Table[], positions: Positions, view: Size, pad: number = 48): View {
-  const placed = nodeRects(tables, positions);
-  if (!placed.length) return { zoom: 1, offset: { x: 0, y: 0 } };
-  const minX = Math.min(...placed.map((r) => r.x));
-  const minY = Math.min(...placed.map((r) => r.y));
-  const w = Math.max(...placed.map((r) => r.x + r.w)) - minX;
-  const h = Math.max(...placed.map((r) => r.y + r.h)) - minY;
-  const zoom = clampZoom(Math.min(1, (view.w - pad * 2) / w, (view.h - pad * 2) / h));
+/** The rectangle that holds every rect. */
+function boundsOfRects(rects: readonly Rect[]): Rect {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const r of rects) {
+    minX = Math.min(minX, r.x);
+    minY = Math.min(minY, r.y);
+    maxX = Math.max(maxX, r.x + r.w);
+    maxY = Math.max(maxY, r.y + r.h);
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+/** The zoom and pan that centre `box` in a canvas of `view` screen px. */
+function centred(box: Rect, zoom: number, view: Size): View {
   return {
     zoom,
-    offset: { x: Math.round((view.w - w * zoom) / 2 - minX * zoom), y: Math.round((view.h - h * zoom) / 2 - minY * zoom) },
+    offset: {
+      x: Math.round((view.w - box.w * zoom) / 2 - box.x * zoom),
+      y: Math.round((view.h - box.h * zoom) / 2 - box.y * zoom),
+    },
   };
+}
+
+/** Whether `box` is a better cluster than the one already chosen: more rects, then a smaller box, then nearer the top left. */
+function betterCluster(count: number, box: Rect, bestCount: number, best: Rect): boolean {
+  if (count !== bestCount) return count > bestCount;
+  const area = box.w * box.h;
+  const bestArea = best.w * best.h;
+  if (area !== bestArea) return area < bestArea;
+  if (box.x !== best.x) return box.x < best.x;
+  return box.y < best.y;
+}
+
+/**
+ * The most of `rects` that fit together in a window of `spanW` by `spanH`. A rect larger than the
+ * window is a cluster of its own, so there is always one to centre on. Two sets of the same size
+ * take the smaller box, then the one nearer the top left.
+ *
+ * The left of a cluster's box is the left of one of its rects and the top is the top of one of
+ * them, so the window is anchored there.
+ */
+function largestCluster(rects: readonly Rect[], spanW: number, spanH: number): readonly Rect[] {
+  if (rects.length <= 1) return rects;
+  const whole = boundsOfRects(rects);
+  if (whole.w <= spanW && whole.h <= spanH) return rects;
+
+  let bestRects: readonly Rect[] = [rects[0]];
+  let bestCount = 1;
+  let bestBox = boundsOfRects(bestRects);
+  const consider = (group: readonly Rect[]) => {
+    if (group.length < bestCount) return;
+    const box = boundsOfRects(group);
+    if (!betterCluster(group.length, box, bestCount, bestBox)) return;
+    bestRects = group.slice();
+    bestCount = group.length;
+    bestBox = box;
+  };
+  for (let i = 1; i < rects.length; i++) consider([rects[i]]);
+
+  const byX = rects.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+  for (let i = 0; i < byX.length; i++) {
+    const left = byX[i].x;
+    const band: Rect[] = [];
+    for (let j = i; j < byX.length; j++) {
+      const r = byX[j];
+      if (r.x - left > spanW) break;
+      if (r.x + r.w - left <= spanW) band.push(r);
+    }
+    if (band.length < bestCount) continue;
+    if (band.length === bestCount) {
+      const box = boundsOfRects(band);
+      if (box.w <= spanW && box.h <= spanH) consider(band);
+      continue;
+    }
+    const byY = band.slice().sort((a, b) => a.y - b.y || a.x - b.x);
+    for (let k = 0; k < byY.length; k++) {
+      if (byY.length - k < bestCount) break;
+      const top = byY[k].y;
+      const group: Rect[] = [];
+      for (let j = k; j < byY.length; j++) {
+        const r = byY[j];
+        if (r.y - top > spanH) break;
+        if (r.y + r.h - top <= spanH) group.push(r);
+      }
+      if (group.length < bestCount) continue;
+      consider(group);
+      // Every rect of this band fits under `top`: no later anchor holds more.
+      if (group.length === byY.length - k) break;
+    }
+  }
+  return bestRects;
+}
+
+/**
+ * The zoom and pan that centre the placed tables in a canvas of `view` screen px, `pad` px from
+ * its edges. Small diagrams are not enlarged past 100%. When the tables still do not fit at the
+ * minimum zoom, the view stays there and centres the largest cluster (see `largestCluster`).
+ * With no placed table the view resets.
+ */
+export function fitView(
+  tables: readonly Table[],
+  positions: Positions,
+  view: Size,
+  pad: number = 48,
+  extra: readonly Rect[] = [],
+): View {
+  const placed = [...nodeRects(tables, positions), ...extra];
+  if (!placed.length) return { zoom: 1, offset: { x: 0, y: 0 } };
+  const box = boundsOfRects(placed);
+  const roomW = view.w - pad * 2;
+  const roomH = view.h - pad * 2;
+  const zoomToFit = Math.min(1, roomW > 0 ? roomW / box.w : 0, roomH > 0 ? roomH / box.h : 0);
+  if (zoomToFit >= MIN_ZOOM) return centred(box, zoomToFit, view);
+  if (box.w * MIN_ZOOM <= view.w && box.h * MIN_ZOOM <= view.h) return centred(box, MIN_ZOOM, view);
+  return centred(boundsOfRects(largestCluster(placed, view.w / MIN_ZOOM, view.h / MIN_ZOOM)), MIN_ZOOM, view);
 }
 
 /** How a minimap draws the canvas: the canvas point at its top left corner and its px for one canvas unit. */

@@ -31,15 +31,18 @@ import {
   type Size,
 } from '../core/layout';
 import type { ColumnsChoice } from '../core/edit';
+import { locatePoint, stubAnchor, type PlacedStub, type StubLink } from '../core/explorer';
 import { groupOf } from '../core/groups';
 import { t } from '../core/i18n';
-import type { Position, Positions, Table, TableGroup } from '../core/model';
+import { hideHubEdges } from '../core/views';
+import type { GroupColor, Position, Positions, Table, TableGroup } from '../core/model';
 import { DEFAULT_NOTATION, type Notation } from '../core/notation';
 import { positionOf } from '../core/positions';
 import { qualifiedName, referenceProblem, type ColumnRef } from '../core/relations';
 import { ContextMenu, type MenuItem } from './ContextMenu';
 import { cx } from './cx';
 import { Icon } from './Icon';
+import { Switch } from './Switch';
 import { rich } from './rich';
 import { TableNode, type TableNodeProps } from './TableNode';
 import { SMOOTH_EASE, useLiveView, viewTransform } from './useLiveView';
@@ -77,6 +80,8 @@ export interface CanvasMenu {
 export interface ERCanvasActions {
   /** Zooms and pans so that every table is in view. */
   fit: () => void;
+  /** Pans so that `name` — a table, or its stub — sits in the middle. The zoom stays. */
+  locate: (name: string) => void;
   /** The part of the canvas that is on screen, in canvas units. */
   view: () => Rect;
 }
@@ -153,6 +158,27 @@ export interface ERCanvasProps {
   onReviewInferred?: () => void;
   /** "Remove inferred relationships" in the same menu. Left out when there are none to remove. */
   onRemoveInferred?: () => void;
+  /** The table pointed at in the Explorer. Its node takes an accent border and its lines the accent. */
+  pointed?: string | null;
+  /** Column names the Explorer filter matched, by table. */
+  markedColumns?: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Hubs drawn as tags: a column that references one shows the tag, and the line to it is left out. */
+  hubTags?: ReadonlySet<string>;
+  /** The bar over the canvas. On, the tags stand in for the lines; off, the lines are drawn. */
+  hubsAsTags?: boolean;
+  onHubsAsTags?: (on: boolean) => void;
+  /** The hubs the bar names, such as `da_don_vi · 65`. */
+  hubNote?: string;
+  /** Tables of other modules the drawn tables reference, as dashed pills. */
+  stubs?: readonly PlacedStub[];
+  /** Foreign keys from a drawn table to a stub. */
+  stubLinks?: readonly StubLink[];
+  /** The colour of a stub's module. */
+  stubColor?: (module: string) => GroupColor;
+  /** "Show" on a stub: draw that table. */
+  onShowStub?: (name: string) => void;
+  /** The filter pill: how many drawn tables hold the query. Null when the filter is empty. */
+  highlight?: { query: string; count: string } | null;
   initialMenu?: CanvasMenu;
   /** Shows the diagram without letting it be changed: tables are not dragged and have no menu. Panning and selecting still work. */
   readOnly?: boolean;
@@ -289,13 +315,15 @@ interface EdgeLineProps {
   edge: Edge;
   /** How the line stands to the selected tables: on one of them, or not (when something is selected), or neither. */
   mode: 'active' | 'dim' | 'plain';
+  /** The Explorer is pointing at one end of the line. */
+  hot?: boolean;
   notation: Notation;
 }
 
 /** One relationship line. It is redrawn only when its line, or how it stands to the selection, changes. */
-const EdgeLine = memo(function EdgeLine({ edge: e, mode, notation }: EdgeLineProps) {
+const EdgeLine = memo(function EdgeLine({ edge: e, mode, hot, notation }: EdgeLineProps) {
   return (
-    <g className={cx('ss-edge-g', e.inferred && 'is-inferred', mode === 'active' && 'is-active', mode === 'dim' && 'is-dim')}>
+    <g className={cx('ss-edge-g', e.inferred && 'is-inferred', mode === 'active' && 'is-active', mode === 'dim' && 'is-dim', hot && 'is-hot')}>
       <path className="ss-edge" d={edgePath(e.a, e.b, e.via)} />
       <EdgeEnds {...e} notation={notation} />
     </g>
@@ -428,6 +456,17 @@ export function ERCanvas({
   onInferRelations,
   onReviewInferred,
   onRemoveInferred,
+  pointed,
+  markedColumns,
+  hubTags,
+  hubsAsTags,
+  onHubsAsTags,
+  hubNote,
+  stubs = [],
+  stubLinks: links = [],
+  stubColor,
+  onShowStub,
+  highlight,
   initialMenu,
   readOnly,
   hint,
@@ -478,11 +517,19 @@ export function ERCanvas({
     fit() {
       const el = ref.current;
       if (!el) return;
-      const view = fitView(tables, positions, { w: el.clientWidth, h: el.clientHeight });
+      const extra = stubs.map((s) => ({ x: s.x, y: s.y, w: 220, h: 32 }));
+      const view = fitView(tables, positions, { w: el.clientWidth, h: el.clientHeight }, 48, extra);
       // A glide that is still on its way would otherwise end where the wheel sent it.
       settleView();
       setOffset(view.offset);
       onZoom?.(view.zoom);
+    },
+    locate(name) {
+      const el = ref.current;
+      const point = locatePoint(tables, positions, name, stubs);
+      if (!el || !point) return;
+      settleView();
+      setOffset(centreOn(point, live.current.zoom, { w: el.clientWidth, h: el.clientHeight }));
     },
     view() {
       const el = ref.current;
@@ -834,7 +881,7 @@ export function ERCanvas({
     const timer = setTimeout(() => setPass((n) => n + 1), 0);
     return () => clearTimeout(timer);
   }, [found, busy]);
-  const edges = found.edges;
+  const edges = useMemo(() => hideHubEdges(found.edges, hubTags ?? NO_NAMES), [found.edges, hubTags]);
 
   // The foreign key that is being drawn: its two columns, why it cannot end where the pointer is,
   // and its line, which ends on the column as the relationship will once the column is one it can end on.
@@ -998,11 +1045,35 @@ export function ERCanvas({
       role="application"
       aria-label={t('canvas.label')}
     >
+      {onHubsAsTags && (
+        <div className="ss-modbar" onPointerDown={(e) => e.stopPropagation()}>
+          <span className="ss-modbar-pill">
+            <Switch checked={!!hubsAsTags} onChange={onHubsAsTags} label={t('focus.hubsAsTags')} />
+            {hubNote ? <span className="ss-modbar-k">{hubNote}</span> : null}
+          </span>
+        </div>
+      )}
       <div ref={layerRef} className="ss-canvas-layer" style={{ transform: viewTransform({ offset, zoom }) }}>
         <svg className="ss-edges" width={1} height={1}>
           {shownEdges.map((e) => {
             const active = isChosen.has(e.from) || isChosen.has(e.to);
-            return <EdgeLine key={e.id} edge={e} mode={active ? 'active' : chosen.length > 0 ? 'dim' : 'plain'} notation={notation} />;
+            const hot = pointed != null && (e.from === pointed || e.to === pointed);
+            return <EdgeLine key={e.id} edge={e} mode={active ? 'active' : chosen.length > 0 ? 'dim' : 'plain'} hot={hot} notation={notation} />;
+          })}
+          {links.map((link) => {
+            const from = tables.find((t) => t.name === link.from);
+            const at = from ? positionOf(positions, from.name) : undefined;
+            const stub = stubs.find((s) => s.table === link.to);
+            if (!from || !at || !stub) return null;
+            const start = stubAnchor(at, from, link.column);
+            const hot = pointed === link.from || pointed === link.to;
+            return (
+              <path
+                key={`${link.from}:${link.column}:${link.to}`}
+                className={cx('ss-edge', 'is-stub', hot && 'is-hot')}
+                d={edgePath({ ...start, side: 1 }, { x: stub.x, y: stub.y + 16, side: -1 })}
+              />
+            );
           })}
         </svg>
         {tables.map((t) => {
@@ -1019,6 +1090,9 @@ export function ERCanvas({
               cols={q.cols}
               lite={lite}
               selected={chosenHere}
+              pointed={pointed === t.name}
+              markedColumns={markedColumns?.get(t.name)}
+              hubTags={hubTags}
               group={groupByTable.get(t.name)}
               // While a foreign key is drawn every table is one it may end on, and none is faded.
               dimmed={!!dimUnrelated && !!related && !related.has(t.name) && !link}
@@ -1033,6 +1107,24 @@ export function ERCanvas({
             />
           );
         })}
+        {stubs.map((stub) => (
+          <div key={stub.table} className="ss-stub" style={{ left: stub.x, top: stub.y }} data-table={stub.table}>
+            <span className={cx('ss-stub-dot', stubColor && `ss-group--${stubColor(stub.module)}`)} />
+            <span className="ss-stub-name">{stub.table}</span>
+            <span className="ss-stub-module">{stub.module || t('explorer.other')}</span>
+            <button
+              type="button"
+              className="ss-stub-show"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowStub?.(stub.table);
+              }}
+            >
+              {t('explorer.stubShow')}
+            </button>
+          </div>
+        ))}
         {/* Over the tables, unlike the lines of the relationships: the pointer is on a table when the line ends. */}
         {drawn && (
           <svg className="ss-edges" width={1} height={1}>
@@ -1050,6 +1142,21 @@ export function ERCanvas({
         />
       )}
       {(linkHint ?? hint) && <div className="ss-canvas-hint">{linkHint ?? hint}</div>}
+      {highlight && (
+        <div className="ss-ex-pill" onPointerDown={(e) => e.stopPropagation()}>
+          <span className="ss-ex-pill-dot" />
+          {rich('explorer.highlight', {
+            query: <b className="ss-mono">{highlight.query}</b>,
+            count: highlight.count,
+          })}
+        </div>
+      )}
+      {stubs.length > 0 && (
+        <div className="ss-ex-stubnote" onPointerDown={(e) => e.stopPropagation()}>
+          <Icon name="folder" size={14} />
+          {t('explorer.stubNote')}
+        </div>
+      )}
       {showLegend !== false && (
         <div className="ss-legend">
           <span>

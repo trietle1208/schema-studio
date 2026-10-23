@@ -60,6 +60,8 @@ function Screens() {
   const summaries = useMemo(() => (stored ?? []).map((s) => schemaSummary(s, now)), [stored, now]);
   const sidebarCollapsed = useSettingsStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
+  const diagramRail = useUiStore((s) => s.diagramRail);
+  const setDiagramRail = useUiStore((s) => s.setDiagramRail);
   useAppShortcuts();
 
   const title = routeTitle(route);
@@ -76,6 +78,11 @@ function Screens() {
             // On the list no schema is the current one, as in the design.
             activeSchema={routeSchema(route) ?? undefined}
             collapsed={sidebarCollapsed}
+            rail={route.screen === 'workspace' ? diagramRail : undefined}
+            onRail={(id) => {
+              if (id === 'schemas') go(SCHEMAS_ROUTE);
+              else setDiagramRail(id);
+            }}
             onCollapse={toggleSidebar}
             onNavigate={(id) => {
               if (id === 'schemas') go(SCHEMAS_ROUTE);
@@ -88,7 +95,7 @@ function Screens() {
             onSettings={requestSettings}
             onShortcuts={requestShortcuts}
           />
-          {!sidebarCollapsed && <PanelHandle panel="sidebar" />}
+          {!sidebarCollapsed && route.screen !== 'workspace' && <PanelHandle panel="sidebar" />}
         </>
       }
       overlay={<Overlays />}

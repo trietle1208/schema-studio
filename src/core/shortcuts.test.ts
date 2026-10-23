@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchShortcut } from './shortcuts';
+import { matchShortcut, matchViewIndex } from './shortcuts';
 
 describe('matchShortcut', () => {
   it('treats ⌘ and Ctrl as the same modifier', () => {
@@ -37,6 +37,16 @@ describe('matchShortcut', () => {
     expect(matchShortcut({ key: '-', code: 'NumpadSubtract', metaKey: true })).toBe('zoom-out');
     expect(matchShortcut({ key: '0', code: 'Digit0', ctrlKey: true })).toBe('zoom-reset');
     expect(matchShortcut({ key: '0', code: 'Numpad0', metaKey: true })).toBe('zoom-reset');
+  });
+
+  it('numbers ⌘1 to ⌘9 as saved views and leaves ⌘0 to the zoom', () => {
+    expect(matchViewIndex({ key: '1', code: 'Digit1', metaKey: true })).toBe(1);
+    expect(matchViewIndex({ key: '9', code: 'Digit9', ctrlKey: true })).toBe(9);
+    expect(matchViewIndex({ key: '5', code: 'Numpad5', metaKey: true })).toBe(5);
+    expect(matchViewIndex({ key: '0', code: 'Digit0', metaKey: true })).toBeNull();
+    expect(matchViewIndex({ key: '1', code: 'Digit1', metaKey: true, shiftKey: true })).toBeNull();
+    expect(matchViewIndex({ key: '1', code: 'Digit1' })).toBeNull();
+    expect(matchViewIndex({ key: '1', code: 'Digit1', altKey: true, ctrlKey: true })).toBeNull();
   });
 
   it('matches ⇧1 and ⇧A, which need Shift alone', () => {

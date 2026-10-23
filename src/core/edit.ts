@@ -13,14 +13,17 @@ function placed(x: number, y: number, like: Placement | undefined): Placement {
   return lookOf({ x, y }, like);
 }
 
-/** A snapshot of `tables` and `positions` with the groups of `snapshot`, or with `groups` in their place. One that has no groups gets none. */
+/** A snapshot of `tables` and `positions` with the groups and the shown tables of `snapshot`. One that has no groups gets none. */
 function edited(
   snapshot: SchemaSnapshot,
   tables: Table[],
   positions: Positions,
   groups: readonly TableGroup[] | undefined = snapshot.groups,
+  shown: readonly string[] | undefined = snapshot.shown,
 ): SchemaSnapshot {
-  return groups ? { tables, positions, groups } : { tables, positions };
+  const next: SchemaSnapshot = groups ? { tables, positions, groups } : { tables, positions };
+  if (shown) next.shown = shown;
+  return next;
 }
 
 function mapColumns(table: Table, edit: (column: Column) => Column): Table {
@@ -51,7 +54,8 @@ export function renameTable(snapshot: SchemaSnapshot, from: string, to: string):
     return mapColumns(renamed, (c) => (c.fk?.table === from ? { ...c, fk: { ...c.fk, table: to } } : c));
   });
   const positions = Object.fromEntries(Object.entries(snapshot.positions).map(([key, p]) => [key === from ? to : key, p]));
-  return edited(snapshot, tables, positions, snapshot.groups && renameMember(snapshot.groups, from, to));
+  const shown = snapshot.shown?.map((name) => (name === from ? to : name));
+  return edited(snapshot, tables, positions, snapshot.groups && renameMember(snapshot.groups, from, to), shown);
 }
 
 /** The name a copy of `name` gets: `orders_copy`, then `orders_copy2`, `orders_copy3`… */
@@ -77,11 +81,13 @@ export function duplicateTable(
     indexes: [],
   };
   const origin = positionOf(snapshot.positions, name) ?? { x: 0, y: 0 };
+  const shown = snapshot.shown?.includes(name) ? snapshot.shown.flatMap((n) => (n === name ? [n, newName] : [n])) : snapshot.shown;
   return edited(
     snapshot,
     [...snapshot.tables, copy],
     { ...snapshot.positions, [newName]: placed(origin.x + DUPLICATE_OFFSET, origin.y + DUPLICATE_OFFSET, origin) },
     snapshot.groups && copyMember(snapshot.groups, name, newName),
+    shown,
   );
 }
 
@@ -112,7 +118,8 @@ export function deleteTable(snapshot: SchemaSnapshot, name: string): SchemaSnaps
     .map((t) => mapColumns(t, (c) => (c.fk?.table === name ? { ...c, fk: null } : c)));
   const positions = { ...snapshot.positions };
   delete positions[name];
-  return edited(snapshot, tables, positions, snapshot.groups && renameMember(snapshot.groups, name, null));
+  const shown = snapshot.shown?.filter((n) => n !== name);
+  return edited(snapshot, tables, positions, snapshot.groups && renameMember(snapshot.groups, name, null), shown);
 }
 
 /** Places a table at `position` on the canvas. */

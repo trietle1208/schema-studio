@@ -19,8 +19,10 @@ import {
 } from '../core/edit';
 import { ecommercePositions, ecommerceTables } from '../core/fixtures/ecommerce';
 import { groupsOf } from '../core/groups';
+import { nextShown, SHOW_ALL_BELOW, visibleNames } from '../core/explorer';
 import { addInferred } from '../core/infer';
 import type { OnDelete, Position, Positions, SchemaSnapshot, Table, TableGroup } from '../core/model';
+import { suggestModules, type SchemaModule } from '../core/modules';
 import { positionOf } from '../core/positions';
 import { addForeignKey, countInferred, declareInferred, removeInferred, type ColumnRef } from '../core/relations';
 import { findProblems } from '../core/validate';
@@ -103,8 +105,13 @@ export interface SchemaState extends SchemaSnapshot {
    * to its table when the table has no column of that name. Returns whether it did.
    */
   addForeignKey: (from: ColumnRef, to: ColumnRef, onDelete?: OnDelete) => boolean;
-  /** Adds the foreign keys the names of the columns point to, marked as inferred. Returns how many it added. */
-  inferRelations: () => number;
+  /** Adds the foreign keys the names of the columns point to, marked as inferred, or only those of `only`. Returns how many it added. */
+  inferRelations: (only?: string) => number;
+  /**
+   * Draws the tables called `names` and hides the others, in one undo step. The default — every
+   * table of a small schema, the largest module of a large one — is stored as no list.
+   */
+  setShown: (names: readonly string[]) => void;
   /** Makes every inferred foreign key a declared one, or the one on the column `only`. Returns how many it changed. */
   acceptInferred: (only?: ColumnRef) => number;
   /** Removes every inferred foreign key, or the one on the column `only`. Returns how many it removed. */
@@ -145,7 +152,17 @@ export interface SchemaState extends SchemaSnapshot {
 }
 
 /** What undo and redo restore: the snapshot plus the selection that went with it. */
-type Tracked = Pick<SchemaState, 'tables' | 'positions' | 'groups' | 'selected' | 'selection' | 'selectedColumn'>;
+type Tracked = Pick<SchemaState, 'tables' | 'positions' | 'groups' | 'shown' | 'selected' | 'selection' | 'selectedColumn'>;
+
+/** Modules of the tables last asked for, so a click does not find them again. */
+let moduleCache: { tables: readonly Table[]; modules: SchemaModule[] } | null = null;
+
+function modulesOf(tables: readonly Table[]): SchemaModule[] {
+  if (moduleCache?.tables === tables) return moduleCache.modules;
+  const modules = suggestModules(tables);
+  moduleCache = { tables, modules };
+  return modules;
+}
 
 export const ecommerceSample: SchemaSource = {
   name: 'ecommerce',
@@ -183,7 +200,13 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample, persi
           tables: initial.tables,
           positions: initial.positions,
           groups: groupsOf(initial),
-          saved: { tables: initial.tables, positions: initial.positions, groups: groupsOf(initial) },
+          shown: initial.shown,
+          saved: {
+            tables: initial.tables,
+            positions: initial.positions,
+            groups: groupsOf(initial),
+            ...(initial.shown ? { shown: initial.shown } : {}),
+          },
           saving: false,
           ...chosen([]),
           selectedColumn: null,
@@ -199,7 +222,13 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample, persi
               tables: schema.tables,
               positions: schema.positions,
               groups: groupsOf(schema),
-              saved: { tables: schema.tables, positions: schema.positions, groups: groupsOf(schema) },
+              shown: schema.shown,
+              saved: {
+                tables: schema.tables,
+                positions: schema.positions,
+                groups: groupsOf(schema),
+                ...(schema.shown ? { shown: schema.shown } : {}),
+              },
               saving: false,
               ...chosen([]),
               selectedColumn: null,
@@ -260,7 +289,12 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample, persi
           addTable: (position) => {
             const state = get();
             const name = newTableName(state.tables);
-            set({ ...addTable(state, newTable(name), position), ...chosen([name]), selectedColumn: null });
+            let next = addTable(state, newTable(name), position);
+            // A new table is on the canvas. A large schema that still shows the default has to say so.
+            if (state.shown) next = { ...next, shown: [...state.shown, name] };
+            else if (state.tables.length >= SHOW_ALL_BELOW)
+              next = { ...next, shown: [...visibleNames(state.tables, modulesOf(state.tables), undefined), name] };
+            set({ ...next, ...chosen([name]), selectedColumn: null });
             return name;
           },
 
@@ -302,12 +336,28 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample, persi
             return true;
           },
 
-          inferRelations: () => {
+          inferRelations: (only) => {
             const { tables } = get();
             const next = addInferred(tables);
             if (next === tables) return 0;
-            set({ tables: next });
-            return countInferred(next) - countInferred(tables);
+            if (!only) {
+              set({ tables: next });
+              return countInferred(next) - countInferred(tables);
+            }
+            const one = next.find((t) => t.name === only);
+            const prev = tables.find((t) => t.name === only);
+            if (!one || !prev || one === prev) return 0;
+            const added = countInferred([one]) - countInferred([prev]);
+            if (added) set({ tables: tables.map((t) => (t.name === only ? one : t)) });
+            return added;
+          },
+
+          setShown: (names) => {
+            const state = get();
+            const next = nextShown(state.tables, modulesOf(state.tables), state.shown, names);
+            if (next === null) return;
+            typing = null;
+            set({ shown: next });
           },
 
           acceptInferred: (only) => {
@@ -397,7 +447,12 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample, persi
             // A schema that is not stored yet is saved even when nothing in it has changed.
             if (state.id !== null && !isDirty(state, state.saved)) return { status: 'unchanged' };
 
-            const snapshot: SchemaSnapshot = { tables: clearDrafts(state.tables), positions: state.positions, groups: state.groups };
+            const snapshot: SchemaSnapshot = {
+              tables: clearDrafts(state.tables),
+              positions: state.positions,
+              groups: state.groups,
+              ...(state.shown ? { shown: state.shown } : {}),
+            };
             const load = loads;
             set({ saving: true });
             let stored: StoredAs;
@@ -430,17 +485,21 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample, persi
       },
       {
         limit: HISTORY_LIMIT,
-        partialize: ({ tables, positions, groups, selected, selection, selectedColumn }): Tracked => ({
+        partialize: ({ tables, positions, groups, shown, selected, selection, selectedColumn }): Tracked => ({
           tables,
           positions,
           groups,
+          shown,
           selected,
           selection,
           selectedColumn,
         }),
         // Selection alone is not an edit: only a changed snapshot adds an undo step.
         equality: (past, current) =>
-          past.tables === current.tables && past.positions === current.positions && past.groups === current.groups,
+          past.tables === current.tables &&
+          past.positions === current.positions &&
+          past.groups === current.groups &&
+          past.shown === current.shown,
       },
     ),
   );

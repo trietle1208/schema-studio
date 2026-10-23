@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import type { ToastProps } from '../components/Toast';
+import type { DiagramView } from '../core/diagramView';
+import type { FocusDepth } from '../core/focusView';
+import type { ExplorerScope } from '../core/explorer';
 import { clampZoom } from '../core/layout';
 import type { Positions, Table, TableGroup } from '../core/model';
 import { SCHEMAS_ROUTE, type Route } from '../core/routes';
@@ -58,6 +61,41 @@ export interface UiState {
   zoom: number;
   /** The toolbar search text; it filters the tables shown on the canvas. */
   search: string;
+  /** The Explorer's filter, and whether it looks at tables, columns or both. */
+  explorerQuery: string;
+  explorerScope: ExplorerScope;
+  /** Which icon of the diagram rail is open: the Explorer, or the list of views. */
+  diagramRail: 'explorer' | 'views';
+  /**
+   * Modules, Tables or Focus, for the schema it was chosen on. Null until the diagram is opened,
+   * which then uses the default for how many tables it has.
+   */
+  diagramView: DiagramView | null;
+  diagramFor: string | null;
+  /** Hide hub lines starts on, for the module map. Inferred only starts off. Both are of this session. */
+  hideHubLines: boolean;
+  inferredOnly: boolean;
+  /**
+   * On the tables canvas a column that points at a hub is a tag instead of a line. The bar over
+   * the canvas turns the lines back on. Starts on.
+   */
+  canvasHubsAsTags: boolean;
+  /** The saved view the tables canvas is showing, for the schema id it was opened on. */
+  activeViewId: number | null;
+  activeViewSchema: number | null;
+  /** The module card that is selected, for the schema it was selected on. */
+  moduleSelection: string | null;
+  moduleSelectionFor: string | null;
+  /** How many steps Focus draws, and whether hubs are tags and cards show keys only. */
+  focusDepth: FocusDepth;
+  focusHubsAsTags: boolean;
+  focusKeysOnly: boolean;
+  /** Neighbours whose hidden relationships are open, and tables asked for with "+ Show". */
+  focusExpanded: string[];
+  focusRevealed: string[];
+  /** The tables Focus has visited, newest last, for the schema it was walked on. */
+  focusTrail: string[];
+  focusTrailFor: string | null;
   /** Bumped each time the selected table should enter rename mode (F2, context menu). */
   renameSignal: number;
   /** Set when the canvas should fit the whole diagram once the workspace shows it, as after an import. */
@@ -69,6 +107,21 @@ export interface UiState {
   setRoute: (route: Route) => void;
   setZoom: (zoom: number) => void;
   setSearch: (search: string) => void;
+  setExplorerQuery: (explorerQuery: string) => void;
+  setExplorerScope: (explorerScope: ExplorerScope) => void;
+  setDiagramRail: (diagramRail: 'explorer' | 'views') => void;
+  setDiagramView: (diagramView: DiagramView, schema: string) => void;
+  setHideHubLines: (hideHubLines: boolean) => void;
+  setInferredOnly: (inferredOnly: boolean) => void;
+  setCanvasHubsAsTags: (canvasHubsAsTags: boolean) => void;
+  setActiveView: (id: number | null, schemaId: number | null) => void;
+  setModuleSelection: (moduleSelection: string | null, schema: string) => void;
+  setFocusDepth: (focusDepth: FocusDepth) => void;
+  setFocusHubsAsTags: (focusHubsAsTags: boolean) => void;
+  setFocusKeysOnly: (focusKeysOnly: boolean) => void;
+  setFocusExpanded: (focusExpanded: string[]) => void;
+  setFocusRevealed: (focusRevealed: string[]) => void;
+  setFocusTrail: (focusTrail: string[], schema: string | null) => void;
   requestRename: () => void;
   setFitPending: (pending: boolean) => void;
   openDialog: (dialog: Dialog) => void;
@@ -85,6 +138,25 @@ export const useUiStore = create<UiState>()((set, get) => ({
   route: SCHEMAS_ROUTE,
   zoom: 1,
   search: '',
+  explorerQuery: '',
+  explorerScope: 'all',
+  diagramRail: 'explorer',
+  diagramView: null,
+  diagramFor: null,
+  hideHubLines: true,
+  inferredOnly: false,
+  canvasHubsAsTags: true,
+  activeViewId: null,
+  activeViewSchema: null,
+  moduleSelection: null,
+  moduleSelectionFor: null,
+  focusDepth: 1,
+  focusHubsAsTags: true,
+  focusKeysOnly: false,
+  focusExpanded: [],
+  focusRevealed: [],
+  focusTrail: [],
+  focusTrailFor: null,
   renameSignal: 0,
   fitPending: false,
   dialog: null,
@@ -92,6 +164,21 @@ export const useUiStore = create<UiState>()((set, get) => ({
   setRoute: (route) => set({ route }),
   setZoom: (zoom) => set({ zoom: clampZoom(zoom) }),
   setSearch: (search) => set({ search }),
+  setExplorerQuery: (explorerQuery) => set({ explorerQuery }),
+  setExplorerScope: (explorerScope) => set({ explorerScope }),
+  setDiagramRail: (diagramRail) => set({ diagramRail }),
+  setDiagramView: (diagramView, schema) => set({ diagramView, diagramFor: schema }),
+  setHideHubLines: (hideHubLines) => set({ hideHubLines }),
+  setInferredOnly: (inferredOnly) => set({ inferredOnly }),
+  setCanvasHubsAsTags: (canvasHubsAsTags) => set({ canvasHubsAsTags }),
+  setActiveView: (activeViewId, activeViewSchema) => set({ activeViewId, activeViewSchema }),
+  setModuleSelection: (moduleSelection, schema) => set({ moduleSelection, moduleSelectionFor: schema }),
+  setFocusDepth: (focusDepth) => set({ focusDepth }),
+  setFocusHubsAsTags: (focusHubsAsTags) => set({ focusHubsAsTags }),
+  setFocusKeysOnly: (focusKeysOnly) => set({ focusKeysOnly }),
+  setFocusExpanded: (focusExpanded) => set({ focusExpanded }),
+  setFocusRevealed: (focusRevealed) => set({ focusRevealed }),
+  setFocusTrail: (focusTrail, schema) => set({ focusTrail, focusTrailFor: schema }),
   requestRename: () => set((s) => ({ renameSignal: s.renameSignal + 1 })),
   setFitPending: (fitPending) => set({ fitPending }),
   openDialog: (dialog) => set({ dialog }),

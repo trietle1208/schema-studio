@@ -3,11 +3,13 @@ import { countLines } from '../core/files';
 import { EXPORT_ENGINES, generatorFor, tableScript } from '../core/generate';
 import { convertTables } from '../core/generate/convert';
 import type { ColumnsChoice } from '../core/edit';
+import { visibleNames } from '../core/explorer';
 import { assignGroup, newGroupName } from '../core/groups';
+import { suggestModules } from '../core/modules';
 import { t } from '../core/i18n';
 import type { Position } from '../core/model';
 import { dataTable, modeRoute, type WorkspaceMode } from '../core/routes';
-import { countInferred, qualifiedName, referenceProblem, referenceTargets, relatedTables, type ColumnRef } from '../core/relations';
+import { countInferred, qualifiedName, referenceProblem, referenceTargets, type ColumnRef } from '../core/relations';
 import { validateColumns } from '../core/validate';
 import { versionLabel } from '../core/versions';
 import { undo, useSchemaStore, type SaveResult } from '../store/schema';
@@ -55,12 +57,11 @@ export async function saveSchema(): Promise<void> {
  */
 export function newTable(position: Position) {
   const ui = useUiStore.getState();
-  const schema = useSchemaStore.getState();
   // A search would hide the new table unless its name happened to match, and a focus always would.
   ui.setSearch('');
-  schema.focus(null);
+  showAllTables();
   // The inspector has to show the new table before it can be told to rename it.
-  flushSync(() => schema.addTable(position));
+  flushSync(() => useSchemaStore.getState().addTable(position));
   ui.requestRename();
 }
 
@@ -164,38 +165,69 @@ export async function copyCreateTable(name: string): Promise<void> {
 }
 
 /**
- * "Focus related tables" in the table menu: the canvas shows only the table and the tables one
- * foreign key away from it, fitted to the screen, until "Show all tables" or Esc. A table that is
- * related to no other is not focused on, which a toast says.
+ * Focus on `name`: the table sits in the middle of the Focus view. A table with no relationship
+ * is still the centre, with empty columns beside it. The tables already visited stay in the
+ * breadcrumb. A search would hide neighbours whose names do not match, so it is cleared.
  */
 export function focusRelatedTables(name: string) {
   const ui = useUiStore.getState();
   const schema = useSchemaStore.getState();
-  const related = relatedTables(schema.tables, name).length - 1;
-  if (related < 0) return;
-  if (!related) {
-    ui.showToast({
-      tone: 'info',
-      title: t('toast.noRelated.title'),
-      description: t('toast.noRelated.description', { name }),
-    });
-    return;
-  }
-  // A search would hide the related tables whose names do not match.
+  if (!schema.tables.some((table) => table.name === name)) return;
+  const same = schema.focused === name;
   ui.setSearch('');
   schema.select(name);
   schema.focus(name);
-  ui.setFitPending(true);
+  ui.setDiagramView('focus', schema.name);
+  const trail = ui.focusTrailFor === schema.name ? ui.focusTrail : [];
+  if (trail[trail.length - 1] !== name) ui.setFocusTrail([...trail, name], schema.name);
+  if (!same) {
+    ui.setFocusExpanded([]);
+    ui.setFocusRevealed([]);
+  }
+}
+
+/** The previous table of the Focus breadcrumb. */
+export function focusBack() {
+  const ui = useUiStore.getState();
+  const schema = useSchemaStore.getState();
+  if (ui.focusTrailFor !== schema.name || ui.focusTrail.length < 2) return;
+  const trail = ui.focusTrail.slice(0, -1);
+  openTrail(trail, schema.name);
+}
+
+/** A table already visited: the breadcrumb keeps that step and drops the ones after it. */
+export function focusTrailTo(index: number) {
+  const ui = useUiStore.getState();
+  const schema = useSchemaStore.getState();
+  if (ui.focusTrailFor !== schema.name || index < 0 || index >= ui.focusTrail.length - 1) return;
+  openTrail(ui.focusTrail.slice(0, index + 1), schema.name);
+}
+
+function openTrail(trail: string[], schemaName: string) {
+  const name = trail[trail.length - 1];
+  const ui = useUiStore.getState();
+  const schema = useSchemaStore.getState();
+  ui.setFocusTrail(trail, schemaName);
+  ui.setFocusExpanded([]);
+  ui.setFocusRevealed([]);
+  schema.select(name);
+  schema.focus(name);
+  ui.setDiagramView('focus', schemaName);
 }
 
 /** "Show all tables" and Esc: ends the focus. The canvas stays where it is, with the other tables back around it. */
 export function showAllTables() {
+  const ui = useUiStore.getState();
   useSchemaStore.getState().focus(null);
+  if (ui.diagramView === 'focus') ui.setDiagramView('tables', ui.diagramFor ?? useSchemaStore.getState().name);
+  if (ui.focusTrail.length) ui.setFocusTrail([], null);
+  if (ui.focusExpanded.length) ui.setFocusExpanded([]);
+  if (ui.focusRevealed.length) ui.setFocusRevealed([]);
 }
 
 /** The toolbar search. It looks through every table, so typing in it ends a focus. */
 export function searchFor(text: string) {
-  if (text.trim()) useSchemaStore.getState().focus(null);
+  if (text.trim()) showAllTables();
   useUiStore.getState().setSearch(text);
 }
 
@@ -203,9 +235,9 @@ export function searchFor(text: string) {
  * "Infer relationships" in the canvas menu: adds the foreign keys the names of the columns point
  * to, for a schema whose database declares none, and says in a toast how many it found.
  */
-export function inferRelationships() {
+export function inferRelationships(only?: string) {
   const ui = useUiStore.getState();
-  const added = useSchemaStore.getState().inferRelations();
+  const added = useSchemaStore.getState().inferRelations(only);
   if (!added) {
     ui.showToast({
       tone: 'info',
@@ -239,21 +271,26 @@ export function arrangeTables() {
   const ui = useUiStore.getState();
   const schema = useSchemaStore.getState();
   if (!schema.tables.length) return;
-  const only = schema.selection.length > 1 ? schema.selection : undefined;
+  const visible = visibleNames(schema.tables, suggestModules(schema.tables), schema.shown);
+  const visibleSet = new Set(visible);
+  const multi = schema.selection.length > 1;
+  const picked = multi ? schema.selection.filter((name) => visibleSet.has(name)) : visible;
+  const only = multi || visible.length < schema.tables.length ? picked : undefined;
+  if (multi && !picked.length) return;
   const moved = schema.arrangeTables(only);
-  if (!only) ui.setFitPending(true);
+  if (!multi) ui.setFitPending(true);
   if (!moved) {
-    ui.showToast({ tone: 'info', title: only ? t('toast.arranged.alreadySelected') : t('toast.arranged.already') });
+    ui.showToast({ tone: 'info', title: multi ? t('toast.arranged.alreadySelected') : t('toast.arranged.already') });
     return;
   }
   ui.showToast(
-    only
+    multi
       ? {
-          title: t('toast.arrangedSelected.title', { count: only.length }),
+          title: t('toast.arrangedSelected.title', { count: picked.length }),
           description: t('toast.arrangedSelected.description'),
         }
       : {
-          title: t('toast.arranged.title', { count: schema.tables.length }),
+          title: t('toast.arranged.title', { count: picked.length }),
           description: t('toast.arranged.description'),
         },
   );
@@ -321,8 +358,8 @@ export function openInDiagram(table: string) {
   const schema = useSchemaStore.getState();
   // A search or a focus could hide the table from the diagram it is opened in.
   useUiStore.getState().setSearch('');
-  schema.focus(null);
-  schema.select(table);
+  showAllTables();
+  useSchemaStore.getState().select(table);
   go({ screen: 'workspace', schema: schema.name });
 }
 
@@ -333,7 +370,7 @@ export function openInDiagram(table: string) {
 export function openColumnInDiagram(table: string, column: string) {
   const schema = useSchemaStore.getState();
   useUiStore.getState().setSearch('');
-  schema.focus(null);
+  showAllTables();
   schema.select(table);
   const t0 = schema.tables.find((x) => x.name === table);
   const index = t0?.columns.findIndex((c) => c.name === column) ?? -1;

@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable, type Table } from 'dexie';
-import type { SchemaSnapshot } from '../core/model';
+import type { Positions, SchemaSnapshot } from '../core/model';
 import type { Row } from '../core/records';
 import type { QuerySpec } from '../core/records/query';
 
@@ -102,6 +102,21 @@ export interface ConnectionRecord {
   ssh?: ConnectionSshRecord;
 }
 
+/**
+ * A saved view of one schema's diagram. The tables it shows, and where they sit, are its own:
+ * opening it does not move the diagram. Not part of a version.
+ */
+export interface DiagramViewRecord {
+  id: number;
+  schemaId: number;
+  /** Unique among the views of the schema, as it is written. */
+  name: string;
+  tables: string[];
+  positions: Positions;
+  /** Milliseconds since the epoch: when it was saved. The first nine follow this, oldest first. */
+  at: number;
+}
+
 /** An SSH server whose key was trusted, so the bridge logs in to it without asking again. One row per `host:port`. */
 export interface KnownHostRecord {
   /** The server as it is named in the connection form, in lower case: `bastion.example.com:22`. */
@@ -119,6 +134,7 @@ export type Database = Dexie & {
   knownHosts: EntityTable<KnownHostRecord, 'id'>;
   queries: EntityTable<QueryRecord, 'id'>;
   connections: EntityTable<ConnectionRecord, 'schemaId'>;
+  views: EntityTable<DiagramViewRecord, 'id'>;
 };
 
 export const db = new Dexie('schema-studio') as Database;
@@ -160,4 +176,9 @@ db.version(6)
 // Version 7 adds the connection profile of a schema imported from MySQL. The password is not stored.
 db.version(7).stores({
   connections: 'schemaId',
+});
+
+// Version 8 adds the saved views of a diagram, one row per view, by schema.
+db.version(8).stores({
+  views: '++id, schemaId',
 });

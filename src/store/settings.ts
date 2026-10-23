@@ -11,6 +11,7 @@ import {
   type Panel,
   type PanelWidths,
 } from '../core/panels';
+import { clampExplorerWidth, EXPLORER_WIDTH_KEY, parseExplorerWidth } from '../core/explorer';
 import { DEFAULT_THEME, parseTheme, THEME_STORAGE_KEY, type Theme } from '../core/theme';
 
 // What the user set for the app itself. It is kept in this browser and is not part of any schema.
@@ -35,6 +36,10 @@ export interface SettingsState {
    * to the other panel, and keeps the width for the next visit.
    */
   setPanelWidth: (panel: Panel, width: number) => void;
+  /** How wide the Explorer is, on the diagram. */
+  explorerWidth: number;
+  /** Makes the Explorer `width` wide, as far as `room` allows, and keeps it for the next visit. */
+  setExplorerWidth: (width: number, room?: number) => void;
   /** Whether the sidebar is the narrow icon rail. */
   sidebarCollapsed: boolean;
   /** Collapses or expands the sidebar and keeps the choice for the next visit. */
@@ -92,6 +97,14 @@ function storedPanels(): PanelWidths {
 }
 
 /** Whether the sidebar was collapsed on an earlier visit. */
+function storedExplorerWidth(): number {
+  try {
+    return parseExplorerWidth(localStorage.getItem(EXPLORER_WIDTH_KEY));
+  } catch {
+    return parseExplorerWidth(null);
+  }
+}
+
 function storedSidebarCollapsed(): boolean {
   try {
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
@@ -140,6 +153,17 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ notation });
   },
   panels: storedPanels(),
+  explorerWidth: storedExplorerWidth(),
+  setExplorerWidth: (width, room) => {
+    const next = clampExplorerWidth(width, room);
+    if (next === get().explorerWidth) return;
+    try {
+      localStorage.setItem(EXPLORER_WIDTH_KEY, String(next));
+    } catch {
+      // The width still holds until the page is closed.
+    }
+    set({ explorerWidth: next });
+  },
   setPanelWidth: (panel, width) => {
     const { panels } = get();
     const other = panels[panel === 'sidebar' ? 'inspector' : 'sidebar'];

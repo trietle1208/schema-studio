@@ -1,0 +1,238 @@
+<!doctype html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Explorer panel</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="bundle.css">
+<link rel="stylesheet" href="explore-base.css">
+<style>
+  .ss-root .ss-btn--primary { color: var(--on-accent); }
+  .ex { width: 300px; }
+  .ex-list { overflow: hidden; }
+  .scope { display: flex; gap: 4px; }
+  .scope span { height: 22px; padding: 0 8px; border-radius: 5px; font: 500 11.5px/22px var(--font-sans); color: var(--ink-3); }
+  .scope span.on { background: var(--bg-5); color: var(--ink-1); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .mod { grid-template-columns: 14px 10px minmax(0,1fr) auto 20px; }
+  .vis { font: 500 11px var(--font-mono); color: var(--ink-3); }
+  .vis b { color: var(--ink-1); font-weight: 500; }
+  .eyebtn { width: 20px; height: 20px; border-radius: 4px; display: grid; place-items: center; color: var(--ink-3); }
+  .eyebtn.on { color: var(--accent-text); }
+  .eyebtn.part { color: var(--accent-text); position: relative; }
+  .eyebtn.part::after { content: ""; position: absolute; right: 1px; bottom: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--modified); box-shadow: 0 0 0 1.5px var(--bg-2); }
+  .tbl { grid-template-columns: 14px minmax(0,1fr) auto 20px; height: 28px; padding-left: 30px; }
+  .tbl .acts { display: flex; gap: 2px; }
+  .tbl .mini { width: 20px; height: 20px; border-radius: 4px; display: grid; place-items: center; color: var(--ink-3); }
+  .tbl.hov { background: var(--bg-4); color: var(--ink-1); }
+  .tbl.hov .mini { color: var(--ink-1); }
+  .tbl.hub b { font-weight: 500; }
+  .tbl .tag { font: 500 9.5px/14px var(--font-mono); padding: 0 5px; border-radius: 7px; background: var(--bg-5); color: var(--ink-2); border: 1px solid var(--line-2); margin-left: 6px; }
+  .tbl.menu { background: var(--bg-5); color: var(--ink-1); box-shadow: inset 0 0 0 1px var(--line-3); }
+  .mark { background: color-mix(in srgb, var(--modified) 28%, transparent); color: var(--ink-1); border-radius: 2px; padding: 0 1px; }
+  .res { display: grid; grid-template-columns: 14px minmax(0,1fr) 20px; gap: 8px; align-items: center; padding: 4px 6px 4px 30px; border-radius: 6px; }
+  .res .nm { font: 500 12px/16px var(--font-mono); color: var(--ink-1); }
+  .res .col { font: 400 11px/15px var(--font-mono); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 4px; }
+  .res > div { min-width: 0; }
+  .res .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .res.hov { background: var(--bg-4); }
+  .grp { display: grid; grid-template-columns: 14px 10px minmax(0,1fr) auto; gap: 8px; align-items: center; height: 28px; padding: 0 6px; font-size: 12.5px; }
+  .grp .c { font: 400 11px var(--font-mono); color: var(--ink-3); }
+  .bulk { margin: 0 10px 10px; padding: 10px; border-radius: 8px; background: var(--accent-subtle); box-shadow: inset 0 0 0 1px var(--accent-line); display: flex; flex-direction: column; gap: 8px; }
+  .bulk .t { font-size: 12px; color: var(--ink-1); }
+  .bulk .row { display: flex; gap: 6px; }
+  .bulk .ss-btn { height: 28px; font-size: 12px; }
+  .note { margin: 4px 6px 8px 24px; padding: 8px 10px; border-radius: 6px; background: var(--bg-1); border: 1px solid var(--line-1); font-size: 11.5px; line-height: 16px; color: var(--ink-2); }
+  .note a { color: var(--accent-text); }
+  .ex-foot { border-top: 1px solid var(--line-1); padding: 10px 12px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); }
+  .ex-foot b { color: var(--ink-1); font-family: var(--font-mono); font-weight: 500; }
+  .ex-foot .lnk { color: var(--accent-text); }
+  .cmenu { position: absolute; z-index: 30; }
+
+  /* canvas */
+  .tn.hl { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-subtle), var(--shadow-pop); }
+  .tn .r.m { background: color-mix(in srgb, var(--modified) 16%, transparent); }
+  .tn .r.m span:nth-child(2) { color: var(--ink-1); }
+  .tn .r.m::after { content: ""; }
+  .stub { position: absolute; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 6px 0 10px; border-radius: 16px; border: 1px dashed var(--line-3); background: var(--bg-2); font: 500 11.5px var(--font-mono); color: var(--ink-1); white-space: nowrap; }
+  .stub .md { font: 400 11px var(--font-sans); color: var(--ink-3); }
+  .stub .dt { width: 8px; height: 8px; border-radius: 2px; }
+  .stub .sh { height: 22px; padding: 0 8px; border-radius: 11px; background: var(--bg-5); color: var(--accent-text); font: 500 11px/22px var(--font-sans); }
+  .lanehd { position: absolute; font: 600 10.5px var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+  .crumbbar { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-3); }
+  .crumbbar b { color: var(--ink-1); font-weight: 600; }
+  .crumbbar .dot { width: 9px; height: 9px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="explore-icons.js"></script>
+<script>
+I.dots = '<circle cx="5.5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="18.5" cy="12" r="1"/>';
+I.locate = '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>';
+I.copy = '<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 8.5V5.5a1.5 1.5 0 0 0-1.5-1.5H5.5A1.5 1.5 0 0 0 4 5.5V14a1.5 1.5 0 0 0 1.5 1.5h3"/>';
+I.folder = '<path d="M3.5 6.5a1.5 1.5 0 0 1 1.5-1.5h4.5l2 2H19a1.5 1.5 0 0 1 1.5 1.5V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17z"/>';
+I.wand = '<path d="M4 20L15 9M14 4v3M18.5 5.5l-2 2M20 10h-3M9 4l1 2"/>';
+I.minus = '<path d="M6 12h12"/>';
+var COL = { hr: '#6b9bff', att: '#4cc2b0', leave: '#a98bff', trip: '#e3b341', pay: '#ff8f6b', site: '#7cc46a', doc: '#e07fb4', s5: '#5fc2d6', camp: '#c9a66b', stat: '#8b909a', cat: '#b0b5bf', wp: '#2f7fd0', sys: '#686d79' };
+var MODS = [['hr', 'Nhân sự', 34, 0], ['att', 'Chấm công', 28, 0], ['leave', 'Nghỉ phép & tăng ca', 14, 0], ['trip', 'Công tác', 11, 0], ['pay', 'Thanh toán & tạm ứng', 19, 8], ['site', 'Công trường', 12, 0], ['doc', 'Chứng từ & phê duyệt', 15, 0], ['s5', 'Đánh giá 5S', 9, 0], ['camp', 'Chiến dịch & khách hàng', 10, 0], ['stat', 'Thống kê', 31, 0], ['cat', 'Danh mục', 24, 0], ['wp', 'WordPress', 22, 0], ['sys', 'Hệ thống', 15, 0]];
+var mode = (location.hash || '#module').slice(1);
+
+function chk(on, mixed) { return '<span class="chk' + (on || mixed ? ' on' : '') + '">' + (mixed ? ic('minus', 9) : on ? ic('check', 9) : '') + '</span>'; }
+function eye(vis, total) {
+  var cls = vis === 0 ? '' : vis === total ? ' on' : ' part';
+  return '<span class="eyebtn' + cls + '" title="' + (vis === 0 ? 'Show module' : 'Hide module') + '">' + ic(vis === 0 ? 'eyeoff' : 'eye', 14) + '</span>';
+}
+function topBar() {
+  return '<header class="top"><span class="crumb">Schemas ' + ic('chevr', 12) + '<b>atad5s</b></span><span class="ss-badge"><span class="ss-badge-dot"></span>MySQL</span><span class="ss-badge ss-badge--accent">v1</span><span class="ss-save is-saved">' + ic('check', 14) + 'Saved</span>' +
+    '<span class="sp"></span><div class="seg"><button class="on">' + ic('diagram', 14) + 'Diagram</button><button>' + ic('grid', 14) + 'Data</button><button>' + ic('table', 14) + 'Query</button></div><span class="sp"></span>' +
+    '<div class="seg"><button>' + ic('grid', 14) + 'Modules</button><button class="on">' + ic('table', 14) + 'Tables</button><button>' + ic('focus', 14) + 'Focus</button></div>' +
+    '<div class="ss-input-wrap" style="width:230px">' + ic('search', 14) + '<input class="ss-input ss-input--icon ss-input--suffix" style="height:30px" placeholder="Search tables, columns…"><span class="ss-input-suffix">' + kbd(['⌘', 'K']) + '</span></div>' +
+    '<button class="ss-btn ss-btn--primary" style="height:30px">Export schema</button></header>';
+}
+function rail() { return '<nav class="rail"><span>' + ic('layers', 18) + '</span><span class="on">' + ic('db', 18) + '</span><span>' + ic('bookmark', 18) + '</span><span style="margin-top:auto;margin-bottom:10px">' + ic('settings', 18) + '</span></nav>'; }
+
+var PAY = [
+  ['da_thanh_toan', 23, 1], ['da_thanh_toan_chi_tien', 9, 1], ['da_thanh_toan_phe_duyet', 8, 1], ['da_thanh_toan_phe_duyet_chi', 7, 1], ['da_hoa_don', 14, 1, 'hov'],
+  ['da_de_nghi_tam_ung', 26, 1], ['da_hoan_ung', 18, 1], ['da_nha_cung_cap', 11, 1], ['da_de_nghi_tam_ung_chi_tiet', 9, 0], ['da_hoan_ung_chi_tiet', 8, 0], ['da_thanh_toan_lich_su', 12, 0]
+];
+
+function exHead(q, scope) {
+  return '<div class="ex-h"><div class="ex-title">' + ic('layers', 16, 'var(--accent-text)') + 'Explorer <span class="n" style="white-space:nowrap">269 tables</span><span class="sp"></span><span class="eyebtn" title="More">' + ic('dots', 15) + '</span></div>' +
+    '<div class="ss-input-wrap">' + ic('search', 14) + '<input class="ss-input ss-input--icon ss-input--suffix" ' + (q ? 'value="' + q + '" style="border-color:var(--focus-ring);box-shadow:0 0 0 1px var(--focus-ring)"' : '') + ' placeholder="Filter tables & columns…"><span class="ss-input-suffix">' + (q ? '<span class="eyebtn">' + ic('x', 13) + '</span>' : kbd(['/'])) + '</span></div>' +
+    (q ? '<div class="scope"><span>All</span><span>Tables</span><span class="on">Columns</span><span style="margin-left:auto;color:var(--ink-3)">17 matches</span></div>' :
+      '<div><div class="ss-caption" style="margin-bottom:6px">Views</div><div class="views"><span class="chip">' + ic('grid', 12) + 'All modules</span><span class="chip">Nhân sự</span><span class="chip on">Thanh toán</span><span class="chip add">' + ic('plus', 12) + 'New view</span></div></div>') +
+    '</div>';
+}
+
+function explorerModule(withMenu) {
+  var h = '<aside class="ex">' + exHead() + '<div class="ex-list"><div class="sec"><span class="ss-caption">Modules</span><span class="ss-caption" style="letter-spacing:0;text-transform:none;font-weight:500">shown / total</span></div>';
+  MODS.forEach(function (m) {
+    var open = m[0] === 'pay' && mode === 'module';
+    var vis = m[0] === 'pay' ? 8 : m[0] === 'cat' ? 0 : 0;
+    h += '<div class="mod' + (open ? ' open' : '') + '">' + ic(open ? 'chev' : 'chevr', 12, 'var(--ink-3)') + '<span class="dot" style="background:' + COL[m[0]] + '"></span><span' + (open ? ' style="font-weight:600"' : '') + '>' + m[1] + '</span><span class="vis">' + (vis ? '<b>' + vis + '</b>/' : '') + m[2] + '</span>' + eye(vis, m[2]) + '</div>';
+    if (open) {
+      PAY.forEach(function (t) {
+        h += '<div class="tbl' + (t[2] ? ' on' : '') + (t[3] ? ' ' + t[3] : '') + '">' + chk(t[2]) + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + t[0] + '</span>' +
+          (t[3] === 'hov' ? '<span class="acts"><span class="mini" title="Locate (L)">' + ic('locate', 13) + '</span><span class="mini" title="Focus (F)">' + ic('focus', 13) + '</span></span>' : '<span class="c">' + t[1] + '</span>') + '<span class="mini">' + (t[3] === 'hov' ? ic('dots', 13) : '') + '</span></div>';
+      });
+      h += '<div class="tbl" style="color:var(--ink-3);font-family:var(--font-sans)"><span></span><span>+ 8 more · <span style="color:var(--accent-text)">Show all 19</span></span><span></span><span></span></div>';
+    }
+  });
+  h += '<div class="sec" style="margin-top:4px"><span class="ss-caption">Not linked</span></div><div class="mod">' + ic('chevr', 12, 'var(--ink-3)') + '<span>' + ic('unlink', 12, 'var(--ink-3)') + '</span><span>No relationship</span><span class="vis">122</span>' + eye(0, 122) + '</div>';
+  h += '</div><div class="ex-foot">' + ic('table', 14, 'var(--ink-3)') + '<span><b>8</b> on canvas · <b>4</b> outside</span><span class="sp"></span><span class="lnk">Hide all</span></div></aside>';
+  return h;
+}
+
+var FILTER = [
+  ['hr', 'Nhân sự', [['da_to_xuong', null, 'table'], ['da_nhan_vien', 'ma_to_xuong INT(11)'], ['da_nhan_vien_moi', 'ma_to_xuong INT(11)'], ['da_to_xuong_thong_ke', 'ma_to_xuong INT(11)']]],
+  ['pay', 'Thanh toán & tạm ứng', [['da_thanh_toan', 'ma_to_xuong INT(11)', 1], ['da_de_nghi_tam_ung', 'ma_to_xuong INT(11)', 1], ['da_hoan_ung', 'ma_to_xuong INT(11)', 1]]],
+  ['leave', 'Nghỉ phép & tăng ca', [['da_nghi_phep', 'ma_to_xuong INT(11)'], ['da_phep_ton', 'ma_to_xuong INT(11)'], ['da_tang_ca_nhan_vien', 'ma_to_xuong INT(11)']]],
+  ['doc', 'Chứng từ & phê duyệt', [['da_chung_tu', 'ma_to_xuong INT(11)'], ['da_de_xuat', 'ma_to_xuong INT(11)']]],
+  ['att', 'Chấm công', [['da_ra_vao', 'ma_to_xuong INT(11)'], ['da_van_tay', 'ma_to_xuong INT(11)']]],
+  ['trip', 'Công tác', [['da_cong_tac', 'ma_to_xuong INT(11)']]],
+  ['stat', 'Thống kê', [['da_thong_ke_lao_dong_tang_ca_danh_sach', 'ma_to_xuong INT(11)']]],
+  ['sys', 'Chưa phân nhóm', [['da_tham_quan', 'ma_to_xuong INT(11)']]]
+];
+function explorerFilter() {
+  var h = '<aside class="ex">' + exHead('ma_to_xuong') + '<div class="ex-list" style="padding-top:0">';
+  FILTER.forEach(function (g, gi) {
+    var open = gi < 3;
+    var shown = g[2].filter(function (r) { return r[2]; }).length;
+    h += '<div class="grp">' + ic(open ? 'chev' : 'chevr', 12, 'var(--ink-3)') + '<span class="mod" style="padding:0;height:auto;display:contents"><span class="dot" style="width:9px;height:9px;border-radius:3px;background:' + COL[g[0]] + '"></span></span><span>' + g[1] + '</span><span class="c">' + (shown ? shown + '/' : '') + g[2].length + '</span></div>';
+    if (open) g[2].forEach(function (r, i) {
+      h += '<div class="res' + (gi === 0 && i === 0 ? ' hov' : '') + '">' + chk(r[2]) + '<div><div class="nm">' + (r[2] === 'table' ? r[0].replace('to_xuong', '<span class="mark">to_xuong</span>') : r[0]) + (r[2] === 'table' ? ' <span class="tag" style="font:500 9.5px/14px var(--font-mono);padding:0 5px;border-radius:7px;background:var(--bg-5);color:var(--ink-2);border:1px solid var(--line-2)">table name</span>' : '') + '</div>' +
+        (r[1] ? '<div class="col">' + ic('link', 10, 'var(--fk)') + '<span class="mark">ma_to_xuong</span> → da_to_xuong</div>' : '<div class="col">referenced by 16 tables</div>') + '</div><span class="eyebtn">' + (gi === 0 && i === 0 ? ic('locate', 13) : '') + '</span></div>';
+    });
+  });
+  h += '</div><div class="bulk"><div class="t"><b>17 matches</b> · 3 already on canvas</div><div class="row"><button class="ss-btn ss-btn--primary">' + ic('eye', 14) + 'Show all 17</button><button class="ss-btn ss-btn--secondary">' + ic('focus', 14) + 'Focus da_to_xuong</button></div></div></aside>';
+  return h;
+}
+
+var UNL = [['wp_actionscheduler_*', 4, [['wp_actionscheduler_actions', 12], ['wp_actionscheduler_claims', 2], ['wp_actionscheduler_groups', 2], ['wp_actionscheduler_logs', 5]]], ['da_thong_ke_*', 18, [['da_thong_ke_cham_cong_thang', 34], ['da_thong_ke_luong', 41], ['da_thong_ke_nghi_phep', 12]]], ['da_cai_dat*', 3], ['da_crontabs, da_attachment…', 9], ['CHECKINOUT, apps_countries…', 14], ['Other', 74]];
+function explorerUnlinked() {
+  var h = '<aside class="ex">' + exHead() + '<div class="ex-list"><div class="sec"><span class="ss-caption">Modules</span><span class="ss-caption" style="letter-spacing:0;text-transform:none;font-weight:500">shown / total</span></div>';
+  MODS.slice(0, 6).forEach(function (m) { var vis = m[0] === 'pay' ? 8 : 0; h += '<div class="mod">' + ic('chevr', 12, 'var(--ink-3)') + '<span class="dot" style="background:' + COL[m[0]] + '"></span><span>' + m[1] + '</span><span class="vis">' + (vis ? '<b>' + vis + '</b>/' : '') + m[2] + '</span>' + eye(vis, m[2]) + '</div>'; });
+  h += '<div class="mod" style="color:var(--ink-3)"><span></span><span></span><span>+ 7 modules</span><span></span><span></span></div>';
+  h += '<div class="sec" style="margin-top:4px"><span class="ss-caption">Not linked</span></div><div class="mod open">' + ic('chev', 12, 'var(--ink-3)') + '<span>' + ic('unlink', 12, 'var(--ink-3)') + '</span><span style="font-weight:600">No relationship</span><span class="vis"><b>1</b>/122</span>' + eye(1, 122) + '</div>' +
+    '<div class="note">These tables have no foreign key, declared or inferred. They stay off the canvas until you show them. <a>Infer relationships</a></div>';
+  UNL.forEach(function (g, gi) {
+    var open = gi < 2;
+    h += '<div class="grp" style="padding-left:24px">' + ic(open ? 'chev' : 'chevr', 12, 'var(--ink-3)') + '<span>' + ic('folder', 12, 'var(--ink-3)') + '</span><span style="font-family:var(--font-mono);font-size:12px">' + g[0] + '</span><span class="c">' + g[1] + '</span></div>';
+    if (open) g[2].forEach(function (t, i) {
+      var menu = gi === 1 && i === 1, on = gi === 1 && i === 0;
+      h += '<div class="tbl' + (menu ? ' menu' : '') + (on ? ' on' : '') + '" style="padding-left:48px">' + chk(on) + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + t[0] + '</span><span class="c">' + t[1] + '</span><span class="mini">' + (menu ? ic('dots', 13) : '') + '</span></div>';
+    });
+  });
+  h += '</div><div class="ex-foot">' + ic('table', 14, 'var(--ink-3)') + '<span><b>9</b> on canvas</span><span class="sp"></span><span class="lnk">Hide all</span></div></aside>';
+  return h;
+}
+
+// ---------- canvas (module opened) ----------
+function node(x, y, name, rows, o) {
+  o = o || {};
+  var s = '<div class="tn' + (o.cls ? ' ' + o.cls : '') + '" style="left:' + x + 'px;top:' + y + 'px' + (o.w ? ';width:' + o.w + 'px' : '') + '" data-n="' + name + '">';
+  s += '<div class="th"><span class="gb" style="background:' + (o.col || COL.pay) + '"></span>' + ic('table', 13) + '<b>' + name + '</b><span class="cnt">' + (o.n || rows.length) + '</span></div>';
+  rows.forEach(function (r) { s += '<div class="r ' + (r[2] || '') + '">' + (r[2] && r[2].indexOf('k') === 0 ? ic('key', 11) : r[2] && r[2].indexOf('f') === 0 ? ic('link', 11) : '<span></span>') + '<span>' + r[0] + '</span><span class="t">' + r[1] + '</span></div>'; });
+  if (o.more) s += '<div class="more">' + o.more + '</div>';
+  if (o.badge) s += '<span class="x ghost">' + o.badge + '</span>';
+  return s + '</div>';
+}
+var HUB = ' <span class="hubref">' + ic('hub', 9) + 'da_don_vi</span>';
+function canvas(highlight) {
+  var m = highlight === 'col';
+  var h = '<main class="cv" id="cv">';
+  h += '<div class="cbar"><span class="pill acc"><span class="crumbbar"><span>Modules</span>' + ic('chevr', 12) + '<span class="dot" style="background:' + COL.pay + '"></span><b>Thanh toán & tạm ứng</b></span></span>' +
+    '<span class="pill"><b style="font-family:var(--font-mono)">8</b>/19 tables shown · <span style="color:var(--accent-text)">Show all</span></span>' +
+    '<span class="pill">' + ic('layers', 14) + 'Arrange ⇧A</span>' +
+    '<span class="sp"></span>' + (m ? '<span class="pill" style="border-color:color-mix(in srgb,var(--modified) 60%,transparent)"><span style="width:8px;height:8px;border-radius:2px;background:var(--modified)"></span>Highlighting <b style="font-family:var(--font-mono)">ma_to_xuong</b> in 3 tables</span>' : '<span class="pill"><span class="toggle"><span class="sw on"></span>Hubs as tags</span></span>') + '</div>';
+  h += '<svg class="e" id="ed" width="1092" height="856"></svg>';
+  h += '<span class="lanehd" style="left:24px;top:66px">Details</span><span class="lanehd" style="left:290px;top:66px">Core</span><span class="lanehd" style="left:556px;top:66px">Advances</span><span class="lanehd" style="left:790px;top:66px">Outside this module</span>';
+  h += node(24, 92, 'da_thanh_toan_chi_tien', [['id', 'INT(11)', 'k'], ['ma_thanh_toan', 'INT(11)', 'f'], ['so_tien', 'DECIMAL(15,2)']], { n: 9 });
+  h += node(24, 222, 'da_thanh_toan_phe_duyet', [['id', 'INT(11)', 'k'], ['ma_thanh_toan', 'INT(11)', 'f'], ['nguoi_duyet', 'INT(11)']], { n: 8 });
+  h += node(24, 352, 'da_thanh_toan_phe_duyet_chi', [['id', 'INT(11)', 'k'], ['ma_thanh_toan', 'INT(11)', 'f']], { n: 7 });
+  h += node(24, 462, 'da_hoa_don', [['id', 'INT(11)', 'k'], ['ma_thanh_toan', 'INT(11)', 'f'], ['so_hoa_don', 'VARCHAR(50)'], ['ngay_hoa_don', 'DATE']], { n: 14, cls: highlight === 'hover' ? 'hl' : '' });
+  h += node(290, 92, 'da_thanh_toan', [['id', 'INT(11)', 'k'], ['ma_loai_chi', 'INT(11)', 'f'], ['ma_loai_nhom_chi', 'INT(11)', 'f'], ['ma_nha_cung_cap', 'INT(11)', 'f'], ['ma_phap_nhan_cong_ty', 'INT(11)', 'f'], ['ma_to_xuong', 'INT(11)', 'f' + (m ? ' m' : '')], ['ma_don_vi' + HUB, '', 'f'], ['so_tien', 'DECIMAL(15,2)'], ['trang_thai', 'TINYINT(4)']], { n: 23, more: '+ 14 columns', w: 240 });
+  h += node(290, 430, 'da_nha_cung_cap', [['id', 'INT(11)', 'k'], ['ten_ncc', 'VARCHAR(255)'], ['ma_so_thue', 'VARCHAR(20)']], { n: 11 });
+  h += node(556, 92, 'da_de_nghi_tam_ung', [['id', 'INT(11)', 'k'], ['ma_to_xuong', 'INT(11)', 'f' + (m ? ' m' : '')], ['ma_don_vi' + HUB, '', 'f'], ['so_tien', 'DECIMAL(15,2)'], ['ly_do', 'TEXT']], { n: 26, more: '+ 21 columns' });
+  h += node(556, 300, 'da_hoan_ung', [['id', 'INT(11)', 'k'], ['ma_tam_ung', 'INT(11)', 'f'], ['ma_to_xuong', 'INT(11)', 'f' + (m ? ' m' : '')], ['ma_don_vi' + HUB, '', 'f'], ['so_tien', 'DECIMAL(15,2)']], { n: 18, more: '+ 13 columns' });
+  var stub = function (y, name, md, col, n) { return '<div class="stub" style="left:790px;top:' + y + 'px" data-n="' + name + '"><span class="dt" style="background:' + col + '"></span>' + name + '<span class="md">' + md + '</span><span class="sh">Show</span></div>'; };
+  h += stub(110, 'da_loai_chi', 'Danh mục', COL.cat) + stub(160, 'da_loai_nhom_chi', 'Danh mục', COL.cat) + stub(210, 'da_phap_nhan_cong_ty', 'Nhân sự', COL.hr) + stub(260, 'da_to_xuong', 'Nhân sự', COL.hr);
+  h += '<div class="tray"><span class="sp"></span><div class="ws">' + ic('folder', 14, 'var(--ink-3)') + '<span>Dashed pills are tables of other modules this module points to</span></div></div>';
+  return h + '</main>';
+}
+
+var hh = '<div class="app ss-root">' + topBar() + '<div class="body">' + rail();
+if (mode === 'module') hh += explorerModule() + canvas('hover');
+else if (mode === 'filter') hh += explorerFilter() + canvas('col');
+else hh += explorerUnlinked() + canvas('none');
+hh += '</div>';
+if (mode === 'unlinked') hh += '<div class="cmenu" style="left:300px;top:640px"><div class="ss-menu"><div class="ss-menu-label">da_thong_ke_luong · 41 columns</div>' +
+  ['eye|Show on canvas|Space', 'focus|Focus|F', 'locate|Locate on canvas|L', '-', 'folder|Move to module…|', 'wand|Infer its relationships|', '-', 'copy|Copy name|⌘C'].map(function (x) { if (x === '-') return '<div class="ss-menu-sep"></div>'; var p = x.split('|'); return '<button class="ss-menu-item' + (p[1] === 'Show on canvas' ? ' is-active' : '') + '">' + ic(p[0], 14) + p[1] + (p[2] ? '<span class="ss-menu-sc">' + p[2] + '</span>' : '') + '</button>'; }).join('') + '</div></div>';
+hh += '</div>';
+document.getElementById('app').innerHTML = hh;
+if (mode === 'unlinked') document.querySelector('.app').style.position = 'relative';
+
+// edges
+var cv = document.getElementById('cv'), svg = document.getElementById('ed'), R = cv.getBoundingClientRect();
+function el(n) { return cv.querySelector('[data-n="' + n + '"]'); }
+function bx(n) { var b = el(n).getBoundingClientRect(); return { l: b.left - R.left, r: b.right - R.left, t: b.top - R.top, cy: b.top - R.top + b.height / 2 }; }
+function ry(n, i) { return bx(n).t + 31 + i * 22 + 11; }
+function curve(x1, y1, x2, y2, cls) { var d = Math.max(40, Math.abs(x2 - x1) / 2); return '<path d="M' + x1 + ' ' + y1 + ' C' + (x1 + (x2 > x1 ? d : -d)) + ' ' + y1 + ' ' + (x2 + (x2 > x1 ? -d : d)) + ' ' + y2 + ' ' + x2 + ' ' + y2 + '" style="fill:none;' + cls + '"/>'; }
+var base = 'stroke:var(--relation);stroke-width:1.25;stroke-dasharray:4 3';
+var hot = 'stroke:var(--accent);stroke-width:1.8';
+var out = '';
+[['da_thanh_toan_chi_tien', 1], ['da_thanh_toan_phe_duyet', 1], ['da_thanh_toan_phe_duyet_chi', 1], ['da_hoa_don', 1]].forEach(function (e) {
+  var a = bx(e[0]), b = bx('da_thanh_toan'); out += curve(a.r, ry(e[0], e[1]), b.l, ry('da_thanh_toan', 0), e[0] === 'da_hoa_don' && mode === 'module' ? hot : base);
+});
+var tt = bx('da_thanh_toan'), ncc = bx('da_nha_cung_cap');
+out += '<path d="M' + tt.l + ' ' + ry('da_thanh_toan', 3) + ' C' + (tt.l - 30) + ' ' + ry('da_thanh_toan', 3) + ' ' + (ncc.l - 30) + ' ' + ry('da_nha_cung_cap', 0) + ' ' + ncc.l + ' ' + ry('da_nha_cung_cap', 0) + '" style="fill:none;' + base + '"/>';
+var hu = bx('da_hoan_ung'), dn = bx('da_de_nghi_tam_ung');
+out += '<path d="M' + hu.r + ' ' + ry('da_hoan_ung', 1) + ' C' + (hu.r + 28) + ' ' + ry('da_hoan_ung', 1) + ' ' + (dn.r + 28) + ' ' + ry('da_de_nghi_tam_ung', 0) + ' ' + dn.r + ' ' + ry('da_de_nghi_tam_ung', 0) + '" style="fill:none;' + base + '"/>';
+// to stubs
+[['da_thanh_toan', 1, 'da_loai_chi'], ['da_thanh_toan', 2, 'da_loai_nhom_chi'], ['da_thanh_toan', 4, 'da_phap_nhan_cong_ty'], ['da_de_nghi_tam_ung', 1, 'da_to_xuong'], ['da_hoan_ung', 2, 'da_to_xuong']].forEach(function (e) {
+  var a = bx(e[0]), s = bx(e[2]); var from = e[0] === 'da_thanh_toan' ? a.r : a.r; out += curve(from, ry(e[0], e[1]), s.l, s.cy, 'stroke:var(--line-3);stroke-width:1;stroke-dasharray:2 3;opacity:.8');
+});
+svg.innerHTML = out;
+</script>
+</body>
+</html>

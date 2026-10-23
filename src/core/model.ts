@@ -84,6 +84,12 @@ export interface SchemaSnapshot {
   positions: Positions;
   /** Left out by a schema that has none, as by every version saved before there were groups. */
   groups?: readonly TableGroup[];
+  /**
+   * The tables drawn on the canvas, in the order of the schema. Left out when the diagram shows
+   * the default: every table of a small schema, or the largest module of a large one. Of the
+   * diagram, like the positions: DDL, migrations and the diff leave it out.
+   */
+  shown?: readonly string[];
 }
 
 export interface SchemaSummary {

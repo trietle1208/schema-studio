@@ -501,9 +501,20 @@ describe('fitView', () => {
     expect(Math.abs(top - (size.h - bottom))).toBeLessThanOrEqual(1);
   });
 
-  it('does not zoom below the minimum', () => {
+  it('does not zoom below the minimum, and still centres the whole diagram when that zoom holds it', () => {
     const { tables, positions } = ecommerceSnapshot();
-    expect(fitView(tables, positions, { w: 200, h: 150 }).zoom).toBe(0.25);
+    const size = { w: 200, h: 150 };
+    const view = fitView(tables, positions, size);
+    expect(view.zoom).toBe(0.25);
+    expect(view.offset).toEqual({
+      x: Math.round((size.w - bounds.w * 0.25) / 2 - bounds.x * 0.25),
+      y: Math.round((size.h - bounds.h * 0.25) / 2 - bounds.y * 0.25),
+    });
+    const seen = viewRect(view.offset, view.zoom, size);
+    expect(seen.x).toBeLessThanOrEqual(bounds.x);
+    expect(seen.y).toBeLessThanOrEqual(bounds.y);
+    expect(seen.x + seen.w).toBeGreaterThanOrEqual(bounds.x + bounds.w);
+    expect(seen.y + seen.h).toBeGreaterThanOrEqual(bounds.y + bounds.h);
   });
 
   it('fits only the tables it is given', () => {
@@ -515,6 +526,87 @@ describe('fitView', () => {
   it('resets the view when no table is placed', () => {
     expect(fitView([], {}, { w: 800, h: 600 })).toEqual({ zoom: 1, offset: { x: 0, y: 0 } });
     expect(fitView(ecommerceSnapshot().tables, {}, { w: 800, h: 600 })).toEqual({ zoom: 1, offset: { x: 0, y: 0 } });
+  });
+
+  // Tables of one column, each 40 by 35, so a cluster's box is the grid and not the text.
+  const placed = (names: readonly string[], at: (index: number) => { x: number; y: number }) => {
+    const tables: Table[] = names.map((name) => ({ name, columns: [{ name: 'id', type: 'INT', pk: true }] }));
+    const positions: Positions = {};
+    names.forEach((name, i) => {
+      positions[name] = { ...at(i), w: 40, cols: 'none' };
+    });
+    return { tables, positions };
+  };
+  const grid = (column: number, row: number, x0 = 0, y0 = 0) => ({ x: x0 + column * 50, y: y0 + row * 45 });
+
+  it('centres the largest cluster when the diagram does not fit at the minimum zoom', () => {
+    const dense = Array.from({ length: 10 }, (_, i) => `d${i}`);
+    const far = ['f0', 'f1', 'f2'];
+    const { tables, positions } = placed([...dense, ...far], (i) => (i < dense.length ? grid(i % 5, Math.floor(i / 5)) : grid(i - dense.length, 0, 20000)));
+    const size = { w: 400, h: 300 };
+    const view = fitView(tables, positions, size);
+    expect(view.zoom).toBe(0.25);
+    expect(tablesInRect(tables, positions, viewRect(view.offset, view.zoom, size))).toEqual(dense);
+    const seen = viewRect(view.offset, view.zoom, size);
+    const rects = nodeRects(tables, positions);
+    const gap = (Math.min(...rects.map((r) => r.x)) + Math.max(...rects.map((r) => r.x + r.w))) / 2;
+    expect(Math.abs(seen.x + seen.w / 2 - gap)).toBeGreaterThan(seen.w);
+  });
+
+  it('ignores a table it was not given, even when that table is placed', () => {
+    const dense = Array.from({ length: 10 }, (_, i) => `d${i}`);
+    const far = ['f0', 'f1', 'f2'];
+    const { tables, positions } = placed([...dense, ...far], (i) => (i < dense.length ? grid(i % 5, Math.floor(i / 5)) : grid(i - dense.length, 0, 20000)));
+    const size = { w: 400, h: 300 };
+    const onlyFar = tables.filter((t) => far.includes(t.name));
+    const view = fitView(onlyFar, positions, size);
+    expect(tablesInRect(tables, positions, viewRect(view.offset, view.zoom, size))).toEqual(far);
+  });
+
+  it('prefers the tighter cluster when two sets hold the same number of tables', () => {
+    const loose = ['l0', 'l1', 'l2', 'l3'];
+    const tight = ['t0', 't1', 't2', 't3'];
+    const { tables, positions } = placed([...loose, ...tight], (i) => {
+      if (i < loose.length) return { x: (i % 2) * 360, y: Math.floor(i / 2) * 360 };
+      const k = i - loose.length;
+      return grid(k % 2, Math.floor(k / 2), 10000);
+    });
+    const size = { w: 400, h: 300 };
+    const view = fitView(tables, positions, size);
+    expect(view.zoom).toBe(0.25);
+    expect(tablesInRect(tables, positions, viewRect(view.offset, view.zoom, size))).toEqual(tight);
+  });
+
+  it('centres the most tables that fit when one row is wider than the screen', () => {
+    const names = Array.from({ length: 30 }, (_, i) => `r${i}`);
+    const { tables, positions } = placed(names, (i) => ({ x: i * 200, y: 0 }));
+    const size = { w: 400, h: 300 };
+    const view = fitView(tables, positions, size);
+    expect(view.zoom).toBe(0.25);
+    // Eight tables span 1440 canvas px, which is what a 400px screen holds at 25%. The ninth starts at 1600.
+    expect(tablesInRect(tables, positions, viewRect(view.offset, view.zoom, size))).toEqual(names.slice(0, 8));
+  });
+
+  it('centres the dense block when hundreds of tables leave a gap in the bounding box', () => {
+    const dense = Array.from({ length: 200 }, (_, i) => `d${i}`);
+    const far = Array.from({ length: 69 }, (_, i) => `f${i}`);
+    const { tables, positions } = placed([...dense, ...far], (i) =>
+      i < dense.length ? grid(i % 20, Math.floor(i / 20)) : grid((i - dense.length) % 10, Math.floor((i - dense.length) / 10), 50000),
+    );
+    const size = { w: 1000, h: 700 };
+    const view = fitView(tables, positions, size);
+    expect(view.zoom).toBe(0.25);
+    expect(tablesInRect(tables, positions, viewRect(view.offset, view.zoom, size))).toEqual(dense);
+  });
+
+  it('prefers the cluster nearer the top left when two sets are the same size', () => {
+    const left = ['a0', 'a1', 'a2', 'a3'];
+    const right = ['b0', 'b1', 'b2', 'b3'];
+    const { tables, positions } = placed([...left, ...right], (i) => grid(i % 2, Math.floor(i / 2) % 2, i < left.length ? 0 : 10000));
+    const size = { w: 400, h: 300 };
+    const view = fitView(tables, positions, size);
+    expect(view.zoom).toBe(0.25);
+    expect(tablesInRect(tables, positions, viewRect(view.offset, view.zoom, size))).toEqual(left);
   });
 });
 

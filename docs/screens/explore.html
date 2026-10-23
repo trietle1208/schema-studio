@@ -1,0 +1,302 @@
+<!doctype html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Explore large schema</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="bundle.css">
+<style>
+  html, body { margin: 0; background: var(--bg-1); }
+  .app { width: 1440px; height: 900px; display: flex; flex-direction: column; overflow: hidden; font-family: var(--font-sans); color: var(--ink-1); }
+  .top { height: 44px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--bg-2); border-bottom: 1px solid var(--line-1); }
+  .crumb { color: var(--ink-3); font-size: 13px; display: flex; gap: 6px; align-items: center; }
+  .crumb b { color: var(--ink-1); font: 600 13px var(--font-mono); }
+  .sp { flex: 1; }
+  .seg { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg-1); }
+  .seg button { height: 26px; padding: 0 10px; border: 0; border-radius: 5px; background: transparent; color: var(--ink-2); font: 500 12px var(--font-sans); display: inline-flex; gap: 6px; align-items: center; }
+  .seg button.on { background: var(--bg-5); color: var(--ink-1); box-shadow: 0 0 0 1px var(--line-2); }
+  .seg button.on .ss-icon { color: var(--accent-text); }
+  .body { flex: 1; display: flex; min-height: 0; }
+  .rail { width: 48px; flex: none; background: var(--bg-0); border-right: 1px solid var(--line-1); display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 10px; }
+  .rail span { width: 32px; height: 32px; border-radius: 6px; display: grid; place-items: center; color: var(--ink-3); }
+  .rail span.on { background: var(--bg-5); color: var(--accent-text); }
+
+  /* explorer */
+  .ex { width: 290px; flex: none; background: var(--bg-2); border-right: 1px solid var(--line-1); display: flex; flex-direction: column; min-height: 0; }
+  .ex-h { padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 8px; }
+  .ex-title { display: flex; align-items: center; gap: 8px; font: 600 13px var(--font-sans); }
+  .ex-title .n { font: 400 11.5px var(--font-mono); color: var(--ink-3); }
+  .ex .ss-input { height: 30px; }
+  .views { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { height: 24px; padding: 0 9px; border-radius: 12px; border: 1px solid var(--line-2); font: 500 11.5px var(--font-sans); color: var(--ink-2); display: inline-flex; align-items: center; gap: 5px; background: var(--bg-1); }
+  .chip.on { background: var(--accent-subtle); border-color: var(--accent-line); color: var(--accent-text); }
+  .chip.add { border-style: dashed; }
+  .ex-list { flex: 1; overflow: hidden; padding: 4px 8px; }
+  .sec { padding: 10px 6px 4px; display: flex; justify-content: space-between; align-items: center; }
+  .mod { display: grid; grid-template-columns: 14px 10px minmax(0,1fr) auto 18px; gap: 8px; align-items: center; height: 30px; padding: 0 6px; border-radius: 6px; font-size: 12.5px; }
+  .mod:hover, .mod.hov { background: var(--bg-4); }
+  .mod.open { background: var(--bg-4); }
+  .mod .dot { width: 9px; height: 9px; border-radius: 3px; }
+  .mod .c { font: 400 11px var(--font-mono); color: var(--ink-3); }
+  .mod .eye { color: var(--ink-3); }
+  .mod .eye.on { color: var(--accent-text); }
+  .tbl { display: grid; grid-template-columns: 14px minmax(0,1fr) auto 18px; gap: 8px; align-items: center; height: 26px; padding: 0 6px 0 34px; border-radius: 6px; font: 400 12px var(--font-mono); color: var(--ink-2); }
+  .tbl.on { color: var(--ink-1); }
+  .tbl.cur { background: var(--accent-subtle); color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--accent-line); }
+  .tbl .c { font-size: 10.5px; color: var(--ink-3); }
+  .chk { width: 13px; height: 13px; border-radius: 3px; border: 1.5px solid var(--line-3); display: grid; place-items: center; }
+  .chk.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .ex-f { border-top: 1px solid var(--line-1); padding: 10px 12px; display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); }
+
+  /* canvas */
+  .cv { flex: 1; position: relative; overflow: hidden; background-color: var(--bg-1); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1.2px); background-size: 16px 16px; }
+  .cv svg.e { position: absolute; inset: 0; pointer-events: none; }
+  .cbar { position: absolute; left: 16px; top: 14px; right: 16px; display: flex; gap: 10px; align-items: center; z-index: 5; }
+  .pill { white-space: nowrap; height: 32px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line-2); font-size: 12.5px; color: var(--ink-2); box-shadow: var(--shadow-pop); }
+  .pill b { color: var(--ink-1); font-weight: 600; }
+  .pill .ss-icon { color: var(--ink-3); }
+  .pill.acc { border-color: var(--accent-line); }
+  .pill .k { font: 500 11px var(--font-mono); color: var(--ink-3); }
+  .toggle { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 24px; height: 14px; border-radius: 7px; background: var(--bg-5); border: 1px solid var(--line-3); position: relative; }
+  .sw::after { content: ""; position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink-3); }
+  .sw.on { background: var(--accent); border-color: var(--accent); }
+  .sw.on::after { left: 11px; background: var(--on-accent); }
+
+  /* module cards */
+  .mc { position: absolute; width: 196px; border-radius: 10px; background: var(--bg-3); border: 1px solid var(--line-2); box-shadow: var(--shadow-node); overflow: hidden; }
+  .mc .bar { height: 4px; }
+  .mc .hd { padding: 10px 12px 6px; display: flex; align-items: center; gap: 8px; }
+  .mc .hd b { font: 600 13.5px var(--font-sans); }
+  .mc .hd .n { margin-left: auto; font: 500 11px var(--font-mono); color: var(--ink-3); background: var(--bg-5); padding: 1px 7px; border-radius: 9px; }
+  .mc .pre { padding: 0 12px; font: 400 11px var(--font-mono); color: var(--ink-3); }
+  .mc ul { list-style: none; margin: 8px 0 0; padding: 6px 12px 10px; border-top: 1px solid var(--line-1); font: 400 11.5px var(--font-mono); color: var(--ink-2); display: flex; flex-direction: column; gap: 3px; }
+  .mc ul li.more { color: var(--ink-3); font-family: var(--font-sans); }
+  .mc.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow-pop); }
+  .mc.dim { opacity: .42; }
+  .mc .act { display: flex; gap: 6px; padding: 0 12px 10px; }
+  .mc .act span { font: 500 11.5px var(--font-sans); color: var(--accent-text); }
+  .elab { font: 600 11px var(--font-mono); fill: var(--ink-2); }
+  .elbg { fill: var(--bg-2); stroke: var(--line-2); }
+  .hub { position: absolute; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 20px; border: 1px dashed var(--line-3); background: var(--bg-2); font-size: 12px; color: var(--ink-2); }
+  .hub b { font: 600 12px var(--font-mono); color: var(--ink-1); }
+
+  /* focus nodes */
+  .tn { position: absolute; width: 196px; border-radius: 8px; background: var(--bg-3); border: 1px solid var(--line-2); box-shadow: var(--shadow-node); font: 400 11.5px var(--font-mono); }
+  .tn .th { height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-bottom: 1px solid var(--line-1); border-radius: 8px 8px 0 0; position: relative; }
+  .tn .th b { font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tn .th .ss-icon { color: var(--ink-3); flex: none; }
+  .tn .th .cnt { margin-left: auto; color: var(--ink-3); font-size: 10.5px; }
+  .tn .gb { position: absolute; left: -1px; top: -1px; bottom: 0; width: 3px; border-radius: 8px 0 0 0; }
+  .tn .r { height: 22px; display: grid; grid-template-columns: 12px minmax(0,1fr) auto; gap: 6px; align-items: center; padding: 0 10px; color: var(--ink-1); }
+  .tn .r .t { color: var(--ink-3); font-size: 10.5px; }
+  .tn .r.k .ss-icon { color: var(--pk); }
+  .tn .r.f .ss-icon { color: var(--fk); }
+  .tn .r.hl { background: var(--accent-subtle); }
+  .tn .more { height: 22px; padding: 0 10px; color: var(--ink-3); font-family: var(--font-sans); font-size: 11px; display: flex; align-items: center; }
+  .tn.center { width: 220px; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow-pop); }
+  .tn .x { position: absolute; top: -10px; right: -10px; height: 20px; padding: 0 7px; border-radius: 10px; background: var(--accent); color: var(--on-accent); font: 600 10.5px/20px var(--font-mono); box-shadow: 0 0 0 2px var(--bg-1); }
+  .tn .x.ghost { background: var(--bg-5); color: var(--ink-2); box-shadow: 0 0 0 2px var(--bg-1), inset 0 0 0 1px var(--line-3); }
+  .hubref { display: inline-flex; align-items: center; gap: 3px; font: 500 9.5px/14px var(--font-mono); padding: 0 5px; border-radius: 7px; background: var(--bg-5); color: var(--ink-2); border: 1px solid var(--line-2); }
+  .tn.ghost { opacity: .9; border-style: dashed; background: var(--bg-2); }
+  .tn.hov { border-color: var(--line-3); }
+  .lane { position: absolute; top: 64px; font: 600 10.5px var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+
+  /* inspector-ish panel */
+  .ins { width: 320px; flex: none; background: var(--bg-2); border-left: 1px solid var(--line-1); display: flex; flex-direction: column; }
+  .ins-h { padding: 14px 14px 10px; border-bottom: 1px solid var(--line-1); }
+  .ins-h h3 { margin: 0; display: flex; gap: 8px; align-items: center; font: 600 15px var(--font-sans); }
+  .ins-h p { margin: 4px 0 0; font-size: 12px; color: var(--ink-2); }
+  .ins-s { padding: 12px 14px; border-bottom: 1px solid var(--line-1); display: flex; flex-direction: column; gap: 8px; }
+  .kv { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .kv div { background: var(--bg-1); border: 1px solid var(--line-1); border-radius: 6px; padding: 6px 8px; font-size: 11px; color: var(--ink-3); }
+  .kv b { display: block; font: 500 14px var(--font-mono); color: var(--ink-1); }
+  .rel { display: grid; grid-template-columns: 14px minmax(0,1fr) auto; gap: 8px; align-items: center; font: 400 11.5px var(--font-mono); height: 26px; padding: 0 6px; border-radius: 5px; }
+  .rel .ss-icon { color: var(--fk); }
+  .rel .on { color: var(--added); font-family: var(--font-sans); font-size: 11px; }
+  .rel .add { color: var(--accent-text); font-family: var(--font-sans); font-size: 11px; }
+  .rel:hover { background: var(--bg-4); }
+  .path { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font: 400 11.5px var(--font-mono); }
+  .path span { padding: 2px 6px; border-radius: 4px; background: var(--bg-4); }
+  .path i { color: var(--ink-3); font-style: normal; }
+
+  .tray { position: absolute; left: 16px; right: 16px; bottom: 14px; display: flex; gap: 10px; align-items: center; z-index: 5; }
+  .ws { white-space: nowrap; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 6px 0 14px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--line-2); box-shadow: var(--shadow-pop); font-size: 12.5px; color: var(--ink-2); }
+  .ws b { color: var(--ink-1); }
+  .ws .ss-btn { height: 28px; }
+  .crumbs { white-space: nowrap; display: flex; align-items: center; gap: 6px; font: 400 12px var(--font-mono); color: var(--ink-3); }
+  .crumbs span { color: var(--ink-2); padding: 2px 6px; border-radius: 4px; }
+  .crumbs span.cur { color: var(--accent-text); background: var(--accent-subtle); }
+  .ss-root .ss-btn--primary { color: var(--on-accent); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+var I = {
+  table: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M9.5 9.5v10"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
+  chev: '<path d="M6 9l6 6 6-6"/>', chevr: '<path d="M9 6l6 6-6 6"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l8.5-8.5M16.5 6.5l2.5 2.5M14.5 8.5l2 2"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>',
+  eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.75"/>',
+  eyeoff: '<path d="M3 3l18 18"/><path d="M10.6 6.1A9.9 9.9 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.6 3.3M6.6 6.6C3.9 8.3 2.5 12 2.5 12s3.5 6.5 9.5 6.5c1.6 0 3-.4 4.3-1"/>',
+  layers: '<path d="M12 3.5L3.5 8 12 12.5 20.5 8z"/><path d="M3.5 12.5L12 17l8.5-4.5"/><path d="M3.5 16.5L12 21l8.5-4.5"/>',
+  grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+  focus: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>',
+  route: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/>',
+  bookmark: '<path d="M6 4h12v16l-6-4-6 4z"/>', db: '<ellipse cx="12" cy="5.5" rx="7.5" ry="2.75"/><path d="M4.5 5.5v13c0 1.5 3.4 2.75 7.5 2.75s7.5-1.25 7.5-2.75v-13"/>',
+  unlink: '<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/><path d="M4 4l16 16"/>',
+  hub: '<circle cx="12" cy="12" r="3"/><circle cx="4.5" cy="5" r="1.5"/><circle cx="19.5" cy="5" r="1.5"/><circle cx="4.5" cy="19" r="1.5"/><circle cx="19.5" cy="19" r="1.5"/><path d="M6 6.2l3.8 3.8M18 6.2l-3.8 3.8M6 17.8l3.8-3.8M18 17.8l-3.8-3.8"/>',
+  diagram: '<rect x="3" y="4" width="7" height="6" rx="1.5"/><rect x="14" y="14" width="7" height="6" rx="1.5"/><path d="M6.5 10v3.5a3 3 0 0 0 3 3H14"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>', arrowl: '<path d="M19 12H5M11 6l-6 6 6 6"/>', settings: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>'
+};
+function ic(n, s, c) { return '<svg class="ss-icon" width="' + (s || 16) + '" height="' + (s || 16) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"' + (c ? ' style="color:' + c + '"' : '') + '>' + I[n] + '</svg>'; }
+function kbd(a) { return a.map(function (k) { return '<kbd class="ss-kbd">' + k + '</kbd>'; }).join(''); }
+var COL = { hr: '#6b9bff', att: '#4cc2b0', leave: '#a98bff', trip: '#e3b341', pay: '#ff8f6b', site: '#7cc46a', doc: '#e07fb4', s5: '#5fc2d6', camp: '#c9a66b', stat: '#8b909a', cat: '#b0b5bf', wp: '#2f7fd0', sys: '#686d79' };
+var MODS = [
+  ['hr', 'Nhân sự', 'nhan_vien* · phong_ban* · to_xuong', 34, ['da_nhan_vien', 'da_to_xuong', 'da_phong_ban_sap', 'da_chuc_vu']],
+  ['att', 'Chấm công', 'cham_cong* · ca_* · van_tay', 28, ['da_cham_cong_ngay', 'da_ca_lam_viec_mau', 'da_van_tay', 'CHECKINOUT']],
+  ['leave', 'Nghỉ phép & tăng ca', 'nghi_phep* · tang_ca*', 14, ['da_tang_ca', 'da_tang_ca_nhan_vien', 'da_nghi_phep']],
+  ['trip', 'Công tác', 'cong_tac*', 11, ['da_cong_tac', 'da_cong_tac_dinh_muc', 'da_cong_tac_phi']],
+  ['pay', 'Thanh toán & tạm ứng', 'thanh_toan* · tam_ung · hoan_ung', 19, ['da_thanh_toan', 'da_hoa_don', 'da_de_nghi_tam_ung']],
+  ['site', 'Công trường', 'cong_truong* · ca_cong_truong*', 12, ['da_cong_truong', 'da_ca_cong_truong', 'da_cong_truong_nhan_vien']],
+  ['doc', 'Chứng từ & phê duyệt', 'chung_tu* · de_xuat* · phe_duyet', 15, ['da_chung_tu', 'da_de_xuat', 'da_chung_tu_phe_duyet']],
+  ['s5', 'Đánh giá 5S', 'danh_gia_5s · chu_de*', 9, ['da_danh_gia_5s', 'da_chu_de_5s']],
+  ['camp', 'Chiến dịch & khách hàng', 'chien_dich* · customer', 10, ['da_chien_dich', 'da_customer']],
+  ['stat', 'Thống kê', 'thong_ke_*', 31, ['da_thong_ke_lao_dong_tang_ca…', '+ 30 bảng thống kê']],
+  ['cat', 'Danh mục', 'loai_*', 24, ['da_loai_chi', 'da_loai_tang_ca', '+ 22 bảng loai_*']],
+  ['wp', 'WordPress', 'wp_*', 22, ['wp_users', 'wp_posts', 'wp_actionscheduler_*']],
+  ['sys', 'Hệ thống', 'cai_dat* · attachment · crontabs', 15, ['da_cai_dat', 'da_attachment', 'da_crontabs']]
+];
+var mode = (location.hash || '#modules').slice(1);
+
+function topBar(sub) {
+  return '<header class="top"><span class="crumb">Schemas ' + ic('chevr', 12) + '<b>atad5s</b></span><span class="ss-badge"><span class="ss-badge-dot"></span>MySQL</span><span class="ss-badge ss-badge--accent">v1</span><span class="ss-save is-saved">' + ic('check', 14) + 'Saved</span>' +
+    '<span class="sp"></span><div class="seg"><button class="on">' + ic('diagram', 14) + 'Diagram</button><button>' + ic('grid', 14) + 'Data</button><button>' + ic('table', 14) + 'Query</button></div><span class="sp"></span>' +
+    '<div class="seg">' + sub + '</div>' +
+    '<div class="ss-input-wrap" style="width:230px">' + ic('search', 14) + '<input class="ss-input ss-input--icon ss-input--suffix" style="height:30px" placeholder="Search tables, columns…"><span class="ss-input-suffix">' + kbd(['⌘', 'K']) + '</span></div>' +
+    '<button class="ss-btn ss-btn--primary" style="height:30px">Export schema</button></header>';
+}
+function rail() { return '<nav class="rail"><span>' + ic('layers', 18) + '</span><span class="on">' + ic('db', 18) + '</span><span>' + ic('bookmark', 18) + '</span><span style="margin-top:auto;margin-bottom:10px">' + ic('settings', 18) + '</span></nav>'; }
+
+function explorer(openMod, cur) {
+  var h = '<aside class="ex"><div class="ex-h"><div class="ex-title">' + ic('layers', 16, 'var(--accent-text)') + 'Explorer <span class="n">269 tables · 13 modules</span></div>' +
+    '<div class="ss-input-wrap">' + ic('search', 14) + '<input class="ss-input ss-input--icon" placeholder="Filter tables & columns…"></div>' +
+    '<div><div class="ss-caption" style="margin-bottom:6px">Views</div><div class="views"><span class="chip' + (mode === 'modules' ? ' on' : '') + '">' + ic('grid', 12) + 'All modules</span><span class="chip">Nhân sự</span><span class="chip' + (mode === 'focus' ? ' on' : '') + '">Thanh toán</span><span class="chip add">' + ic('plus', 12) + 'New view</span></div></div></div>' +
+    '<div class="ex-list"><div class="sec"><span class="ss-caption">Modules</span><span class="ss-caption" style="letter-spacing:0;text-transform:none;font-weight:500">on canvas</span></div>';
+  MODS.forEach(function (m) {
+    var open = m[0] === openMod, vis = mode === 'modules' || ['pay', 'hr'].indexOf(m[0]) >= 0;
+    h += '<div class="mod' + (open ? ' open' : '') + '">' + ic(open ? 'chev' : 'chevr', 12, 'var(--ink-3)') + '<span class="dot" style="background:' + COL[m[0]] + '"></span><span>' + m[1] + '</span><span class="c">' + m[3] + '</span><span class="eye' + (vis ? ' on' : '') + '">' + ic(vis ? 'eye' : 'eyeoff', 14) + '</span></div>';
+    if (open) {
+      [['da_thanh_toan', 23, 1, 1], ['da_thanh_toan_chi_tien', 9, 1], ['da_thanh_toan_phe_duyet', 8, 1], ['da_thanh_toan_phe_duyet_chi', 7, 1], ['da_hoa_don', 14, 1], ['da_de_nghi_tam_ung', 26, 0], ['da_hoan_ung', 18, 0]].forEach(function (t) {
+        h += '<div class="tbl' + (t[2] ? ' on' : '') + (t[3] ? ' cur' : '') + '"><span class="chk' + (t[2] ? ' on' : '') + '">' + (t[2] ? ic('check', 9) : '') + '</span><span style="overflow:hidden;text-overflow:ellipsis">' + t[0] + '</span><span class="c">' + t[1] + '</span><span></span></div>';
+      });
+      h += '<div class="tbl" style="color:var(--ink-3);font-family:var(--font-sans)"><span></span><span>+ 12 more</span><span></span><span></span></div>';
+    }
+  });
+  h += '<div class="sec" style="margin-top:6px"><span class="ss-caption">Not linked</span></div>' +
+    '<div class="mod">' + ic('chevr', 12, 'var(--ink-3)') + '<span>' + ic('unlink', 12, 'var(--ink-3)') + '</span><span>Tables with no relationship</span><span class="c">122</span><span class="eye">' + ic('eyeoff', 14) + '</span></div>';
+  h += '</div><div class="ex-f">' + ic('hub', 15, 'var(--ink-3)') + '<span>Hubs <b style="color:var(--ink-1);font-family:var(--font-mono);font-weight:500">da_don_vi</b>, <b style="color:var(--ink-1);font-family:var(--font-mono);font-weight:500">wp_users</b> drawn as tags</span></div></aside>';
+  return h;
+}
+
+var h = '<div class="app ss-root">';
+if (mode === 'modules') {
+  h += topBar('<button class="on">' + ic('grid', 14) + 'Modules</button><button>' + ic('table', 14) + 'Tables</button><button>' + ic('focus', 14) + 'Focus</button>');
+  h += '<div class="body">' + rail() + explorer(null) + '<main class="cv">';
+  // positions of module cards (canvas is 1102 wide)
+  var X = [28, 244, 460, 676, 892], Y = [84, 330, 590];
+  var P = { cat: [X[0], Y[0]], att: [X[1], Y[0]], trip: [X[2], Y[0]], wp: [X[3], Y[0]], sys: [X[4], Y[0]], leave: [X[0], Y[1]], hr: [X[1], Y[1]], pay: [X[2], Y[1]], doc: [X[3], Y[1]], camp: [X[4], Y[1]], stat: [X[0], Y[2]], site: [X[1], Y[2]], s5: [X[2], Y[2]] };
+  var E = [['hr', 'att', 18], ['hr', 'leave', 12], ['hr', 'trip', 9], ['hr', 'pay', 7], ['hr', 'site', 11], ['hr', 'doc', 8], ['pay', 'doc', 6], ['trip', 'pay', 4], ['att', 'leave', 5], ['site', 'att', 4], ['hr', 'stat', 6], ['cat', 'hr', 5], ['cat', 'pay', 4], ['s5', 'site', 3], ['camp', 'doc', 2], ['wp', 'camp', 2], ['sys', 'doc', 3]];
+  var cx = function (k) { return P[k][0] + 98; }, cy = function (k) { return P[k][1] + 66; };
+  h += '<svg class="e" width="1102" height="856">';
+  E.forEach(function (e) {
+    var a = e[0], b = e[1], x1 = cx(a), y1 = cy(a), x2 = cx(b), y2 = cy(b), sel = (a === 'pay' || b === 'pay');
+    var w = 1 + e[2] / 4;
+    h += '<path d="M' + x1 + ' ' + y1 + ' L' + x2 + ' ' + y2 + '" style="stroke:' + (sel ? 'var(--accent)' : 'var(--relation)') + ';stroke-width:' + w + ';fill:none;opacity:' + (sel ? 1 : .55) + '"/>';
+    var mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    h += '<rect class="elbg" x="' + (mx - 13) + '" y="' + (my - 9) + '" width="26" height="18" rx="9" style="' + (sel ? 'stroke:var(--accent)' : '') + '"/><text class="elab" x="' + mx + '" y="' + (my + 4) + '" text-anchor="middle" style="' + (sel ? 'fill:var(--accent-text)' : '') + '">' + e[2] + '</text>';
+  });
+  h += '</svg>';
+  MODS.forEach(function (m) {
+    var p = P[m[0]], sel = m[0] === 'pay', dim = !sel && ['hr', 'doc', 'trip', 'cat'].indexOf(m[0]) < 0;
+    h += '<div class="mc' + (sel ? ' sel' : '') + (dim ? ' dim' : '') + '" style="left:' + p[0] + 'px;top:' + p[1] + 'px"><div class="bar" style="background:' + COL[m[0]] + '"></div><div class="hd"><b>' + m[1] + '</b><span class="n">' + m[3] + '</span></div><div class="pre">' + m[2] + '</div><ul>' +
+      m[4].slice(0, 3).map(function (t) { return '<li' + (t[0] === '+' ? ' class="more"' : '') + '>' + t + '</li>'; }).join('') + (m[3] > 3 && m[4][m[4].length - 1][0] !== '+' ? '<li class="more">+ ' + (m[3] - 3) + ' tables</li>' : '') + '</ul>' +
+      (sel ? '<div class="act"><span>Open ⏎</span><span style="color:var(--ink-3)">·</span><span>Focus</span><span style="color:var(--ink-3)">·</span><span>Rename</span></div>' : '') + '</div>';
+  });
+  h += '<div class="cbar"><span class="pill acc">' + ic('layers', 15, 'var(--accent-text)') + '<b>13 modules</b> · 269 tables</span>' +
+    '<span class="pill"><span class="toggle"><span class="sw on"></span>Hide hub lines</span><span class="k">da_don_vi · 65</span></span>' +
+    '<span class="pill"><span class="toggle"><span class="sw"></span>Inferred only</span><span class="k">162</span></span>' +
+    '<span class="sp"></span><span class="pill">Double-click to open · ' + kbd(['⌘', 'K']) + ' jump</span></div>';
+  h += '<div class="hub" style="left:676px;top:640px;width:380px;flex-wrap:wrap;border-radius:12px">' + ic('hub', 15) + '<b>da_don_vi</b> referenced by 65 tables · shown as a tag on each column</div>';
+  h += '</main></div>';
+} else {
+  h += topBar('<button>' + ic('grid', 14) + 'Modules</button><button>' + ic('table', 14) + 'Tables</button><button class="on">' + ic('focus', 14) + 'Focus</button>');
+  h += '<div class="body">' + rail() + explorer('pay', 'da_thanh_toan') + '<main class="cv" style="flex:1">';
+  // focus graph: center da_thanh_toan; left = referenced by (incoming), right = references (outgoing)
+  function node(x, y, name, rows, opts) {
+    opts = opts || {};
+    var s = '<div class="tn' + (opts.center ? ' center' : '') + (opts.ghost ? ' ghost' : '') + '" style="left:' + x + 'px;top:' + y + 'px">';
+    s += '<div class="th"><span class="gb" style="background:' + (opts.col || COL.pay) + '"></span>' + ic('table', 13) + '<b>' + name + '</b><span class="cnt">' + (opts.n || rows.length) + '</span></div>';
+    rows.forEach(function (r) { s += '<div class="r ' + (r[2] || '') + (r[3] ? ' hl' : '') + '">' + (r[2] === 'k' ? ic('key', 11) : r[2] === 'f' ? ic('link', 11) : '<span></span>') + '<span>' + r[0] + '</span><span class="t">' + r[1] + '</span></div>'; });
+    if (opts.more) s += '<div class="more">' + opts.more + '</div>';
+    if (opts.badge) s += '<span class="x' + (opts.badgeGhost ? ' ghost' : '') + '">' + opts.badge + '</span>';
+    return s + '</div>';
+  }
+  h += '<span class="lane" style="left:24px">Referenced by · 4</span><span class="lane" style="left:276px">Selected</span><span class="lane" style="left:560px">References · 6</span>';
+  var edges = [];
+  h += '<svg class="e" width="1100" height="856" id="fe"></svg>';
+  h += node(270, 290, 'da_thanh_toan', [
+    ['id', 'INT(11)', 'k'], ['ma_loai_chi', 'INT(11)', 'f', 1], ['ma_loai_nhom_chi', 'INT(11)', 'f', 1], ['ma_nha_cung_cap', 'INT(11)', 'f', 1], ['ma_phap_nhan_cong_ty', 'INT(11)', 'f', 1],
+    ['ma_to_xuong', 'INT(11)', 'f', 1], ['ma_don_vi <span class="hubref">' + ic('hub', 9) + 'da_don_vi</span>', '', 'f'], ['so_tien', 'DECIMAL(15,2)'], ['trang_thai', 'TINYINT(4)']], { center: true, n: 23, more: '+ 14 columns' });
+  h += node(20, 100, 'da_thanh_toan_chi_tien', [['id', 'INT(11)', 'k'], ['ma_thanh_toan', 'INT(11)', 'f'], ['so_tien', 'DECIMAL(15,2)']], { n: 9 });
+  h += node(20, 250, 'da_thanh_toan_phe_duyet', [['id', 'INT(11)', 'k'], ['ma_thanh_toan', 'INT(11)', 'f'], ['nguoi_duyet', 'INT(11)']], { n: 8, badge: '+2' });
+  h += node(20, 400, 'da_thanh_toan_phe_duyet_chi', [['id', 'INT(11)', 'k'], ['ma_thanh_toan', 'INT(11)', 'f']], { n: 7 });
+  h += node(20, 525, 'da_hoa_don', [['id', 'INT(11)', 'k'], ['ma_thanh_toan', 'INT(11)', 'f'], ['so_hoa_don', 'VARCHAR(50)']], { n: 14, badge: '+1' });
+  h += node(560, 90, 'da_loai_chi', [['id', 'INT(11)', 'k'], ['ten_loai_chi', 'VARCHAR(255)']], { col: COL.cat, n: 4, badge: '+5', badgeGhost: true });
+  h += node(560, 195, 'da_loai_nhom_chi', [['id', 'INT(11)', 'k'], ['ten_nhom', 'VARCHAR(255)']], { col: COL.cat, n: 3 });
+  h += node(560, 300, 'da_nha_cung_cap', [['id', 'INT(11)', 'k'], ['ten_ncc', 'VARCHAR(255)']], { col: COL.pay, n: 11, badge: '+3', badgeGhost: true });
+  h += node(560, 405, 'da_phap_nhan_cong_ty', [['id', 'INT(11)', 'k'], ['ten_phap_nhan', 'VARCHAR(255)']], { col: COL.hr, n: 6, badge: '+5', badgeGhost: true });
+  h += node(560, 510, 'da_to_xuong', [['id', 'INT(11)', 'k'], ['ten_to_xuong', 'VARCHAR(255)'], ['ma_don_vi <span class="hubref">' + ic('hub', 9) + 'da_don_vi</span>', '', 'f']], { col: COL.hr, n: 8, badge: '+15', badgeGhost: true });
+  h += '<div class="cbar"><span class="pill acc">' + ic('focus', 15, 'var(--accent-text)') + 'Focus <b style="font-family:var(--font-mono)">da_thanh_toan</b></span>' +
+    '<span class="pill"><span class="ss-caption" style="letter-spacing:.04em">Depth</span><span class="seg" style="border:0;padding:0;background:transparent"><button class="on" style="height:22px">1</button><button style="height:22px">2</button><button style="height:22px">3</button></span></span>' +
+    '<span class="pill"><span class="toggle"><span class="sw on"></span>Hubs as tags</span></span>' +
+    '<span class="pill"><span class="toggle"><span class="sw"></span>Keys only</span></span>' +
+    '<span class="sp"></span><span class="pill">' + ic('route', 15) + 'Path</span></div>';
+  h += '<div class="tray"><div class="crumbs">' + ic('arrowl', 14, 'var(--ink-3)') + '<span>da_to_xuong</span>›<span class="cur">da_thanh_toan</span></div><span class="sp"></span>' +
+    '<div class="ws"><b>10 tables</b> in view<button class="ss-btn ss-btn--secondary">Add to canvas</button><button class="ss-btn ss-btn--primary">' + ic('bookmark', 14) + 'Save as view</button></div></div>';
+  h += '</main>';
+  // right panel
+  h += '<aside class="ins"><div class="ins-h"><h3>' + ic('table', 16, 'var(--accent-text)') + '<span style="font-family:var(--font-mono)">da_thanh_toan</span></h3><p>Module <b style="color:var(--ink-1)">Thanh toán & tạm ứng</b> · 23 columns</p></div>' +
+    '<div class="ins-s"><div class="kv"><div>Refs out<b>7</b></div><div>Refs in<b>4</b></div><div>2-hop<b>38</b></div></div></div>' +
+    '<div class="ins-s"><span class="ss-caption">Relationships</span>' +
+    [['ma_loai_chi → da_loai_chi', 1], ['ma_loai_nhom_chi → da_loai_nhom_chi', 1], ['ma_nha_cung_cap → da_nha_cung_cap', 1], ['ma_phap_nhan_cong_ty → …', 1], ['ma_to_xuong → da_to_xuong', 1], ['ma_don_vi → da_don_vi (hub)', 0], ['da_hoa_don.ma_thanh_toan', 1]].map(function (r) { return '<div class="rel">' + ic('link', 12) + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + r[0] + '</span>' + (r[1] ? '<span class="on">on canvas</span>' : '<span class="add">+ Show</span>') + '</div>'; }).join('') + '</div>' +
+    '<div class="ins-s"><span class="ss-caption">Path to another table</span><div class="ss-input-wrap">' + ic('route', 14) + '<input class="ss-input ss-input--icon" style="height:30px" value="da_nhan_vien"></div>' +
+    '<div class="path"><span>da_thanh_toan</span><i>→</i><span>da_to_xuong</span><i>←</i><span>da_nhan_vien</span></div><div style="font-size:11.5px;color:var(--ink-3)">2 joins · via <span style="font-family:var(--font-mono)">ma_to_xuong</span></div>' +
+    '<button class="ss-btn ss-btn--secondary ss-btn--sm" style="align-self:flex-start">Show path on canvas</button></div></aside>';
+  h += '</div>';
+}
+h += '</div>';
+document.getElementById('app').innerHTML = h;
+
+if (mode === 'focus') {
+  // draw edges from DOM positions
+  var svg = document.getElementById('fe'), cv = svg.parentNode, R = cv.getBoundingClientRect();
+  function box(name) { var el = [].slice.call(cv.querySelectorAll('.tn')).find(function (n) { return n.querySelector('b').textContent === name; }); var b = el.getBoundingClientRect(); return { l: b.left - R.left, r: b.right - R.left, t: b.top - R.top }; }
+  function rowY(name, i) { return box(name).t + 30 + i * 22 + 11; }
+  var c = 'da_thanh_toan', out = '';
+  [['da_thanh_toan_chi_tien', 1], ['da_thanh_toan_phe_duyet', 1], ['da_thanh_toan_phe_duyet_chi', 1], ['da_hoa_don', 1]].forEach(function (e) {
+    var a = box(e[0]), b = box(c), x1 = a.r, y1 = rowY(e[0], e[1]), x2 = b.l, y2 = rowY(c, 0);
+    out += '<path d="M' + x1 + ' ' + y1 + ' C' + (x1 + 70) + ' ' + y1 + ' ' + (x2 - 70) + ' ' + y2 + ' ' + x2 + ' ' + y2 + '" style="fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 4"/>';
+  });
+  [['da_loai_chi', 1], ['da_loai_nhom_chi', 2], ['da_nha_cung_cap', 3], ['da_phap_nhan_cong_ty', 4], ['da_to_xuong', 5]].forEach(function (e) {
+    var a = box(c), b = box(e[0]), x1 = a.r, y1 = rowY(c, e[1]), x2 = b.l, y2 = rowY(e[0], 0);
+    out += '<path d="M' + x1 + ' ' + y1 + ' C' + (x1 + 70) + ' ' + y1 + ' ' + (x2 - 70) + ' ' + y2 + ' ' + x2 + ' ' + y2 + '" style="fill:none;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:5 4"/>';
+  });
+  svg.innerHTML = out;
+}
+</script>
+</body>
+</html>

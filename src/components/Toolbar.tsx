@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import type { DiagramView } from '../core/diagramView';
 import { t } from '../core/i18n';
 import { LARGE_TABLE, stepZoom, ZOOM_STEP } from '../core/layout';
 import type { WorkspaceMode } from '../core/routes';
@@ -13,6 +14,7 @@ import { IconButton } from './IconButton';
 import { Input } from './Input';
 import { Kbd } from './Kbd';
 import { ModeSwitch } from './ModeSwitch';
+import { SegmentedControl } from './SegmentedControl';
 
 export type SaveState = 'saved' | 'dirty' | 'saving';
 
@@ -147,6 +149,9 @@ export interface ToolbarProps {
   searchRef?: Ref<HTMLInputElement>;
   /** Makes "Schemas" in the breadcrumb a link to the schema list. */
   onSchemas?: () => void;
+  /** Modules, Tables or Focus, shown beside the canvas tools while the diagram is open. */
+  diagramView?: DiagramView;
+  onDiagramView?: (view: DiagramView) => void;
   // History, Share and Export stay disabled without a handler.
   onHistory?: () => void;
   onShare?: () => void;
@@ -183,6 +188,8 @@ export function Toolbar({
   onSearchSubmit,
   searchRef,
   onSchemas,
+  diagramView,
+  onDiagramView,
   onHistory,
   onShare,
   onExport,
@@ -228,7 +235,22 @@ export function Toolbar({
     </div>
   );
 
-  const canvasTools = mode === 'diagram' && (
+  const diagramSwitch = mode === 'diagram' && onDiagramView && (
+    <div className="ss-diagram-switch" role="group" aria-label={t('diagram.view')}>
+      <SegmentedControl
+        className="ss-diagram-view"
+        value={diagramView ?? 'tables'}
+        onChange={(value) => onDiagramView(value as DiagramView)}
+        options={[
+          { value: 'modules', label: t('diagram.modules'), icon: 'grid' },
+          { value: 'tables', label: t('diagram.tables'), icon: 'table' },
+          { value: 'focus', label: t('diagram.focus'), icon: 'focus' },
+        ]}
+      />
+    </div>
+  );
+
+  const canvasTools = mode === 'diagram' && diagramView !== 'modules' && diagramView !== 'focus' && (
     <div className="ss-tb-tools" role="group" aria-label={t('toolbar.canvasGroup')}>
       <IconButton icon="zoom-out" label={t('toolbar.zoomOut')} onClick={() => onZoom?.(stepZoom(zoom, -ZOOM_STEP))} />
       <button type="button" className="ss-tb-zoom" title={t('toolbar.zoomReset')} onClick={() => onZoom?.(1)}>
@@ -288,6 +310,7 @@ export function Toolbar({
         </div>
         <div className="ss-tb-zone ss-tb-zone--center">{showModes && <ModeSwitch value={mode} onChange={onMode} dataDisabled={dataDisabled} large />}</div>
         <div className="ss-tb-zone ss-tb-zone--end">
+          {diagramSwitch}
           {canvasTools}
           {searchBox}
           {history}
@@ -307,11 +330,12 @@ export function Toolbar({
       {save}
       {showModes && <ModeSwitch value={mode} onChange={onMode} dataDisabled={dataDisabled} />}
       <span className="ss-spacer" />
+      {diagramSwitch}
       {canvasTools}
       {searchBox}
       {history}
       {share}
-      <Button variant="primary" icon="download" disabled={!onExport} onClick={onExport}>
+        <Button variant="primary" icon="download" disabled={!onExport} onClick={onExport}>
         {t('common.export')}
       </Button>
     </header>

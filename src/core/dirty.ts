@@ -18,9 +18,15 @@ function regrouped(current: SchemaSnapshot, saved: SchemaSnapshot, name: string)
   return now?.name !== before?.name || now?.color !== before?.color;
 }
 
-/** Whether the two snapshots have their tables, positions and groups in common, as they do when nothing was edited. */
+function sameShown(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return !a && !b;
+  return a.length === b.length && a.every((name, i) => name === b[i]);
+}
+
+/** Whether the two snapshots have their tables, positions, groups and shown tables in common, as they do when nothing was edited. */
 function identical(current: SchemaSnapshot, saved: SchemaSnapshot): boolean {
-  return current.tables === saved.tables && current.positions === saved.positions && groupsOf(current) === groupsOf(saved);
+  return current.tables === saved.tables && current.positions === saved.positions && groupsOf(current) === groupsOf(saved) && current.shown === saved.shown;
 }
 
 /**
@@ -42,6 +48,7 @@ export function isDirty(current: SchemaSnapshot, saved: SchemaSnapshot): boolean
     current.tables.length !== saved.tables.length ||
     current.tables.some((t, i) => saved.tables[i] !== t) ||
     current.tables.some((t) => moved(current, saved, t.name)) ||
-    !sameGroups(groupsOf(current), groupsOf(saved))
+    !sameGroups(groupsOf(current), groupsOf(saved)) ||
+    !sameShown(current.shown, saved.shown)
   );
 }

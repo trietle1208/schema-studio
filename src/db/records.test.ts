@@ -131,12 +131,13 @@ describe('database version 2', () => {
 
     await db.open();
 
-    expect(db.verno).toBe(7);
+    expect(db.verno).toBe(8);
     expect(await db.schemas.toArray()).toEqual([expect.objectContaining({ id, name: 'old' })]);
     expect((await db.versions.toArray())[0].snapshot).toEqual(snapshot);
     expect(await db.records.count()).toBe(0);
     expect(await db.queries.count()).toBe(0);
     expect(await db.connections.count()).toBe(0);
+    expect(await db.views.count()).toBe(0);
     expect(await openRecords(id, snapshot.tables, 'users')).toEqual([]);
     expect(await recordCounts(id)).toMatchObject({ users: 0 });
   });
