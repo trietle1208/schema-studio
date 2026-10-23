@@ -275,6 +275,7 @@ export const vi: Dictionary = {
   'toolbar.historyGroup': 'Hoàn tác, làm lại và lịch sử',
   'toolbar.canvasGroup': 'Công cụ sơ đồ',
   'toolbar.share': 'Chia sẻ',
+  'toolbar.more': 'Thêm công cụ',
   'crumbs.back': 'Về sơ đồ',
 
   'empty.title': 'Các schema cơ sở dữ liệu của bạn sẽ hiện ở đây.',

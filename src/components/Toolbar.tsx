@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { splitShortcut, type ToolbarLevel } from '../core/toolbarFit';
 import type { DiagramView } from '../core/diagramView';
 import { t } from '../core/i18n';
 import { LARGE_TABLE, stepZoom, ZOOM_STEP } from '../core/layout';
@@ -7,7 +8,7 @@ import { Badge } from './Badge';
 import type { ColumnsChoice } from '../core/edit';
 import { Button } from './Button';
 import { ButtonGroup } from './ButtonGroup';
-import { ContextMenu } from './ContextMenu';
+import { ContextMenu, type MenuItem } from './ContextMenu';
 import { cx } from './cx';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
@@ -15,6 +16,8 @@ import { Input } from './Input';
 import { Kbd } from './Kbd';
 import { ModeSwitch } from './ModeSwitch';
 import { SegmentedControl } from './SegmentedControl';
+import { usePopover } from './usePopover';
+import { useToolbarFit } from './useToolbarFit';
 
 export type SaveState = 'saved' | 'dirty' | 'saving';
 
@@ -115,6 +118,27 @@ function ColumnsMenu({ onChoose, selected }: { onChoose: (choice: ColumnsChoice)
   );
 }
 
+/** `Zoom out (⌘−)` as a menu item: the words, with the keys on the right. */
+function item(icon: MenuItem['icon'], text: string, onSelect?: () => void, note?: string): MenuItem {
+  const { label, shortcut } = splitShortcut(text);
+  return { icon, label: note ? `${label} · ${note}` : label, ...(shortcut ? { shortcut } : {}), onSelect };
+}
+
+/** The ⋯ button of a bar that is too narrow for all its tools: what was put away is in its menu. */
+function MoreMenu({ items }: { items: (MenuItem | '-')[] }) {
+  const [open, setOpen, box] = usePopover();
+  return (
+    <div ref={box} className="ss-tb-menu">
+      <IconButton icon="more" label={t('toolbar.more')} aria-expanded={open} onClick={() => setOpen((o) => !o)} />
+      {open && (
+        <div className="ss-tb-pop">
+          <ContextMenu label={t('toolbar.more')} onClose={() => setOpen(false)} items={items} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface ToolbarProps {
   schema?: string;
   engine?: string;
@@ -197,6 +221,14 @@ export function Toolbar({
 }: ToolbarProps) {
   const showModes = !!onMode;
   const centered = chrome === 'centered';
+  const bar = useRef<HTMLElement>(null);
+  const start = useRef<HTMLDivElement>(null);
+  // What the bar holds decides how much room it needs: the fit is measured again when it changes.
+  const level: ToolbarLevel = useToolbarFit(
+    bar,
+    start,
+    [mode, diagramView, saveState, schema, engine, version, t('common.schemas'), !!onArrange, !!onShowColumns].join('|'),
+  );
 
   const identity = (
     <div className="ss-tb-identity">
@@ -209,7 +241,7 @@ export function Toolbar({
       </div>
       {(engine || version) && (
         <span className="ss-tb-badges">
-          {engine && (
+          {engine && level < 4 && (
             <Badge tone="outline" title={t('toolbar.engine')}>
               {engine}
             </Badge>
@@ -228,7 +260,7 @@ export function Toolbar({
     <div className={cx('ss-tb-save', saveState === 'dirty' && 'is-dirty')}>
       <SaveStatus state={saveState} />
       {saveState === 'dirty' && (
-        <Button size="sm" kbd={['⌘', 'S']} onClick={onSave}>
+        <Button size="sm" kbd={level >= 3 ? undefined : ['⌘', 'S']} onClick={onSave}>
           {t('toolbar.save')}
         </Button>
       )}
@@ -250,7 +282,41 @@ export function Toolbar({
     </div>
   );
 
-  const canvasTools = mode === 'diagram' && diagramView !== 'modules' && diagramView !== 'focus' && (
+  const hasCanvasTools = mode === 'diagram' && diagramView !== 'modules' && diagramView !== 'focus';
+  // A narrow bar puts the zoom tools, and then undo, redo, history and share, in the ⋯ menu.
+  const toolsAway = level >= 1 && hasCanvasTools;
+  const historyAway = level >= 3;
+  const moreItems: (MenuItem | '-')[] = [];
+  if (toolsAway) {
+    moreItems.push(
+      item('zoom-out', t('toolbar.zoomOut'), () => onZoom?.(stepZoom(zoom, -ZOOM_STEP))),
+      item('zoom-in', t('toolbar.zoomIn'), () => onZoom?.(stepZoom(zoom, ZOOM_STEP))),
+      item('refresh', t('toolbar.zoomReset'), () => onZoom?.(1), `${Math.round(zoom * 100)}%`),
+      item('fit', t('toolbar.fit'), onFit),
+    );
+    if (onArrange) moreItems.push(item('sparkle', `${arrangeSelected ? t('action.arrangeSelected') : t('action.arrange')} (⇧A)`, onArrange));
+    if (onShowColumns) {
+      moreItems.push(
+        '-',
+        item('columns', t('columns.all'), () => onShowColumns('all')),
+        item('key', t('columns.keys'), () => onShowColumns('keys')),
+        item('minus', t('columns.none'), () => onShowColumns('none')),
+      );
+      if (!columnsSelected) moreItems.push(item('filter', t('columns.large'), () => onShowColumns('large')));
+    }
+  }
+  if (historyAway) {
+    if (moreItems.length) moreItems.push('-');
+    moreItems.push(
+      item('undo', t('toolbar.undo'), canUndo === false ? undefined : onUndo),
+      item('redo', t('toolbar.redo'), canRedo === false ? undefined : onRedo),
+      ...(onHistory ? [item('history', t('toolbar.history'), onHistory)] : []),
+      ...(onShare ? [item('share', t('toolbar.share'), onShare)] : []),
+    );
+  }
+  const more = moreItems.length > 0 && <MoreMenu items={moreItems} />;
+
+  const canvasTools = hasCanvasTools && !toolsAway && (
     <div className="ss-tb-tools" role="group" aria-label={t('toolbar.canvasGroup')}>
       <IconButton icon="zoom-out" label={t('toolbar.zoomOut')} onClick={() => onZoom?.(stepZoom(zoom, -ZOOM_STEP))} />
       <button type="button" className="ss-tb-zoom" title={t('toolbar.zoomReset')} onClick={() => onZoom?.(1)}>
@@ -266,12 +332,12 @@ export function Toolbar({
   );
 
   const searchBox = (
-    <div className={cx('ss-tb-search', centered && 'ss-tb-search--wide')}>
+    <div className={cx('ss-tb-search', centered && 'ss-tb-search--wide', level >= 2 && 'is-narrow')}>
       <Input
         icon="search"
         placeholder={t('toolbar.search')}
         size="sm"
-        suffix={<Kbd keys={['⌘', 'K']} />}
+        suffix={level >= 2 ? undefined : <Kbd keys={['⌘', 'K']} />}
         value={search ?? ''}
         onChange={onSearch ? (e) => onSearch(e.target.value) : undefined}
         onKeyDown={(e) => {
@@ -290,7 +356,7 @@ export function Toolbar({
     </div>
   );
 
-  const history = (
+  const history = !historyAway && (
     <ButtonGroup label={t('toolbar.historyGroup')}>
       <IconButton icon="undo" label={t('toolbar.undo')} disabled={canUndo === false} onClick={onUndo} />
       <IconButton icon="redo" label={t('toolbar.redo')} disabled={canRedo === false} onClick={onRedo} />
@@ -298,12 +364,22 @@ export function Toolbar({
     </ButtonGroup>
   );
 
-  const share = <IconButton icon="share" label={t('toolbar.share')} disabled={!onShare} onClick={onShare} />;
+  const share = !historyAway && <IconButton icon="share" label={t('toolbar.share')} disabled={!onShare} onClick={onShare} />;
+
+  // Export is the one primary action: it keeps its place and becomes an icon when the bar is narrow.
+  const exportButton =
+    level >= 2 ? (
+      <IconButton variant="primary" icon="download" label={t('common.exportSchema')} disabled={!onExport} onClick={onExport} />
+    ) : (
+      <Button variant="primary" icon="download" disabled={!onExport} onClick={onExport}>
+        {t('common.exportSchema')}
+      </Button>
+    );
 
   if (centered) {
     return (
-      <header className="ss-toolbar ss-toolbar--centered">
-        <div className="ss-tb-zone ss-tb-zone--start">
+      <header ref={bar} className="ss-toolbar ss-toolbar--centered" data-fit={level}>
+        <div ref={start} className="ss-tb-zone ss-tb-zone--start">
           {identity}
           <span className="ss-tb-sep" />
           {save}
@@ -315,16 +391,15 @@ export function Toolbar({
           {searchBox}
           {history}
           {share}
-          <Button variant="primary" icon="download" disabled={!onExport} onClick={onExport}>
-            {t('common.exportSchema')}
-          </Button>
+          {more}
+          {exportButton}
         </div>
       </header>
     );
   }
 
   return (
-    <header className="ss-toolbar">
+    <header ref={bar} className="ss-toolbar">
       {identity}
       <span className="ss-tb-sep" />
       {save}

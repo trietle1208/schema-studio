@@ -283,6 +283,7 @@ export const en = {
   'toolbar.historyGroup': 'Undo, redo and history',
   'toolbar.canvasGroup': 'Diagram tools',
   'toolbar.share': 'Share',
+  'toolbar.more': 'More tools',
   'crumbs.back': 'Back to diagram',
 
   // Empty state and the drop zone.

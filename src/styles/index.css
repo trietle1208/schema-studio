@@ -1191,6 +1191,7 @@ body {
 
 .ss-toolbar--centered .ss-tb-zone--start {
   flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -1213,8 +1214,15 @@ body {
   flex: 0 1 auto;
 }
 
+/*
+ * The breadcrumb is the one part of the start of the bar that gives way: the schema name is cut by
+ * an ellipsis, and "Schemas ›", the badges and the save status keep their width. The crumb clips
+ * what is left over, so nothing of it is ever painted over a neighbour. `useToolbarFit` takes
+ * tools out of the bar before the name is narrower than 80px.
+ */
 .ss-tb-crumb {
   min-width: 0;
+  overflow: hidden;
   gap: var(--space-1);
   font: 500 12px/16px var(--font-sans);
 }
@@ -1232,6 +1240,18 @@ body {
 .ss-tb-crumb > .ss-tb-link:not(.ss-tb-name):hover {
   color: var(--ink-1);
   background: var(--bg-4);
+}
+
+.ss-tb-crumb > * {
+  flex: none;
+}
+
+.ss-tb-crumb > .ss-tb-name {
+  flex: 0 1 auto;
+}
+
+.ss-tb-sep {
+  flex: none;
 }
 
 .ss-tb-name {
@@ -1347,6 +1367,7 @@ body {
 }
 
 .ss-tb-zone--end > .ss-tb-tools,
+.ss-tb-zone--end > .ss-tb-menu,
 .ss-tb-zone--end > .ss-btn-group,
 .ss-tb-zone--end > .ss-btn {
   flex: none;
@@ -1357,6 +1378,14 @@ body {
   flex: 1 1 180px;
   min-width: 180px;
   max-width: 220px;
+}
+
+/* A narrow bar gives the search box less, and takes the keys off its end. */
+.ss-tb-search.is-narrow,
+.ss-toolbar--centered .ss-tb-search--wide.is-narrow {
+  min-width: 120px;
+  max-width: 160px;
+  flex: 0 1 140px;
 }
 
 /* Stays 180–240px. It does not grow into the gap between the two switches. */
