@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { atad5sTables } from '../core/fixtures/atad5sShape';
 import { ecommerceSnapshot, inferredTables, tableNamed } from '../core/fixtures/testing';
 import { convertTables } from '../core/generate/convert';
 import type { Table } from '../core/model';
+import { suggestModules } from '../core/modules';
+import { visibleNames } from '../core/explorer';
 import { countInferred, countRelations, removeInferred } from '../core/relations';
 import { db } from '../db/db';
 import { createSchema, listSchemas, listVersions } from '../db/schemas';
@@ -12,6 +15,7 @@ import { useUiStore } from '../store/ui';
 import { startRouting } from './navigation';
 import {
   arrangeTables,
+  chooseDiagramView,
   copyColumnName,
   copyCreateTable,
   deleteTable,
@@ -19,8 +23,12 @@ import {
   focusRelatedTables,
   groupTables,
   groupTablesAsNew,
+  currentShown,
+  focusBack,
   inferRelationships,
+  lookAt,
   newTable,
+  openModule,
   openColumnInDiagram,
   removeInferredRelationships,
   requestAddForeignKey,
@@ -30,6 +38,7 @@ import {
   saveSchema,
   searchFor,
   showAllTables,
+  showTables,
 } from './workspaceActions';
 
 const schema = () => useSchemaStore.getState();
@@ -603,5 +612,84 @@ describe('groups of tables', () => {
     await startRouting(memoryAddress('#/schemas/ecommerce'));
     expect(schema().groups).toEqual([{ name: 'sales', color: 'violet', tables: ['orders', 'order_items'] }]);
     expect(selectDirty(schema())).toBe(false);
+  });
+});
+
+describe('looking at a large schema is not editing it', () => {
+  const modules = () => suggestModules(schema().tables);
+  /** The module with the most tables: the one that is not on the canvas to begin with. */
+  const biggest = () => modules().reduce((best, m) => (m.tables.length > best.tables.length ? m : best));
+
+  beforeEach(() => {
+    schema().load({ name: 'atad5s', engine: 'PostgreSQL', tables: atad5sTables(), positions: {} });
+    useUiStore.setState({ lookShown: null, lookShownFor: null, diagramView: null, diagramFor: null, focusTrail: [], focusTrailFor: null });
+  });
+
+  it('opens a module and goes back to Modules without marking the schema as changed', () => {
+    const before = schema().shown;
+    const module = modules().find((m) => m.tables.length > 4 && m !== biggest())!;
+    expect(selectDirty(schema())).toBe(false);
+
+    openModule(module.tables);
+    expect(ui().diagramView).toBe('tables');
+    expect(currentShown()).toEqual(module.tables);
+    expect(selectDirty(schema())).toBe(false);
+    expect(schema().shown).toBe(before);
+    expect(useSchemaStore.temporal.getState().pastStates).toHaveLength(0);
+
+    chooseDiagramView('modules', null);
+    expect(ui().diagramView).toBe('modules');
+    expect(selectDirty(schema())).toBe(false);
+    expect(schema().shown).toBe(before);
+  });
+
+  it('walks Focus, its depth and its breadcrumb without marking the schema as changed', () => {
+    const table = schema().tables.find((t) => t.name === 'da_chung_tu')!.name;
+    const other = schema().tables.find((t) => t.name === 'da_loai_chung_tu')!.name;
+    focusRelatedTables(table);
+    ui().setFocusDepth(2);
+    focusRelatedTables(other);
+    focusBack();
+    ui().setFocusDepth(3);
+    expect(ui().diagramView).toBe('focus');
+    expect(selectDirty(schema())).toBe(false);
+    expect(schema().shown).toBeUndefined();
+    expect(useSchemaStore.temporal.getState().pastStates).toHaveLength(0);
+  });
+
+  it('switches to a saved view or a path without marking the schema as changed', () => {
+    lookAt(['da_chung_tu', 'da_don_vi']);
+    expect(currentShown()).toEqual(['da_chung_tu', 'da_don_vi']);
+    expect(visibleNames(schema().tables, modules(), currentShown())).toEqual(['da_chung_tu', 'da_don_vi']);
+    expect(selectDirty(schema())).toBe(false);
+  });
+
+  it('writes the schema only when the Explorer or Add to canvas shows tables, with undo', () => {
+    const module = biggest();
+    openModule(module.tables.slice(0, 5));
+    showTables([...module.tables.slice(0, 5), 'da_don_vi']);
+    // What was looked at became what the schema keeps, as one edit.
+    expect(ui().lookShown).toBeNull();
+    expect(schema().shown).toEqual(visibleNames(schema().tables, modules(), [...module.tables.slice(0, 5), 'da_don_vi']));
+    expect(selectDirty(schema())).toBe(true);
+    expect(currentShown()).toEqual(schema().shown);
+
+    undo();
+    expect(schema().shown).toBeUndefined();
+    expect(selectDirty(schema())).toBe(false);
+  });
+
+  it('keeps a table made while a module is open on the canvas it was made on', () => {
+    const module = modules().find((m) => m.tables.length > 4 && m !== biggest())!;
+    openModule(module.tables);
+    newTable({ x: 40, y: 40 });
+    const made = schema().selected!;
+    expect(currentShown()).toEqual([...module.tables, made]);
+  });
+
+  it('forgets what was looked at for another schema', () => {
+    lookAt(['da_chung_tu']);
+    schema().load({ name: 'other', engine: 'PostgreSQL', tables: atad5sTables(), positions: {} });
+    expect(currentShown()).toBeUndefined();
   });
 });

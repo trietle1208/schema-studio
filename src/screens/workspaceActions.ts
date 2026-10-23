@@ -3,6 +3,7 @@ import { countLines } from '../core/files';
 import { EXPORT_ENGINES, generatorFor, tableScript } from '../core/generate';
 import { convertTables } from '../core/generate/convert';
 import type { ColumnsChoice } from '../core/edit';
+import type { DiagramView } from '../core/diagramView';
 import { visibleNames } from '../core/explorer';
 import { assignGroup, newGroupName } from '../core/groups';
 import { suggestModules } from '../core/modules';
@@ -15,6 +16,34 @@ import { versionLabel } from '../core/versions';
 import { undo, useSchemaStore, type SaveResult } from '../store/schema';
 import { useUiStore } from '../store/ui';
 import { go } from './navigation';
+
+/**
+ * The tables the canvas of the open schema shows: what is being looked at, when something is, and
+ * otherwise what the schema keeps (see `lookAt`). Undefined is the default of the schema.
+ */
+export function currentShown(): readonly string[] | undefined {
+  const { name, shown } = useSchemaStore.getState();
+  const ui = useUiStore.getState();
+  return ui.lookShownFor === name && ui.lookShown ? ui.lookShown : shown;
+}
+
+/**
+ * Shows `names` on the canvas for now: a module that was opened, a saved view, a path. Only the
+ * ui changes, so the schema is no more edited than it is by panning. It is not undone, not saved
+ * and not a change; `showTables` is what writes the tables of the schema.
+ */
+export function lookAt(names: readonly string[]) {
+  useUiStore.getState().setLookShown(names, useSchemaStore.getState().name);
+}
+
+/**
+ * The Explorer's checkbox, eye, Show and Hide, "Add to canvas" and a table asked for by name: the
+ * canvas shows `names` and the schema keeps them, as an edit with its undo step and its mark.
+ */
+export function showTables(names: readonly string[]) {
+  useUiStore.getState().setLookShown(null, null);
+  useSchemaStore.getState().setShown(names);
+}
 
 /**
  * ⌘S and the Save button: stores the working copy as a new version and says in a toast how it went.
@@ -61,7 +90,13 @@ export function newTable(position: Position) {
   ui.setSearch('');
   showAllTables();
   // The inspector has to show the new table before it can be told to rename it.
-  flushSync(() => useSchemaStore.getState().addTable(position));
+  const looking = ui.lookShown !== null && ui.lookShownFor === useSchemaStore.getState().name ? ui.lookShown : null;
+  let added = '';
+  flushSync(() => {
+    added = useSchemaStore.getState().addTable(position);
+  });
+  // A table that is made while a module is open is on the canvas it was made on.
+  if (looking) ui.setLookShown([...looking, added], useSchemaStore.getState().name);
   ui.requestRename();
 }
 
@@ -186,6 +221,36 @@ export function focusRelatedTables(name: string) {
   }
 }
 
+/**
+ * The Modules | Tables | Focus control of the toolbar, and what "back to Modules" does. Choosing is
+ * looking: nothing here edits the schema. Focus opens on `selected` when a table is.
+ */
+export function chooseDiagramView(next: DiagramView, selected: string | null) {
+  const ui = useUiStore.getState();
+  const name = useSchemaStore.getState().name;
+  if (next === 'focus') {
+    ui.setDiagramView('focus', name);
+    if (selected) focusRelatedTables(selected);
+    return;
+  }
+  // Show all tables also leaves Focus, so the view is set after it.
+  showAllTables();
+  ui.setDiagramView(next, name);
+  if (next === 'tables') ui.setFitPending(true);
+}
+
+/**
+ * Opens a module on the Tables view: the canvas shows its tables and fits them. It only looks at
+ * them (see `lookAt`); the schema keeps what it showed and stays as clean as it was.
+ */
+export function openModule(names: readonly string[]) {
+  const ui = useUiStore.getState();
+  showAllTables();
+  lookAt(names);
+  ui.setDiagramView('tables', useSchemaStore.getState().name);
+  ui.setFitPending(true);
+}
+
 /** The previous table of the Focus breadcrumb. */
 export function focusBack() {
   const ui = useUiStore.getState();
@@ -271,7 +336,7 @@ export function arrangeTables() {
   const ui = useUiStore.getState();
   const schema = useSchemaStore.getState();
   if (!schema.tables.length) return;
-  const visible = visibleNames(schema.tables, suggestModules(schema.tables), schema.shown);
+  const visible = visibleNames(schema.tables, suggestModules(schema.tables), currentShown());
   const visibleSet = new Set(visible);
   const multi = schema.selection.length > 1;
   const picked = multi ? schema.selection.filter((name) => visibleSet.has(name)) : visible;

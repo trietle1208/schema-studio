@@ -67,8 +67,11 @@ import {
   groupTables,
   groupTablesAsNew,
   inferRelationships,
+  chooseDiagramView,
+  lookAt,
   newTable,
   openMode,
+  openModule,
   removeInferredRelationships,
   requestAddForeignKey,
   requestDeleteTable,
@@ -78,6 +81,7 @@ import {
   searchFor,
   showAllTables,
   showColumns,
+  showTables,
 } from './workspaceActions';
 
 const NO_HUBS: ReadonlySet<string> = new Set();
@@ -92,8 +96,9 @@ export function Workspace() {
   const tables = useSchemaStore((s) => s.tables);
   const positions = useSchemaStore((s) => s.positions);
   const groups = useSchemaStore((s) => s.groups);
-  const shown = useSchemaStore((s) => s.shown);
-  const setShown = useSchemaStore((s) => s.setShown);
+  const savedShown = useSchemaStore((s) => s.shown);
+  const lookShown = useUiStore((s) => s.lookShown);
+  const lookShownFor = useUiStore((s) => s.lookShownFor);
   const editGroups = useSchemaStore((s) => s.editGroups);
   const selected = useSchemaStore((s) => s.selected);
   const selection = useSchemaStore((s) => s.selection);
@@ -176,6 +181,8 @@ export function Workspace() {
     setFitPending(false);
   }, [fitPending, setFitPending]);
 
+  // What is being looked at (a module that was opened) stands in for what the schema keeps.
+  const shown = lookShownFor === name && lookShown ? lookShown : savedShown;
   const modules = useMemo(() => suggestModules(tables), [tables]);
   const onCanvas = useMemo(() => {
     if (focused !== null) return relatedTables(tables, focused);
@@ -236,24 +243,7 @@ export function Workspace() {
   const focusDrawn = useMemo(() => new Set(focusModel?.nodes.map((node) => node.table) ?? []), [focusModel]);
   const moduleCount = useMemo(() => moduleCards(tables, modules).length, [tables, modules]);
 
-  const chooseView = (next: DiagramView) => {
-    if (next === 'focus') {
-      setDiagramView('focus', name);
-      if (selected) focusRelatedTables(selected);
-      return;
-    }
-    // Show all tables also leaves Focus, so the view is set after it.
-    showAllTables();
-    setDiagramView(next, name);
-    if (next === 'tables') setFitPending(true);
-  };
-
-  const openModule = (names: readonly string[]) => {
-    showAllTables();
-    setShown(names);
-    setDiagramView('tables', name);
-    setFitPending(true);
-  };
+  const chooseView = (next: DiagramView) => chooseDiagramView(next, selected);
 
   const renameModule = (members: readonly string[], from: string, to: string, color: GroupColor) => {
     const problem = groupNameProblem(groups, to, from);
@@ -283,7 +273,7 @@ export function Workspace() {
   const addToCanvas = (names: readonly string[]) => {
     const have = new Set(visibleNames(tables, modules, shown));
     const adding = names.filter((item) => !have.has(item));
-    setShown([...have, ...names]);
+    showTables([...have, ...names]);
     showToast({
       title: adding.length ? t('focus.added', { count: adding.length }) : t('explorer.already', { count: names.length }),
     });
@@ -297,7 +287,7 @@ export function Workspace() {
 
   const openSaved = (view: { id: number; tables: readonly string[] }) => {
     showAllTables();
-    setShown(view.tables);
+    lookAt(view.tables);
     setActiveView(view.id, schemaId);
     setDiagramView('tables', name);
     setPlaced(null);
@@ -515,7 +505,7 @@ export function Workspace() {
   });
 
   const showPath = (path: SchemaPath) => {
-    setShown(path.tables);
+    lookAt(path.tables);
     showAllTables();
     const end = path.tables[path.tables.length - 1];
     if (end) useSchemaStore.getState().select(end);
@@ -531,7 +521,7 @@ export function Workspace() {
     }
     if (!showing.has(tableName) || diagramView !== 'tables') {
       pendingLocate.current = tableName;
-      if (!showing.has(tableName)) setShown([...showing, tableName]);
+      if (!showing.has(tableName)) showTables([...showing, tableName]);
       return;
     }
     canvas.current?.locate(tableName);
@@ -605,7 +595,7 @@ export function Workspace() {
           width={explorerWidth}
           pane={diagramRail}
           onShown={(names) => {
-            setShown(names);
+            showTables(names);
             const ui = useUiStore.getState();
             const view = savedViews.find((item) => item.id === ui.activeViewId && ui.activeViewSchema === schemaId);
             if (view && !viewIsShowing(tables, view.tables, names)) setActiveView(null, null);
