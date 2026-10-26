@@ -177,6 +177,9 @@ export interface ERCanvasProps {
   stubColor?: (module: string) => GroupColor;
   /** "Show" on a stub: draw that table. */
   onShowStub?: (name: string) => void;
+  /** The hint under the stubs. Off once it has been shown; a click dismisses it. */
+  stubNote?: boolean;
+  onDismissStubNote?: () => void;
   /** The filter pill: how many drawn tables hold the query. Null when the filter is empty. */
   highlight?: { query: string; count: string } | null;
   initialMenu?: CanvasMenu;
@@ -466,6 +469,8 @@ export function ERCanvas({
   stubLinks: links = [],
   stubColor,
   onShowStub,
+  stubNote,
+  onDismissStubNote,
   highlight,
   initialMenu,
   readOnly,
@@ -1151,38 +1156,40 @@ export function ERCanvas({
           })}
         </div>
       )}
-      {stubs.length > 0 && (
-        <div className="ss-ex-stubnote" onPointerDown={(e) => e.stopPropagation()}>
-          <Icon name="folder" size={14} />
-          {t('explorer.stubNote')}
-        </div>
-      )}
       {showLegend !== false && (
-        <div className="ss-legend">
-          <span>
-            <Icon name="key" size={12} style={{ color: 'var(--pk)' }} />
-            {t('legend.primaryKey')}
-          </span>
-          <span>
-            <Icon name="link" size={12} style={{ color: 'var(--fk)' }} />
-            {t('legend.foreignKey')}
-          </span>
-          {edges.some((e) => e.inferred) && (
+        <div className="ss-canvas-notes">
+          <div className="ss-legend">
             <span>
-              <svg className="ss-legend-edge" width={16} height={8} aria-hidden="true">
-                <path className="ss-edge" d="M0 4 H16" />
-              </svg>
-              {t('relation.inferred')}
+              <Icon name="key" size={12} style={{ color: 'var(--pk)' }} />
+              {t('legend.primaryKey')}
             </span>
+            <span>
+              <Icon name="link" size={12} style={{ color: 'var(--fk)' }} />
+              {t('legend.foreignKey')}
+            </span>
+            {edges.some((e) => e.inferred) && (
+              <span>
+                <svg className="ss-legend-edge" width={16} height={8} aria-hidden="true">
+                  <path className="ss-edge" d="M0 4 H16" />
+                </svg>
+                {t('relation.inferred')}
+              </span>
+            )}
+            <span>
+              <b style={{ color: 'var(--ink-2)', fontWeight: 500 }}>?</b>
+              {t('legend.nullable')}
+            </span>
+            <span>
+              <b style={{ color: 'var(--ink-2)', fontWeight: 600, fontSize: 9.5 }}>UQ</b>
+              {t('legend.unique')}
+            </span>
+          </div>
+          {stubNote !== false && stubs.length > 0 && (
+            <button type="button" className="ss-ex-stubnote" onPointerDown={(e) => e.stopPropagation()} onClick={onDismissStubNote}>
+              <Icon name="folder" size={14} />
+              <span>{t('explorer.stubNote')}</span>
+            </button>
           )}
-          <span>
-            <b style={{ color: 'var(--ink-2)', fontWeight: 500 }}>?</b>
-            {t('legend.nullable')}
-          </span>
-          <span>
-            <b style={{ color: 'var(--ink-2)', fontWeight: 600, fontSize: 9.5 }}>UQ</b>
-            {t('legend.unique')}
-          </span>
         </div>
       )}
       {showLegend !== false && shownGroups.length > 0 && (

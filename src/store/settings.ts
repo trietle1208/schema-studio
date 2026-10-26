@@ -18,6 +18,9 @@ import { DEFAULT_THEME, parseTheme, THEME_STORAGE_KEY, type Theme } from '../cor
 
 export const SIDEBAR_COLLAPSED_KEY = 'schema-studio.sidebar-collapsed';
 
+/** Set once the stub hint has been shown, so it does not come back. */
+export const STUB_NOTE_KEY = 'schema-studio.stub-note';
+
 export interface SettingsState {
   theme: Theme;
   /** Paints the app in `theme` at once and keeps the choice for the next visit. */
@@ -46,6 +49,10 @@ export interface SettingsState {
   setSidebarCollapsed: (collapsed: boolean) => void;
   /** Toggles the sidebar between the full rail and the icon rail. */
   toggleSidebar: () => void;
+  /** The hint about dashed stubs has already been shown, so the canvas leaves it out. */
+  stubNoteSeen: boolean;
+  /** Remembers that the stub hint has been shown. */
+  dismissStubNote: () => void;
 }
 
 /** The theme chosen on an earlier visit. A browser that keeps nothing, as in private mode, gives the default. */
@@ -102,6 +109,14 @@ function storedExplorerWidth(): number {
     return parseExplorerWidth(localStorage.getItem(EXPLORER_WIDTH_KEY));
   } catch {
     return parseExplorerWidth(null);
+  }
+}
+
+function storedStubNote(): boolean {
+  try {
+    return localStorage.getItem(STUB_NOTE_KEY) === '1';
+  } catch {
+    return false;
   }
 }
 
@@ -188,6 +203,16 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ sidebarCollapsed: collapsed });
   },
   toggleSidebar: () => get().setSidebarCollapsed(!get().sidebarCollapsed),
+  stubNoteSeen: storedStubNote(),
+  dismissStubNote: () => {
+    if (get().stubNoteSeen) return;
+    try {
+      localStorage.setItem(STUB_NOTE_KEY, '1');
+    } catch {
+      // The choice still holds until the page is closed.
+    }
+    set({ stubNoteSeen: true });
+  },
 }));
 
 // index.html has applied the stored theme before the first paint; this keeps the page and the store in step.

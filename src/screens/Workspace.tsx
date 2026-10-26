@@ -82,6 +82,7 @@ import {
   showAllTables,
   showColumns,
   showTables,
+  stageLookPositions,
 } from './workspaceActions';
 
 const NO_HUBS: ReadonlySet<string> = new Set();
@@ -99,6 +100,8 @@ export function Workspace() {
   const savedShown = useSchemaStore((s) => s.shown);
   const lookShown = useUiStore((s) => s.lookShown);
   const lookShownFor = useUiStore((s) => s.lookShownFor);
+  const lookPositions = useUiStore((s) => s.lookPositions);
+  const lookPositionsFor = useUiStore((s) => s.lookPositionsFor);
   const editGroups = useSchemaStore((s) => s.editGroups);
   const selected = useSchemaStore((s) => s.selected);
   const selection = useSchemaStore((s) => s.selection);
@@ -113,6 +116,8 @@ export function Workspace() {
   const moveTables = useSchemaStore((s) => s.moveTables);
   const resizeTables = useSchemaStore((s) => s.resizeTables);
   const notation = useSettingsStore((s) => s.notation);
+  const stubNoteSeen = useSettingsStore((s) => s.stubNoteSeen);
+  const dismissStubNote = useSettingsStore((s) => s.dismissStubNote);
   const explorerWidth = useSettingsStore((s) => s.explorerWidth);
   const setExplorerWidth = useSettingsStore((s) => s.setExplorerWidth);
   const inspectorWidth = useSettingsStore((s) => s.panels.inspector);
@@ -200,14 +205,23 @@ export function Workspace() {
   const activeView = savedViews.find((view) => view.id === activeViewId && activeViewSchema === schemaId) ?? null;
   const liveView = activeView && viewIsShowing(tables, activeView.tables, canvasNames) ? activeView : null;
   const viewPositions = placed && liveView && placed.id === liveView.id ? placed.positions : liveView?.positions;
-  const canvasPositions = useMemo(
-    () => (diagramView === 'tables' && viewPositions ? overlayPositions(positions, viewPositions) : positions),
-    [diagramView, viewPositions, positions],
-  );
+  const canvasPositions = useMemo(() => {
+    // A module that was opened is arranged for the look. Those positions are not the schema's yet.
+    const base = lookPositionsFor === name && lookPositions ? lookPositions : positions;
+    return diagramView === 'tables' && viewPositions ? overlayPositions(base, viewPositions) : base;
+  }, [diagramView, viewPositions, positions, lookPositions, lookPositionsFor, name]);
   const stubs = useMemo(
     () => placeStubs(visible, canvasPositions, canvasStubs(tables, modules, drawn, tagHubs)),
     [visible, canvasPositions, tables, modules, drawn, tagHubs],
   );
+
+  // The stub hint is shown once, beside the legend. Leaving the tables canvas remembers that.
+  useEffect(() => {
+    if (diagramView !== 'tables' || stubNoteSeen || stubs.length === 0) return;
+    return () => {
+      if (useUiStore.getState().diagramView !== 'tables') dismissStubNote();
+    };
+  }, [diagramView, stubNoteSeen, stubs.length, dismissStubNote]);
   const links = useMemo(() => stubLinks(tables, drawn, new Set(stubs.map((stub) => stub.table))), [tables, drawn, stubs]);
   const needle = foldQuery(explorerQuery.trim());
   const markedColumns = useMemo(() => {
@@ -374,6 +388,7 @@ export function Workspace() {
 
   const moveCurrent = (patch: Positions) => {
     if (!liveView || diagramView !== 'tables') {
+      stageLookPositions();
       moveTables(patch);
       return;
     }
@@ -384,6 +399,7 @@ export function Workspace() {
 
   const resizeCurrent = (patch: Positions) => {
     if (!liveView || diagramView !== 'tables') {
+      stageLookPositions();
       resizeTables(patch);
       return;
     }
@@ -394,7 +410,9 @@ export function Workspace() {
 
   const arrangeCurrent = () => {
     if (!liveView || diagramView !== 'tables') {
+      const staged = stageLookPositions();
       arrangeTables();
+      if (staged) endMove();
       return;
     }
     const base = overlayPositions(positions, viewPositions ?? {});
@@ -720,6 +738,8 @@ export function Workspace() {
           hubNote={hubNote}
           stubs={stubs}
           stubLinks={links}
+          stubNote={!stubNoteSeen}
+          onDismissStubNote={dismissStubNote}
           stubColor={(module) => moduleColor(module, modules.findIndex((item) => item.name === module), groups)}
           onShowStub={locate}
           highlight={

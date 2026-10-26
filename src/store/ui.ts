@@ -87,6 +87,12 @@ export interface UiState {
    */
   lookShown: string[] | null;
   lookShownFor: string | null;
+  /**
+   * Where the tables sit while a module is only being looked at. Opening a module arranges its
+   * tables here and fits them; the schema's positions stay as they were until a table is dragged.
+   */
+  lookPositions: Positions | null;
+  lookPositionsFor: string | null;
   /** The saved view the tables canvas is showing, for the schema id it was opened on. */
   activeViewId: number | null;
   activeViewSchema: number | null;
@@ -123,6 +129,8 @@ export interface UiState {
   setCanvasHubsAsTags: (canvasHubsAsTags: boolean) => void;
   /** Looks at `names` on the canvas, without changing the schema; null goes back to what the schema shows. */
   setLookShown: (names: readonly string[] | null, schema: string | null) => void;
+  /** The arrangement a module is being looked at with. Null drops it. Setting what is shown drops it too. */
+  setLookPositions: (positions: Positions | null, schema: string | null) => void;
   setActiveView: (id: number | null, schemaId: number | null) => void;
   setModuleSelection: (moduleSelection: string | null, schema: string) => void;
   setFocusDepth: (focusDepth: FocusDepth) => void;
@@ -157,6 +165,8 @@ export const useUiStore = create<UiState>()((set, get) => ({
   canvasHubsAsTags: true,
   lookShown: null,
   lookShownFor: null,
+  lookPositions: null,
+  lookPositionsFor: null,
   activeViewId: null,
   activeViewSchema: null,
   moduleSelection: null,
@@ -182,7 +192,14 @@ export const useUiStore = create<UiState>()((set, get) => ({
   setHideHubLines: (hideHubLines) => set({ hideHubLines }),
   setInferredOnly: (inferredOnly) => set({ inferredOnly }),
   setCanvasHubsAsTags: (canvasHubsAsTags) => set({ canvasHubsAsTags }),
-  setLookShown: (names, schema) => set({ lookShown: names ? [...names] : null, lookShownFor: names ? schema : null }),
+  setLookShown: (names, schema) =>
+    set({
+      lookShown: names ? [...names] : null,
+      lookShownFor: names ? schema : null,
+      lookPositions: null,
+      lookPositionsFor: null,
+    }),
+  setLookPositions: (lookPositions, schema) => set({ lookPositions, lookPositionsFor: lookPositions ? schema : null }),
   setActiveView: (activeViewId, activeViewSchema) => set({ activeViewId, activeViewSchema }),
   setModuleSelection: (moduleSelection, schema) => set({ moduleSelection, moduleSelectionFor: schema }),
   setFocusDepth: (focusDepth) => set({ focusDepth }),

@@ -39,6 +39,7 @@ import {
   searchFor,
   showAllTables,
   showTables,
+  stageLookPositions,
 } from './workspaceActions';
 
 const schema = () => useSchemaStore.getState();
@@ -622,7 +623,7 @@ describe('looking at a large schema is not editing it', () => {
 
   beforeEach(() => {
     schema().load({ name: 'atad5s', engine: 'PostgreSQL', tables: atad5sTables(), positions: {} });
-    useUiStore.setState({ lookShown: null, lookShownFor: null, diagramView: null, diagramFor: null, focusTrail: [], focusTrailFor: null });
+    useUiStore.setState({ lookShown: null, lookShownFor: null, lookPositions: null, lookPositionsFor: null, diagramView: null, diagramFor: null, focusTrail: [], focusTrailFor: null });
   });
 
   it('opens a module and goes back to Modules without marking the schema as changed', () => {
@@ -641,6 +642,31 @@ describe('looking at a large schema is not editing it', () => {
     expect(ui().diagramView).toBe('modules');
     expect(selectDirty(schema())).toBe(false);
     expect(schema().shown).toBe(before);
+  });
+
+  it('arranges an opened module without writing the positions, until a table is dragged', () => {
+    const module = modules().find((m) => m.tables.length > 4 && m !== biggest())!;
+    const before = schema().positions;
+    openModule(module.tables);
+    const arranged = ui().lookPositions;
+    expect(arranged).not.toBeNull();
+    expect(schema().positions).toBe(before);
+    expect(selectDirty(schema())).toBe(false);
+    expect(ui().fitPending).toBe(true);
+
+    const name = module.tables[0];
+    const at = arranged![name];
+    stageLookPositions();
+    schema().moveTables({ [name]: { ...at, x: at.x + 32 } });
+    schema().endMove();
+    expect(schema().positions[name]?.x).toBe(at.x + 32);
+    expect(schema().positions[module.tables[1]]).toEqual(arranged![module.tables[1]]);
+    expect(selectDirty(schema())).toBe(true);
+    expect(ui().lookPositions).toBeNull();
+
+    undo();
+    expect(schema().positions).toBe(before);
+    expect(selectDirty(schema())).toBe(false);
   });
 
   it('walks Focus, its depth and its breadcrumb without marking the schema as changed', () => {

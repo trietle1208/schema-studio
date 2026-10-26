@@ -4,6 +4,7 @@ import { EXPORT_ENGINES, generatorFor, tableScript } from '../core/generate';
 import { convertTables } from '../core/generate/convert';
 import type { ColumnsChoice } from '../core/edit';
 import type { DiagramView } from '../core/diagramView';
+import { arrangeOnly } from '../core/arrange';
 import { visibleNames } from '../core/explorer';
 import { assignGroup, newGroupName } from '../core/groups';
 import { suggestModules } from '../core/modules';
@@ -247,8 +248,25 @@ export function openModule(names: readonly string[]) {
   const ui = useUiStore.getState();
   showAllTables();
   lookAt(names);
-  ui.setDiagramView('tables', useSchemaStore.getState().name);
+  const schema = useSchemaStore.getState();
+  // Arranged for this look only. A drag is what writes the positions (see `stageLookPositions`).
+  ui.setLookPositions(arrangeOnly(schema.tables, schema.positions, names), schema.name);
+  ui.setDiagramView('tables', schema.name);
   ui.setFitPending(true);
+}
+
+/**
+ * The drag of a table, or a resize, while a module is only being looked at: the arrangement becomes
+ * the schema's positions and the drag goes on from there, as one undo step. Returns whether it did.
+ */
+export function stageLookPositions(): boolean {
+  const ui = useUiStore.getState();
+  const schema = useSchemaStore.getState();
+  if (ui.lookPositionsFor !== schema.name || !ui.lookPositions) return false;
+  const positions = ui.lookPositions;
+  ui.setLookPositions(null, null);
+  schema.stagePositions(positions);
+  return true;
 }
 
 /** The previous table of the Focus breadcrumb. */

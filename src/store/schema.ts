@@ -132,6 +132,13 @@ export interface SchemaState extends SchemaSnapshot {
    * step. Returns whether any table changed.
    */
   showColumns: (choice: ColumnsChoice, only?: readonly string[]) => boolean;
+  /**
+   * Takes `positions` as the start of a drag. The set is one undo step and history then pauses, so the
+   * drag that follows replaces that step instead of adding another; `endMove` resumes. This is how
+   * the arrangement a module was only being looked at gets written, together with the drag.
+   * Does nothing when nothing moved, or while a drag is already underway.
+   */
+  stagePositions: (positions: Positions) => void;
   /** Call on every pointer move of a drag; the whole drag becomes one undo step once `endMove` runs. */
   moveTable: (name: string, position: Position) => void;
   /** The same for a drag of several tables: where each of them is now. */
@@ -403,6 +410,21 @@ export function createSchemaStore(initial: SchemaSource = ecommerceSample, persi
             if (next === state) return false;
             set({ positions: next.positions });
             return true;
+          },
+
+          stagePositions: (positions) => {
+            if (dragging) return;
+            const current = get().positions;
+            const names = new Set([...Object.keys(current), ...Object.keys(positions)]);
+            const changed = [...names].some((name) => {
+              const from = positionOf(current, name);
+              const to = positionOf(positions, name);
+              return !from || !to || from.x !== to.x || from.y !== to.y || from.w !== to.w || from.cols !== to.cols;
+            });
+            if (!changed) return;
+            set({ positions });
+            dragging = true;
+            history().pause();
           },
 
           moveTable: (name, position) => get().moveTables({ [name]: position }),
