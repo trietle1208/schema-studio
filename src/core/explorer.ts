@@ -124,26 +124,26 @@ export function parseExplorerWidth(value: string | null | undefined): number {
 }
 
 /**
- * Modules for the tree. Tables with no relationship are left out of every module: they are the
- * Not linked group. Linked tables that fell into no module are one group of their own, named
- * `OTHER_MODULE`.
+ * Modules for the tree. A table with no relationship stays in a module when it shares that
+ * module's prefix (`notLinked` on the module). Not linked is only the tables that belong to no
+ * module. Linked tables that fell into no module are one group of their own, named `OTHER_MODULE`.
  */
 export function explorerModules(tables: readonly Table[], modules: readonly SchemaModule[] = suggestModules(tables)): {
-  modules: { name: string; tables: string[] }[];
+  modules: { name: string; tables: string[]; notLinked: string[] }[];
   unlinked: string[];
 } {
-  const loose = new Set(unlinkedTables(tables));
   const placed = new Set<string>();
   const list = modules
     .map((module) => {
-      const members = module.tables.filter((name) => !loose.has(name));
-      for (const name of members) placed.add(name);
-      return { name: module.name, tables: members };
+      for (const name of module.tables) placed.add(name);
+      const loose = new Set(module.notLinked ?? []);
+      return { name: module.name, tables: [...module.tables], notLinked: module.tables.filter((name) => loose.has(name)) };
     })
     .filter((module) => module.tables.length > 0);
-  const rest = tables.map((t) => t.name).filter((name) => !loose.has(name) && !placed.has(name));
-  if (rest.length) list.push({ name: OTHER_MODULE, tables: rest });
-  return { modules: list, unlinked: tables.map((t) => t.name).filter((name) => loose.has(name)) };
+  const rest = tables.map((t) => t.name).filter((name) => !placed.has(name) && !unlinkedTables(tables).includes(name));
+  if (rest.length) list.push({ name: OTHER_MODULE, tables: rest, notLinked: [] });
+  const loose = new Set(unlinkedTables(tables));
+  return { modules: list, unlinked: tables.map((t) => t.name).filter((name) => !placed.has(name) && loose.has(name)) };
 }
 
 /** The colour of a module: the group of the same name when there is one, otherwise the next group colour. */
@@ -164,6 +164,8 @@ export function implicitShown(tables: readonly Table[], modules: readonly Schema
   const loose = new Set(unlinkedTables(tables));
   let best: readonly string[] = [];
   for (const module of modules) {
+    // Other is where small modules land. The canvas opens on a named module.
+    if (!module.name) continue;
     const members = module.tables.filter((name) => !loose.has(name));
     if (members.length > best.length) best = members;
   }

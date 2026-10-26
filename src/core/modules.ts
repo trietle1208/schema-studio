@@ -29,6 +29,11 @@ export interface SchemaModule {
   prefixes: string[];
   /** In the order of the schema. */
   tables: string[];
+  /**
+   * Tables of this module that have no relationship. They belong here because they share its
+   * prefix; "Not linked" is only the tables that belong to no module.
+   */
+  notLinked?: string[];
   /** Foreign keys with one end in this module and one in another, the most first. */
   links: ModuleLink[];
 }
@@ -255,7 +260,7 @@ export function suggestModules(tables: readonly Table[]): SchemaModule[] {
   for (const table of tables) {
     if (!placed.has(table.name) && (degreeOf.get(table.name) ?? 0) > 0) addCluster([], [table.name]);
   }
-  if (total === 0) return finish(clusters, edges, order);
+  if (total === 0) return foldModules(finish(clusters, edges, order), tables, edges, order);
 
   const pairWeight = (a: string, b: string): number => {
     const [x, y] = a < b ? [a, b] : [b, a];
@@ -331,7 +336,7 @@ export function suggestModules(tables: readonly Table[]): SchemaModule[] {
     merge(keep, keep === best.a ? best.b : best.a, best.w);
   }
 
-  return finish(clusters, edges, order);
+  return foldModules(finish(clusters, edges, order), tables, edges, order);
 }
 
 /** The earlier of the two clusters' first tables, then the other's, as one ordering. */
@@ -423,6 +428,198 @@ function prefixList(cluster: Cluster, name: string): string[] {
     if (prefix) counts.set(prefix, (counts.get(prefix) ?? 0) + 1);
   }
   return [...new Set(cluster.prefixes)].sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0) || a.localeCompare(b));
+}
+
+/**
+ * The modules of a large schema, after the prefix groups are known.
+ *
+ * A module of fewer than three tables joins the module it has the most foreign keys to. A foreign
+ * key into a hub does not count, or the hubs would collect every small module. With none, or with
+ * a tie, it joins Other. A table with no relationship that shares a prefix with a module belongs
+ * to that module. A table is in `wp` only when its name starts with `wp_`, or it has a foreign key
+ * to a `wp_*` table and is not a `da_*` table, so `da_khao_sat` stays out. Past 16 modules, the
+ * smallest joins Other, which keeps the schema inside the range the Modules view can show. A
+ * smaller schema is left as the prefix groups named it.
+ */
+function foldModules(
+  modules: SchemaModule[],
+  tables: readonly Table[],
+  edges: readonly Edge[],
+  order: ReadonlyMap<string, number>,
+): SchemaModule[] {
+  const loose = new Set(unlinkedTables(tables));
+  if (tables.length <= FOLD_FROM) {
+    return modules.map((module) => ({ ...module, notLinked: module.tables.filter((name) => loose.has(name)) }));
+  }
+
+  const hubs = new Set(findHubs(tables).map((hub) => hub.table));
+  const joinsWp = (name: string): boolean => {
+    if (name.startsWith('wp_')) return true;
+    if (name.startsWith('da_')) return false;
+    return edges.some((edge) => edge.from === name && edge.to.startsWith('wp_'));
+  };
+  const byOrder = (a: string, b: string) => (order.get(a) ?? 0) - (order.get(b) ?? 0);
+  const drafts: Draft[] = modules.map((module) => ({ name: module.name, prefixes: [...module.prefixes], tables: [...module.tables] }));
+  const wp = drafts.find((draft) => draft.name === 'wp');
+  if (wp) {
+    const leave = wp.tables.filter((name) => !joinsWp(name));
+    wp.tables = wp.tables.filter((name) => joinsWp(name));
+    for (const name of leave) drafts.push({ name, prefixes: [], tables: [name] });
+  }
+  const placed = new Set(drafts.flatMap((draft) => draft.tables));
+  for (const table of tables) if (!placed.has(table.name)) drafts.push({ name: table.name, prefixes: [], tables: [table.name] });
+
+  const ownerOf = (name: string) => drafts.find((draft) => draft.tables.includes(name));
+  const absorb = (into: Draft, drop: Draft) => {
+    into.tables = [...into.tables, ...drop.tables].sort(byOrder);
+    into.prefixes = [...new Set([...into.prefixes, ...drop.prefixes])];
+    drafts.splice(drafts.indexOf(drop), 1);
+  };
+  const other = (): Draft => {
+    const found = drafts.find((draft) => draft.name === OTHER_NAME);
+    if (found) return found;
+    const made: Draft = { name: OTHER_NAME, prefixes: [], tables: [] };
+    drafts.push(made);
+    return made;
+  };
+  const prefixTarget = (name: string): Draft | null => {
+    let best: Draft | null = null;
+    let bestScore = 1;
+    for (const draft of drafts) {
+      if (draft.name === OTHER_NAME || draft.tables.includes(name)) continue;
+      if (draft.name === 'wp' && !joinsWp(name)) continue;
+      const score = Math.max(sharedStem(name, draft.name), ...draft.prefixes.map((prefix) => sharedStem(name, prefix)));
+      if (score < 2) continue;
+      if (!best || score > bestScore || (score === bestScore && draft.tables.length > best.tables.length)) {
+        best = draft;
+        bestScore = score;
+      }
+    }
+    return best;
+  };
+  const fkTarget = (draft: Draft): Draft | null => {
+    const mine = new Set(draft.tables);
+    const counts = new Map<Draft, number>();
+    for (const edge of edges) {
+      if (!mine.has(edge.from) || hubs.has(edge.to)) continue;
+      const dest = ownerOf(edge.to);
+      if (!dest || dest === draft || dest.name === OTHER_NAME) continue;
+      if (dest.name === 'wp' && draft.tables.some((name) => !joinsWp(name))) continue;
+      counts.set(dest, (counts.get(dest) ?? 0) + 1);
+    }
+    let best: Draft | null = null;
+    let bestCount = 0;
+    let tied = false;
+    for (const [dest, count] of counts) {
+      if (count > bestCount) {
+        best = dest;
+        bestCount = count;
+        tied = false;
+      } else if (count === bestCount) tied = true;
+    }
+    return best && !tied ? best : null;
+  };
+
+  let guard = 0;
+  while (drafts.some((draft) => draft.name !== OTHER_NAME && draft.tables.length < MIN_MODULE) && guard++ < 500) {
+    const small = drafts
+      .filter((draft) => draft.name !== OTHER_NAME && draft.tables.length < MIN_MODULE)
+      .sort((a, b) => a.tables.length - b.tables.length || a.name.localeCompare(b.name))[0];
+    const dest = fkTarget(small);
+    if (dest) absorb(dest, small);
+    else absorb(other(), small);
+  }
+
+  const sink = drafts.find((draft) => draft.name === OTHER_NAME);
+  if (sink) {
+    const stay: string[] = [];
+    for (const name of sink.tables) {
+      if (!loose.has(name)) {
+        stay.push(name);
+        continue;
+      }
+      const dest = prefixTarget(name);
+      if (dest) dest.tables = [...dest.tables, name].sort(byOrder);
+    }
+    sink.tables = stay;
+    if (!sink.tables.length) drafts.splice(drafts.indexOf(sink), 1);
+  }
+
+  guard = 0;
+  while (drafts.length > MODULE_CAP && guard++ < 40) {
+    const small = drafts
+      .filter((draft) => draft.name !== 'wp' && draft.name !== OTHER_NAME)
+      .sort((a, b) => a.tables.length - b.tables.length || a.name.localeCompare(b.name))[0];
+    if (!small) break;
+    absorb(other(), small);
+  }
+
+  return relink(
+    drafts.filter((draft) => draft.tables.length >= MIN_MODULE),
+    edges,
+    order,
+    loose,
+  );
+}
+
+const FOLD_FROM = 80;
+const MIN_MODULE = 3;
+const MODULE_CAP = 16;
+const OTHER_NAME = '';
+
+interface Draft {
+  name: string;
+  prefixes: string[];
+  tables: string[];
+}
+
+/** How many leading words of the two names are the same. `da` alone is one, and does not count. */
+function sharedStem(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const left = a.split('_');
+  const right = b.split('_');
+  let n = 0;
+  while (n < left.length && n < right.length && left[n] === right[n]) n++;
+  return n;
+}
+
+/** The lines between the folded modules, and which of their tables have no relationship. */
+function relink(
+  drafts: readonly Draft[],
+  edges: readonly Edge[],
+  order: ReadonlyMap<string, number>,
+  loose: ReadonlySet<string>,
+): SchemaModule[] {
+  const moduleOf = new Map<string, string>();
+  for (const draft of drafts) for (const table of draft.tables) moduleOf.set(table, draft.name);
+  const linkCount = new Map<string, number>();
+  for (const edge of edges) {
+    if (edge.from === edge.to) continue;
+    const a = moduleOf.get(edge.from);
+    const b = moduleOf.get(edge.to);
+    if (!a || !b || a === b) continue;
+    const key = a < b ? `${a}\0${b}` : `${b}\0${a}`;
+    linkCount.set(key, (linkCount.get(key) ?? 0) + 1);
+  }
+  const modules: SchemaModule[] = drafts.map((draft) => {
+    const links: ModuleLink[] = [];
+    for (const [key, relationships] of linkCount) {
+      const [left, right] = key.split('\0');
+      const other = left === draft.name ? right : right === draft.name ? left : null;
+      if (other) links.push({ module: other, relationships });
+    }
+    links.sort((a, b) => b.relationships - a.relationships || a.module.localeCompare(b.module));
+    const tables = [...draft.tables].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+    return {
+      name: draft.name,
+      prefixes: draft.prefixes.length ? draft.prefixes : draft.name ? [draft.name] : [],
+      tables,
+      notLinked: tables.filter((name) => loose.has(name)),
+      links,
+    };
+  });
+  modules.sort((a, b) => (order.get(a.tables[0]) ?? 0) - (order.get(b.tables[0]) ?? 0));
+  return modules;
 }
 
 /**

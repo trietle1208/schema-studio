@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { atad5sTables } from './fixtures/atad5sShape';
 import { ecommerceSnapshot } from './fixtures/testing';
+import { explorerModules } from './explorer';
 import { assignGroup, groupOf } from './groups';
 import { findHubs, moduleGroup, neighbourhood, shortestPath, suggestModules, unlinkedTables } from './modules';
 import type { Column, Table } from './model';
@@ -97,25 +98,36 @@ describe('suggestModules', () => {
     expect(wide.find((m) => m.tables.includes('aa_item'))?.tables).toEqual(['aa_item', 'aa_item_row']);
   });
 
-  it('keeps the atad5s prefix families, joins the ones the keys tie, and leaves the hub as its own', () => {
+  it('folds the atad5s schema into a few modules, each of at least three tables', () => {
     const tables = atad5sTables();
     const modules = suggestModules(tables);
+    const sizes = modules.map((module) => module.tables.length);
+    // The fold lands on 16 modules. The smallest, da_vi_tri, has 3 tables.
+    expect(modules).toHaveLength(16);
+    expect(Math.min(...sizes)).toBe(3);
+    expect(sizes.every((size) => size >= 3)).toBe(true);
     const names = new Set<string>();
     for (const module of modules) {
-      expect(module.tables.length).toBeGreaterThan(1);
-      expect(module.prefixes.length).toBeGreaterThan(0);
+      expect(module.name).not.toBe('da');
       for (const table of module.tables) {
         expect(names.has(table)).toBe(false);
         names.add(table);
       }
       for (const link of module.links) {
-        const other = modules.find((m) => m.name === link.module);
+        const other = modules.find((item) => item.name === link.module);
         expect(other?.links.find((item) => item.module === module.name)?.relationships).toBe(link.relationships);
       }
+      for (const table of module.notLinked ?? []) expect(module.tables).toContain(table);
     }
-    expect(modules.some((m) => m.name === 'da')).toBe(false);
 
-    const pay = modules.find((m) => m.name === 'da_thanh_toan');
+    const wp = modules.find((module) => module.name === 'wp');
+    expect(wp?.tables).toContain('wp_users');
+    expect(wp?.tables).toContain('wp_posts');
+    expect(wp?.tables).not.toContain('da_thanh_toan');
+    expect(wp?.tables).not.toContain('da_khao_sat');
+    expect(wp?.tables.every((name) => name.startsWith('wp_') || name === 'CHECKINOUT' || name === 'USERINFO')).toBe(true);
+
+    const pay = modules.find((module) => module.name === 'da_thanh_toan');
     expect(pay?.tables).toEqual([
       'da_hoa_don',
       'da_thanh_toan',
@@ -123,22 +135,15 @@ describe('suggestModules', () => {
       'da_thanh_toan_phe_duyet',
       'da_thanh_toan_phe_duyet_chi',
     ]);
-    expect(pay?.links.find((link) => link.module === 'da_don_vi')?.relationships).toBe(1);
-    expect(modules.find((m) => m.name === 'da_loai')?.tables).not.toContain('da_thanh_toan');
 
-    const trip = modules.find((m) => m.tables.includes('da_cong_tac'));
-    expect(trip?.prefixes).toEqual(expect.arrayContaining(['da_cong_tac', 'da_dinh_muc']));
-    expect(trip?.name).not.toBe('da_loai');
-
-    const wp = modules.find((m) => m.name === 'wp');
-    expect(wp?.tables).toContain('wp_users');
-    expect(wp?.tables).toContain('wp_posts');
-    expect(wp?.tables).not.toContain('da_thanh_toan');
-
-    // A name family stays a module when its tables have no keys; it is still unlinked.
-    expect(modules.find((m) => m.name === 'da_cham_cong')?.tables).toContain('da_cham_cong');
-    expect(modules.find((m) => m.name === 'da_don_vi')?.tables).toEqual(['da_don_vi', 'da_don_vi_thong_ke']);
-    expect(modules.find((m) => m.tables.includes('da_nhan_vien'))?.name).not.toBe('da_thanh_toan');
+    // da_cham_cong has no relationship. It shares its prefix with a module, so it is not linked
+    // there, and it is not in the set of tables that belong to no module.
+    const cham = modules.find((module) => module.tables.includes('da_cham_cong'));
+    expect(cham?.notLinked).toContain('da_cham_cong');
+    const tree = explorerModules(tables, modules);
+    expect(tree.unlinked).not.toContain('da_cham_cong');
+    expect(tree.unlinked).toContain('da_email');
+    expect(modules.find((module) => module.tables.includes('da_khao_sat'))?.name).not.toBe('wp');
   });
 });
 

@@ -1613,6 +1613,10 @@ body {
   min-width: 0;
 }
 
+.ss-ex-table.is-loose .ss-ex-table-name {
+  color: var(--ink-3);
+}
+
 .ss-ex-name,
 .ss-ex-mod-hit .ss-ex-name {
   color: var(--ink-1);

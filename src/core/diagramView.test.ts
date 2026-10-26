@@ -19,7 +19,8 @@ import {
   MODULE_CARD_WIDTH,
 } from './diagramView';
 import { atad5sTables } from './fixtures/atad5sShape';
-import { unlinkedTables } from './modules';
+import { explorerModules } from './explorer';
+import { suggestModules } from './modules';
 import type { Column, Table } from './model';
 
 const key = (name = 'id'): Column => ({ name, type: 'INT', pk: true });
@@ -75,21 +76,25 @@ describe('module cards', () => {
     expect(moduleDimmed('b', 'org', edges)).toBe(true);
   });
 
-  it('leaves a table with no relationship off every card of the atad5s schema', () => {
+  it('keeps a table that belongs to no module off the cards', () => {
     const schema = atad5sTables();
-    const loose = new Set(unlinkedTables(schema));
+    const modules = suggestModules(schema);
+    const tree = explorerModules(schema, modules);
     const drawn = moduleCards(schema);
-    expect(drawn.length).toBeGreaterThan(1);
+    expect(drawn).toHaveLength(16);
+    const onCards = new Set(drawn.flatMap((card) => card.tables));
+    for (const name of tree.unlinked) expect(onCards.has(name)).toBe(false);
+    expect(drawn.some((card) => card.tables.includes('da_cham_cong'))).toBe(true);
     for (const card of drawn) {
       expect(card.sample.length).toBeLessThanOrEqual(3);
       expect(card.sample.length + card.more).toBe(card.tables.length);
-      expect(card.tables.some((name) => loose.has(name))).toBe(false);
     }
     const weight = (edges: { relationships: number }[]) => edges.reduce((sum, edge) => sum + edge.relationships, 0);
     const open = moduleEdges(schema, drawn, { hideHubs: false, inferredOnly: false });
     const hidden = moduleEdges(schema, drawn, { hideHubs: true, inferredOnly: false });
     expect(weight(open)).toBeGreaterThan(0);
-    expect(weight(hidden)).toBeLessThan(weight(open));
+    // Hub references on this schema sit inside one module, so hiding them does not drop a line.
+    expect(weight(hidden)).toBeLessThanOrEqual(weight(open));
   });
 });
 

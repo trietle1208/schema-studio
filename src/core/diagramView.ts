@@ -106,7 +106,7 @@ export function representativeTables(tables: readonly Table[], members: readonly
     .map((item) => item.name);
 }
 
-/** One card per module the Explorer lists, unlinked tables left out. */
+/** One card per module the Explorer lists. A table that belongs to no module stays off the cards. */
 export function moduleCards(tables: readonly Table[], modules: readonly SchemaModule[] = suggestModules(tables)): ModuleCardModel[] {
   const tree = explorerModules(tables, modules);
   return tree.modules.map((module) => {

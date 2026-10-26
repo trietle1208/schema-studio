@@ -598,8 +598,9 @@ export function Explorer({
                       return (
                         <div
                           key={name}
-                          className={cx('ss-ex-table', shownSet.has(name) && 'is-on', selected === name && 'is-selected', hot && 'is-hover', cursor === `t:${name}` && 'is-current')}
+                          className={cx('ss-ex-table', shownSet.has(name) && 'is-on', selected === name && 'is-selected', hot && 'is-hover', cursor === `t:${name}` && 'is-current', module.notLinked.includes(name) && 'is-loose')}
                           data-row={`t:${name}`}
+                          title={module.notLinked.includes(name) ? t('explorer.notLinked') : undefined}
                           onMouseEnter={() => point(name)}
                           onClick={() => { setCursor(`t:${name}`); onSelect(name); }}
                           onDoubleClick={() => onLocate(name)}
