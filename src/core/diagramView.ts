@@ -1,6 +1,6 @@
 import { explorerModules, SHOW_ALL_BELOW } from './explorer';
 import type { Table, TableGroup } from './model';
-import { findHubs, suggestModules, type SchemaModule } from './modules';
+import { findHubs, suggestModules, type Hub, type SchemaModule } from './modules';
 import { outgoingRelations } from './relations';
 
 // The Modules view of a large diagram: one card per module, and a line between two modules as
@@ -167,6 +167,37 @@ export function moduleEdges(
       return { from, to, relationships };
     })
     .sort((a, b) => b.relationships - a.relationships || a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
+}
+
+/** What the Modules inspector shows when no module is selected. */
+export interface ModuleOverview {
+  modules: number;
+  hubs: Hub[];
+  /** Tables that belong to no module. */
+  notLinked: number;
+}
+
+/** The Modules inspector with nothing selected: how many modules, the hubs, and Not linked. */
+export function moduleOverview(tables: readonly Table[], modules: readonly SchemaModule[] = suggestModules(tables)): ModuleOverview {
+  return {
+    modules: moduleCards(tables, modules).length,
+    hubs: findHubs(tables),
+    notLinked: explorerModules(tables, modules).unlinked.length,
+  };
+}
+
+/** The other modules `name` has foreign keys with, the most first. The same lines the canvas draws. */
+export function moduleLinks(
+  tables: readonly Table[],
+  name: string,
+  modules: readonly SchemaModule[] = suggestModules(tables),
+  options: ModuleEdgeOptions = { hideHubs: false, inferredOnly: false },
+): { module: string; relationships: number }[] {
+  const cards = moduleCards(tables, modules);
+  return moduleEdges(tables, cards, options)
+    .filter((edge) => edge.from === name || edge.to === name)
+    .map((edge) => ({ module: edge.from === name ? edge.to : edge.from, relationships: edge.relationships }))
+    .sort((a, b) => b.relationships - a.relationships || a.module.localeCompare(b.module));
 }
 
 /** How thick a line of `relationships` foreign keys is drawn: one pixel, plus a quarter pixel each. */

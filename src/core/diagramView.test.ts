@@ -8,6 +8,8 @@ import {
   moduleDimmed,
   moduleEdges,
   moduleLineWidth,
+  moduleLinks,
+  moduleOverview,
   moduleStep,
   moduleStageSize,
   placeModules,
@@ -95,6 +97,20 @@ describe('module cards', () => {
     expect(weight(open)).toBeGreaterThan(0);
     // Hub references on this schema sit inside one module, so hiding them does not drop a line.
     expect(weight(hidden)).toBeLessThanOrEqual(weight(open));
+  });
+
+  it('describes the modules inspector for the atad5s schema', () => {
+    const tables = atad5sTables();
+    const overview = moduleOverview(tables);
+    expect(overview.modules).toBe(16);
+    expect(overview.hubs.map((hub) => hub.table)).toEqual(['da_don_vi', 'da_to_xuong']);
+    expect(overview.notLinked).toBe(42);
+
+    const links = moduleLinks(tables, 'da_thanh_toan');
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.every((link) => link.module !== 'da_thanh_toan' && link.relationships > 0)).toBe(true);
+    expect(moduleLinks(tables, 'da_thanh_toan', suggestModules(tables), { hideHubs: true, inferredOnly: false }).length).toBeLessThanOrEqual(links.length);
+    expect(moduleLinks(tables, 'missing')).toEqual([]);
   });
 });
 

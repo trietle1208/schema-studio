@@ -2827,6 +2827,61 @@ body {
   padding: 10px 14px 4px;
 }
 
+.ss-mod-ins-foot {
+  display: flex;
+  gap: 8px;
+  flex: none;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line-1);
+}
+
+.ss-mod-ins-foot .ss-btn {
+  flex: 1;
+}
+
+.ss-mod-ins-table {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  width: calc(100% - 16px);
+  height: 26px;
+  margin: 0 8px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-1);
+  font: 400 11.5px var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ss-mod-ins-table > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ss-mod-ins-table .ss-icon {
+  color: var(--ink-3);
+}
+
+.ss-mod-ins-table:hover {
+  background: var(--bg-4);
+}
+
+.ss-mod-ins-table.is-loose {
+  color: var(--ink-3);
+}
+
+.ss-mod-ins-empty {
+  margin: 0;
+  padding: 4px 14px 10px;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
 .ss-focus-rel {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr) auto;
@@ -2837,6 +2892,15 @@ body {
   padding: 0 6px;
   border-radius: 5px;
   font: 400 11.5px var(--font-mono);
+}
+
+button.ss-focus-rel {
+  width: calc(100% - 16px);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .ss-focus-rel:hover {

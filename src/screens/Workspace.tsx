@@ -6,6 +6,7 @@ import { Explorer } from '../components/Explorer';
 import { FocusInspector } from '../components/FocusInspector';
 import { FocusView } from '../components/FocusView';
 import { ModulesView } from '../components/ModulesView';
+import { ModuleInspector } from '../components/ModuleInspector';
 import { Inspector } from '../components/Inspector';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { StatusBar } from '../components/StatusBar';
@@ -752,7 +753,24 @@ export function Workspace() {
         />
         )}
         <PanelHandle panel="inspector" />
-        {diagramView === 'focus' && focusTable ? (
+        {diagramView === 'modules' ? (
+          <ModuleInspector
+            tables={tables}
+            modules={modules}
+            groups={groups}
+            selected={selectedModule}
+            hideHubs={hideHubLines}
+            inferredOnly={inferredOnly}
+            onSelect={(moduleName) => setModuleSelection(moduleName, name)}
+            onOpen={openModule}
+            onFocus={(tableName) => {
+              setDiagramView('focus', name);
+              focusRelatedTables(tableName);
+            }}
+            onRename={renameModule}
+            onSaveGroup={(members, title, color) => editGroups((list) => assignGroup(list, members, title, color))}
+          />
+        ) : diagramView === 'focus' && focusTable ? (
           <FocusInspector
             table={focusTable}
             tables={tables}
