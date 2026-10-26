@@ -18,9 +18,12 @@ import type { GroupColor, Table, TableGroup } from '../core/model';
 import { findHubs, type SchemaModule } from '../core/modules';
 import { countInferred } from '../core/relations';
 import { cx } from './cx';
+import { ContextMenu } from './ContextMenu';
 import { Icon } from './Icon';
+import { IconButton } from './IconButton';
 import { rich } from './rich';
 import { Switch } from './Switch';
+import { usePopover } from './usePopover';
 
 export interface ModulesViewProps {
   tables: readonly Table[];
@@ -60,7 +63,12 @@ export function ModulesView({
   onInferredOnly,
 }: ModulesViewProps) {
   const root = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const inferredRef = useRef<HTMLSpanElement>(null);
+  const inferredWidth = useRef(0);
   const [width, setWidth] = useState(0);
+  /** Inferred only leaves the bar for the ⋯ menu once the bar would wrap. */
+  const [inferredAway, setInferredAway] = useState(false);
   const [draft, setDraft] = useState<{ name: string; value: string } | null>(null);
   const skipBlur = useRef(false);
   const cards = useMemo(() => moduleCards(tables, modules), [tables, modules]);
@@ -70,13 +78,15 @@ export function ModulesView({
     [tables, cards, hideHubs, inferredOnly],
   );
   const columns = moduleColumns(width);
-  const placed = useMemo(() => placeModules(cards, columns, chosen), [cards, columns, chosen]);
-  const stage = useMemo(() => moduleStageSize(placed), [placed]);
+  // The bar is in the flow above the cards, so the first row starts just under the 16px gap.
+  const placed = useMemo(() => placeModules(cards, columns, chosen, 0), [cards, columns, chosen]);
+  const stage = useMemo(() => moduleStageSize(placed, 16), [placed]);
   const lines = useMemo(() => layoutModuleLines(placed, edges, chosen), [placed, edges, chosen]);
   const at = useMemo(() => new Map(placed.map((card) => [card.name, card])), [placed]);
   const hubs = useMemo(() => findHubs(tables), [tables]);
   const inferred = useMemo(() => countInferred(tables), [tables]);
   const hub = hideHubs ? hubs[0] : undefined;
+  const [menuOpen, setMenuOpen, menuRef] = usePopover();
 
   useEffect(() => {
     const el = root.current;
@@ -85,6 +95,25 @@ export function ModulesView({
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // A bar that is wider than the canvas puts Inferred only in the menu, and brings it back once there is room for it.
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar || typeof ResizeObserver === 'undefined') return;
+    const apply = () => {
+      const pill = inferredRef.current;
+      if (pill) inferredWidth.current = pill.offsetWidth;
+      const overflow = bar.scrollWidth > bar.clientWidth + 1;
+      setInferredAway((away) => {
+        if (!away && overflow) return true;
+        if (away && bar.clientWidth > bar.scrollWidth + inferredWidth.current + 12) return false;
+        return away;
+      });
+    };
+    const observer = new ResizeObserver(apply);
+    observer.observe(bar);
     return () => observer.disconnect();
   }, []);
 
@@ -122,13 +151,13 @@ export function ModulesView({
       onKeyDown={onKey}
       onClick={() => onSelect(null)}
     >
-      <div className="ss-modbar" onClick={(e) => e.stopPropagation()}>
+      <div ref={barRef} className="ss-modbar" onClick={(e) => e.stopPropagation()}>
         <span className="ss-modbar-pill is-accent">
           <Icon name="layers" size={15} />
           <b>{t('modules.count', { count: cards.length })}</b>
           <span>· {t('count.tables', { count: tables.length })}</span>
         </span>
-        <span className="ss-modbar-pill">
+        <span className="ss-modbar-pill is-shrink">
           <Switch checked={hideHubs} onChange={onHideHubs} label={t('modules.hideHubLines')} />
           {hubs.length > 0 && (
             <span className="ss-modbar-k">
@@ -136,12 +165,35 @@ export function ModulesView({
             </span>
           )}
         </span>
-        <span className="ss-modbar-pill">
-          <Switch checked={inferredOnly} onChange={onInferredOnly} label={t('modules.inferredOnly')} />
-          <span className="ss-modbar-k">{formatNumber(inferred)}</span>
-        </span>
+        {!inferredAway && (
+          <span ref={inferredRef} className="ss-modbar-pill">
+            <Switch checked={inferredOnly} onChange={onInferredOnly} label={t('modules.inferredOnly')} />
+            <span className="ss-modbar-k">{formatNumber(inferred)}</span>
+          </span>
+        )}
         <span className="ss-spacer" />
-        <span className="ss-modbar-pill">{t('modules.openHint')}</span>
+        <span className="ss-modbar-pill is-hint">{t('modules.openHint')}</span>
+        {inferredAway && (
+          <div ref={menuRef} className="ss-modbar-menu">
+            <IconButton icon="more" label={t('modules.barMenu')} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} />
+            {menuOpen && (
+              <div className="ss-tb-pop">
+                <ContextMenu
+                  label={t('modules.barMenu')}
+                  onClose={() => setMenuOpen(false)}
+                  items={[
+                    {
+                      icon: inferredOnly ? 'check' : 'filter',
+                      label: `${t('modules.inferredOnly')} · ${formatNumber(inferred)}`,
+                      active: inferredOnly,
+                      onSelect: () => onInferredOnly(!inferredOnly),
+                    },
+                  ]}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <div className="ss-modules-scroll">
         <div className="ss-modules-stage" style={{ width: stage.width, height: stage.height }}>

@@ -471,6 +471,7 @@ export const en = {
   'modules.more': { one: '+ {count} table', other: '+ {count} tables' },
   'modules.hideHubLines': 'Hide hub lines',
   'modules.inferredOnly': 'Inferred only',
+  'modules.barMenu': 'More',
   'modules.openHint': 'Double-click to open',
   'modules.open': 'Open',
   'modules.rename': 'Rename',

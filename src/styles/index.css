@@ -2134,10 +2134,39 @@ body {
   outline-offset: -2px;
 }
 
+.ss-modules > .ss-modbar {
+  position: static;
+  top: auto;
+  right: auto;
+  left: auto;
+  flex: none;
+  flex-wrap: nowrap;
+  padding: 16px 16px 0;
+}
+
 .ss-modules-scroll {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  padding-top: 16px;
+}
+
+.ss-modbar-pill.is-shrink {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ss-modbar-pill.is-hint {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ss-modbar-menu {
+  position: relative;
+  pointer-events: auto;
+  flex: none;
 }
 
 .ss-modules-stage {
@@ -2187,6 +2216,9 @@ body {
 }
 
 .ss-modbar-k {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font: 500 11px/16px var(--font-mono);
   color: var(--ink-3);
 }
@@ -2353,9 +2385,10 @@ body {
 }
 
 .ss-mod-hub {
-  position: absolute;
-  left: 16px;
-  bottom: 14px;
+  position: static;
+  align-self: flex-end;
+  flex: none;
+  margin: 0 16px 16px;
   z-index: 5;
   display: flex;
   align-items: center;

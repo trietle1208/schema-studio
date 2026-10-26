@@ -9,6 +9,7 @@ import {
   moduleEdges,
   moduleLineWidth,
   moduleStep,
+  moduleStageSize,
   placeModules,
   prefixLine,
   representativeTables,
@@ -119,5 +120,17 @@ describe('module layout', () => {
     expect(moduleStep(placed, 'a', 'right')).toBe('b');
     expect(moduleStep(placed, 'b', 'left')).toBe('a');
     expect(moduleStep(placed, 'a', 'down')).toBeNull();
+    const lowered = placeModules(
+      [
+        { name: 'a', tables: ['a', 'b', 'c', 'd'], prefixes: ['a'] },
+        { name: 'b', tables: ['e', 'f', 'g', 'h'], prefixes: ['b'] },
+      ],
+      2,
+      null,
+      48,
+    );
+    expect(lowered[0].y).toBe(48);
+    expect(lowered[0].height).toBe(height);
+    expect(moduleStageSize(lowered, 64).height).toBe(lowered[0].y + lowered[0].height + 64);
   });
 });

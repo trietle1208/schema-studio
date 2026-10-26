@@ -454,6 +454,7 @@ export const vi: Dictionary = {
   'modules.more': { other: '+ {count} bảng' },
   'modules.hideHubLines': 'Ẩn đường của hub',
   'modules.inferredOnly': 'Chỉ quan hệ suy ra',
+  'modules.barMenu': 'Thêm',
   'modules.openHint': 'Nhấp đúp để mở',
   'modules.open': 'Mở',
   'modules.rename': 'Đổi tên',

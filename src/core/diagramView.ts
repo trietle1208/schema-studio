@@ -191,15 +191,16 @@ export interface ModulePlacement {
   height: number;
 }
 
-/** Cards in a grid, a row as tall as its tallest card. `columns` is at least one. */
+/** Cards in a grid, a row as tall as its tallest card. `columns` is at least one. `originY` is where the first row starts. */
 export function placeModules(
   cards: readonly Pick<ModuleCardModel, 'name' | 'tables' | 'prefixes'>[],
   columns: number,
   selected: string | null,
+  originY: number = MODULE_CARD_ORIGIN_Y,
 ): ModulePlacement[] {
   const cols = Math.max(1, Math.floor(columns) || 1);
   const placed: ModulePlacement[] = [];
-  let y = MODULE_CARD_ORIGIN_Y;
+  let y = originY;
   for (let i = 0; i < cards.length; i += cols) {
     const row = cards.slice(i, i + cols);
     const heights = row.map((card) => moduleCardHeight(card.tables.length, card.prefixes.length > 0, card.name === selected));
@@ -217,13 +218,13 @@ export function placeModules(
   return placed;
 }
 
-/** The stage the cards sit on, with room under the last row for the hub note. */
-export function moduleStageSize(placed: readonly ModulePlacement[]): { width: number; height: number } {
+/** The stage the cards sit on. `padBottom` is the room under the last row. */
+export function moduleStageSize(placed: readonly ModulePlacement[], padBottom = 72): { width: number; height: number } {
   let width = MODULE_CARD_ORIGIN_X + MODULE_CARD_WIDTH + MODULE_CARD_ORIGIN_X;
   let height = MODULE_CARD_ORIGIN_Y;
   for (const card of placed) {
     width = Math.max(width, card.x + card.width + MODULE_CARD_ORIGIN_X);
-    height = Math.max(height, card.y + card.height + 72);
+    height = Math.max(height, card.y + card.height + padBottom);
   }
   return { width, height };
 }
