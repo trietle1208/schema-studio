@@ -2371,8 +2371,14 @@ body {
   overflow: auto;
 }
 
+.ss-focus-zoom {
+  position: relative;
+}
+
+/* A narrow canvas zooms the stage out (70% at the least) from its top left corner. */
 .ss-focus-stage {
   position: relative;
+  transform-origin: 0 0;
 }
 
 .ss-focus-empty {

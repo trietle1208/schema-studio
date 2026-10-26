@@ -15,8 +15,12 @@ import {
   placeFocus,
   suggestTables,
   upsertSavedView,
+  fitFocus,
   FOCUS_CENTER_WIDTH,
+  FOCUS_GAP_MIN,
+  FOCUS_GAP_X,
   FOCUS_NODE_WIDTH,
+  FOCUS_ZOOM_MIN,
   type FocusOptions,
 } from './focusView';
 import type { Column, Table } from './model';
@@ -138,6 +142,66 @@ describe('focusGraph', () => {
     expect(shown.nodes.find((node) => node.table === 'da_to_xuong')).toMatchObject({ lane: 1, hidden: 15 });
     expect(focusViewName(modules, 'da_thanh_toan')).toBe('da_thanh_toan');
     expect(focusViewName([], 'da_thanh_toan')).toBe('da_thanh_toan');
+  });
+});
+
+describe('fitFocus', () => {
+  const tables = atad5sTables();
+  const modules = suggestModules(tables);
+  const payment = (depth = 1) => focusGraph(tables, 'da_thanh_toan', modules, view({ depth }))!;
+
+  /** What the stage takes of the canvas once it is laid out and zoomed. */
+  const taken = (graph: ReturnType<typeof payment>, available: number) => {
+    const fit = fitFocus(graph.nodes, available);
+    return { fit, width: placeFocus(graph.nodes, fit.gap).width * fit.zoom };
+  };
+
+  it('keeps the layout it had in a canvas with room, and when the canvas is not measured yet', () => {
+    const graph = payment();
+    expect(fitFocus(graph.nodes, 900)).toEqual({ gap: FOCUS_GAP_X, zoom: 1 });
+    expect(fitFocus(graph.nodes, 0)).toEqual({ gap: FOCUS_GAP_X, zoom: 1 });
+    expect(placeFocus(graph.nodes).width).toBe(placeFocus(graph.nodes, FOCUS_GAP_X).width);
+  });
+
+  it('closes the gap between the columns before it zooms', () => {
+    const graph = payment();
+    // 1440px with the Explorer (300), the rail (48) and the inspector (352) leaves 740: 796px did not fit.
+    const { fit, width } = taken(graph, 740);
+    expect(fit.zoom).toBe(1);
+    expect(fit.gap).toBeLessThan(FOCUS_GAP_X);
+    expect(fit.gap).toBeGreaterThanOrEqual(FOCUS_GAP_MIN);
+    expect(width).toBeLessThanOrEqual(740);
+  });
+
+  it('then zooms out, but never below 70%', () => {
+    const graph = payment();
+    const narrow = taken(graph, 600);
+    expect(narrow.fit.gap).toBe(FOCUS_GAP_MIN);
+    expect(narrow.fit.zoom).toBeLessThan(1);
+    expect(narrow.fit.zoom).toBeGreaterThanOrEqual(FOCUS_ZOOM_MIN);
+    expect(narrow.width).toBeLessThanOrEqual(600);
+    // Too narrow even at 70%: the canvas scrolls rather than the cards shrinking further.
+    expect(fitFocus(graph.nodes, 300)).toEqual({ gap: FOCUS_GAP_MIN, zoom: FOCUS_ZOOM_MIN });
+  });
+
+  it('leaves no column covered at the widths of a 1440 and a 1280 window', () => {
+    const graph = payment();
+    const columns = new Set(graph.nodes.map((node) => node.lane)).size;
+    expect(columns).toBe(3);
+    // The window less the rail, the Explorer and an inspector of 352 or 440.
+    for (const available of [740, 652, 580, 510]) {
+      const { fit } = taken(graph, available);
+      const placed = placeFocus(graph.nodes, fit.gap);
+      const right = Math.max(...placed.nodes.map((node) => node.x + node.width));
+      expect((right + 20) * fit.zoom).toBeLessThanOrEqual(available + 0.5);
+    }
+  });
+
+  it('lays out the lanes of a deeper view the same way', () => {
+    const graph = payment(2);
+    const { fit } = taken(graph, 740);
+    expect(fit.gap).toBeGreaterThanOrEqual(FOCUS_GAP_MIN);
+    expect(fit.zoom).toBeGreaterThanOrEqual(FOCUS_ZOOM_MIN);
   });
 });
 

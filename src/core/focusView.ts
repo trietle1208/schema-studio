@@ -18,6 +18,10 @@ export const FOCUS_CENTER_WIDTH = 220;
 /** Room between two columns for the curve of a line. */
 export const FOCUS_GAP_X = 72;
 export const FOCUS_GAP_Y = 16;
+/** The least room between two columns, once the canvas is too narrow for `FOCUS_GAP_X`. */
+export const FOCUS_GAP_MIN = 32;
+/** The view is never zoomed out further than this to fit its columns; past it the canvas scrolls. */
+export const FOCUS_ZOOM_MIN = 0.7;
 export const FOCUS_ORIGIN_X = 20;
 /** The lane names sit above the cards, under the bar. */
 export const FOCUS_LABEL_Y = 52;
@@ -301,8 +305,48 @@ export function focusNodeHeight(columns: number, more: number): number {
   return FOCUS_BORDER + FOCUS_HEAD + Math.max(0, columns) * FOCUS_ROW + (more > 0 ? FOCUS_ROW : 0);
 }
 
-/** Cards in columns. A column is as tall as its cards, and the columns share one midline. */
-export function placeFocus(nodes: readonly FocusNode[]): { nodes: PlacedFocusNode[]; width: number; height: number } {
+/** The widths of the columns, left to right. */
+function laneWidths(nodes: readonly FocusNode[]): number[] {
+  const ids = [...new Set(nodes.map((node) => node.lane))].sort((a, b) => a - b);
+  return ids.map((id) => (id === 0 ? FOCUS_CENTER_WIDTH : FOCUS_NODE_WIDTH));
+}
+
+/** How wide the stage is when its columns are `gap` apart. */
+function stageWidth(widths: readonly number[], gap: number): number {
+  const sum = widths.reduce((total, width) => total + width, 0);
+  return Math.max(FOCUS_ORIGIN_X * 2 + FOCUS_CENTER_WIDTH, FOCUS_ORIGIN_X * 2 + sum + gap * Math.max(0, widths.length - 1));
+}
+
+export interface FocusFit {
+  /** Room between two columns. */
+  gap: number;
+  /** 1, or less when the columns do not fit at the least gap. At least `FOCUS_ZOOM_MIN`. */
+  zoom: number;
+}
+
+/**
+ * How the columns are laid out in a canvas `available` px wide (the canvas, not the window: the
+ * inspector and the Explorer are not in it). They keep `FOCUS_GAP_X` between them while that fits.
+ * Short of room the gap shrinks first, down to `FOCUS_GAP_MIN`, and then the stage is zoomed out,
+ * to `FOCUS_ZOOM_MIN` at the least. Past that no column is made smaller: the canvas scrolls. An
+ * unmeasured canvas (0) keeps the layout as it was.
+ */
+export function fitFocus(nodes: readonly FocusNode[], available: number): FocusFit {
+  const widths = laneWidths(nodes);
+  if (!(available > 0) || stageWidth(widths, FOCUS_GAP_X) <= available) return { gap: FOCUS_GAP_X, zoom: 1 };
+  const lanes = Math.max(1, widths.length - 1);
+  const sum = widths.reduce((total, width) => total + width, 0);
+  const room = (available - FOCUS_ORIGIN_X * 2 - sum) / lanes;
+  if (room >= FOCUS_GAP_MIN) return { gap: Math.floor(room), zoom: 1 };
+  const zoom = Math.max(FOCUS_ZOOM_MIN, available / stageWidth(widths, FOCUS_GAP_MIN));
+  return { gap: FOCUS_GAP_MIN, zoom: Math.min(1, zoom) };
+}
+
+/** Cards in columns, `gap` apart. A column is as tall as its cards, and the columns share one midline. */
+export function placeFocus(
+  nodes: readonly FocusNode[],
+  gap: number = FOCUS_GAP_X,
+): { nodes: PlacedFocusNode[]; width: number; height: number } {
   const lanes = new Map<number, FocusNode[]>();
   for (const node of nodes) {
     const list = lanes.get(node.lane) ?? [];
@@ -321,7 +365,7 @@ export function placeFocus(nodes: readonly FocusNode[]): { nodes: PlacedFocusNod
   let x = FOCUS_ORIGIN_X;
   for (const id of ids) {
     xOf.set(id, x);
-    x += (id === 0 ? FOCUS_CENTER_WIDTH : FOCUS_NODE_WIDTH) + FOCUS_GAP_X;
+    x += (id === 0 ? FOCUS_CENTER_WIDTH : FOCUS_NODE_WIDTH) + gap;
   }
   const placed: PlacedFocusNode[] = [];
   for (const id of ids) {
@@ -333,7 +377,7 @@ export function placeFocus(nodes: readonly FocusNode[]): { nodes: PlacedFocusNod
       y += height + FOCUS_GAP_Y;
     }
   }
-  const width = Math.max(FOCUS_ORIGIN_X * 2 + FOCUS_CENTER_WIDTH, x - FOCUS_GAP_X + FOCUS_ORIGIN_X);
+  const width = Math.max(FOCUS_ORIGIN_X * 2 + FOCUS_CENTER_WIDTH, x - gap + FOCUS_ORIGIN_X);
   return { nodes: placed, width, height: FOCUS_TOP + maxH + FOCUS_PAD_BOTTOM };
 }
 

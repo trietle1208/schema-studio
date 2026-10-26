@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useUiStore } from '../store/ui';
 import {
+  fitFocus,
   focusLines,
   placeFocus,
   FOCUS_GAP_X,
@@ -19,6 +20,7 @@ import { Button } from './Button';
 import { cx } from './cx';
 import { Icon } from './Icon';
 import { Switch } from './Switch';
+import { useElementWidth } from './useElementWidth';
 
 export interface FocusViewProps {
   groups: readonly TableGroup[];
@@ -64,7 +66,11 @@ export function FocusView({
   onSaveView,
   onPath,
 }: FocusViewProps) {
-  const placed = graph ? placeFocus(graph.nodes) : null;
+  const scroll = useRef<HTMLDivElement>(null);
+  // The columns are laid out for the room the canvas has: the gap between them gives first, then the zoom.
+  const room = useElementWidth(scroll);
+  const fit = useMemo(() => (graph ? fitFocus(graph.nodes, room) : { gap: FOCUS_GAP_X, zoom: 1 }), [graph, room]);
+  const placed = graph ? placeFocus(graph.nodes, fit.gap) : null;
   const lines = graph && placed ? focusLines(placed.nodes, graph.edges) : [];
   const names = graph?.nodes.map((node) => node.table) ?? [];
   const moduleIndex = new Map(modules.map((module, index) => [module.name, index]));
@@ -116,73 +122,79 @@ export function FocusView({
         </span>
       </div>
 
-      <div className="ss-focus-scroll">
+      <div ref={scroll} className="ss-focus-scroll">
         {placed && graph ? (
-          <div className="ss-focus-stage" style={{ width: placed.width, height: placed.height }}>
-            <LaneLabel nodes={placed.nodes} side="left" />
-            <LaneLabel nodes={placed.nodes} side="center" />
-            <LaneLabel nodes={placed.nodes} side="right" />
-            <svg className="ss-focus-edges" width={placed.width} height={placed.height} aria-hidden="true">
-              {lines.map((line) => (
-                <path key={line.key} d={line.d} />
-              ))}
-            </svg>
-            {placed.nodes.map((node) => {
-              const source = modules.find((module) => module.name === node.module);
-              const saved = source ? savedModuleGroup(groups, source.tables) : undefined;
-              const color: GroupColor | null = node.module ? (saved?.color ?? moduleColor(node.module, moduleIndex.get(node.module) ?? 0, groups)) : null;
-              return (
-                <div
-                  key={node.table}
-                  className={cx('ss-fnode', node.lane === 0 && 'is-center', color && `ss-group--${color}`)}
-                  style={{ left: node.x, top: node.y, width: node.width, height: node.height }}
-                  role="button"
-                  tabIndex={-1}
-                  onClick={() => onFocus(node.table)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      onFocus(node.table);
-                    }
-                  }}
-                >
-                  <div className="ss-fnode-head">
-                    {color && <span className="ss-fnode-bar" />}
-                    <Icon name="table" size={13} />
-                    <b title={node.table}>{node.table}</b>
-                    <span className="ss-fnode-n">{formatNumber(node.total)}</span>
-                  </div>
-                  {node.columns.map((column) => (
-                    <div key={column.name} className={cx('ss-fnode-row', column.kind === 'pk' && 'is-pk', column.kind === 'fk' && 'is-fk', column.join && 'is-join')}>
-                      {column.kind === 'pk' ? <Icon name="key" size={11} /> : column.kind === 'fk' ? <Icon name="link" size={11} /> : <span className="ss-fnode-gap" />}
-                      <span className="ss-fnode-col" title={column.name}>{column.name}</span>
-                      {column.hub ? (
-                        <span className="ss-fnode-hub" title={column.hub}>
-                          <Icon name="hub" size={9} />
-                          {column.hub}
-                        </span>
-                      ) : (
-                        <span className="ss-fnode-type" title={column.type}>{column.type}</span>
-                      )}
+          <div className="ss-focus-zoom" style={{ width: placed.width * fit.zoom, height: placed.height * fit.zoom }}>
+            <div
+              className="ss-focus-stage"
+              data-zoom={fit.zoom}
+              style={{ width: placed.width, height: placed.height, ...(fit.zoom < 1 ? { transform: `scale(${fit.zoom})` } : {}) }}
+            >
+              <LaneLabel nodes={placed.nodes} side="left" />
+              <LaneLabel nodes={placed.nodes} side="center" />
+              <LaneLabel nodes={placed.nodes} side="right" gap={fit.gap} />
+              <svg className="ss-focus-edges" width={placed.width} height={placed.height} aria-hidden="true">
+                {lines.map((line) => (
+                  <path key={line.key} d={line.d} />
+                ))}
+              </svg>
+              {placed.nodes.map((node) => {
+                const source = modules.find((module) => module.name === node.module);
+                const saved = source ? savedModuleGroup(groups, source.tables) : undefined;
+                const color: GroupColor | null = node.module ? (saved?.color ?? moduleColor(node.module, moduleIndex.get(node.module) ?? 0, groups)) : null;
+                return (
+                  <div
+                    key={node.table}
+                    className={cx('ss-fnode', node.lane === 0 && 'is-center', color && `ss-group--${color}`)}
+                    style={{ left: node.x, top: node.y, width: node.width, height: node.height }}
+                    role="button"
+                    tabIndex={-1}
+                    onClick={() => onFocus(node.table)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        onFocus(node.table);
+                      }
+                    }}
+                  >
+                    <div className="ss-fnode-head">
+                      {color && <span className="ss-fnode-bar" />}
+                      <Icon name="table" size={13} />
+                      <b title={node.table}>{node.table}</b>
+                      <span className="ss-fnode-n">{formatNumber(node.total)}</span>
                     </div>
-                  ))}
-                  {node.more > 0 && <div className="ss-fnode-more">{t('focus.moreColumns', { count: node.more })}</div>}
-                  {node.hidden > 0 && (
-                    <button
-                      type="button"
-                      className={cx('ss-fnode-badge', node.lane > 0 && 'is-ghost')}
-                      aria-label={t('focus.expand', { count: node.hidden })}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleExpanded(node.table);
-                      }}
-                    >
-                      {t('focus.badge', { count: node.hidden })}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+                    {node.columns.map((column) => (
+                      <div key={column.name} className={cx('ss-fnode-row', column.kind === 'pk' && 'is-pk', column.kind === 'fk' && 'is-fk', column.join && 'is-join')}>
+                        {column.kind === 'pk' ? <Icon name="key" size={11} /> : column.kind === 'fk' ? <Icon name="link" size={11} /> : <span className="ss-fnode-gap" />}
+                        <span className="ss-fnode-col" title={column.name}>{column.name}</span>
+                        {column.hub ? (
+                          <span className="ss-fnode-hub" title={column.hub}>
+                            <Icon name="hub" size={9} />
+                            {column.hub}
+                          </span>
+                        ) : (
+                          <span className="ss-fnode-type" title={column.type}>{column.type}</span>
+                        )}
+                      </div>
+                    ))}
+                    {node.more > 0 && <div className="ss-fnode-more">{t('focus.moreColumns', { count: node.more })}</div>}
+                    {node.hidden > 0 && (
+                      <button
+                        type="button"
+                        className={cx('ss-fnode-badge', node.lane > 0 && 'is-ghost')}
+                        aria-label={t('focus.expand', { count: node.hidden })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleExpanded(node.table);
+                        }}
+                      >
+                        {t('focus.badge', { count: node.hidden })}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <p className="ss-focus-empty">{t('modules.focusPick')}</p>
@@ -223,13 +235,13 @@ export function FocusView({
   );
 }
 
-function LaneLabel({ nodes, side }: { nodes: readonly PlacedFocusNode[]; side: 'left' | 'center' | 'right' }) {
+function LaneLabel({ nodes, side, gap = FOCUS_GAP_X }: { nodes: readonly PlacedFocusNode[]; side: 'left' | 'center' | 'right'; gap?: number }) {
   const list = nodes.filter((node) => (side === 'left' ? node.lane < 0 : side === 'right' ? node.lane > 0 : node.lane === 0));
   const center = nodes.find((node) => node.lane === 0);
   const left = side === 'left' ? FOCUS_ORIGIN_X : side === 'center' ? (center?.x ?? FOCUS_ORIGIN_X) : undefined;
   const x = list.length ? Math.min(...list.map((node) => node.x)) : left;
   if (x === undefined && side === 'right') {
-    const after = center ? center.x + center.width + FOCUS_GAP_X : FOCUS_ORIGIN_X;
+    const after = center ? center.x + center.width + gap : FOCUS_ORIGIN_X;
     return (
       <span className="ss-focus-lane" style={{ left: after, top: FOCUS_LABEL_Y }}>
         {t('focus.references')} · {formatNumber(0)}
