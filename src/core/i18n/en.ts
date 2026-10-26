@@ -441,6 +441,7 @@ export const en = {
   'explorer.scope.tables': 'Tables',
   'explorer.scope.columns': 'Columns',
   'explorer.matches': { one: '{count} match', other: '{count} matches' },
+  'explorer.noMatch': 'No table or column matches “{query}”',
   'explorer.already': { one: '{count} already on canvas', other: '{count} already on canvas' },
   'explorer.showMatches': 'Show all {count}',
   'explorer.focusNamed': 'Focus {name}',

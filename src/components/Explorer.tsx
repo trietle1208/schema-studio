@@ -482,6 +482,13 @@ export function Explorer({
               );
             })}
           </div>
+        ) : found && found.groups.length === 0 ? (
+          <div className="ss-ex-empty">
+            <p>{t('explorer.noMatch', { query: query.trim() })}</p>
+            <button type="button" className="ss-btn ss-btn--secondary ss-btn--sm" onClick={() => setQuery('')}>
+              {t('explorer.clearFilter')}
+            </button>
+          </div>
         ) : found ? (
           found.groups.map((group, index) => {
             const isOpen = filterOpen(group.module, index);
@@ -698,7 +705,7 @@ export function Explorer({
         )}
       </div>
 
-      {found ? (
+      {found && found.groups.length > 0 ? (
         <div className="ss-ex-bulk">
           <div>
             <b>{t('explorer.matches', { count: found.matches })}</b>

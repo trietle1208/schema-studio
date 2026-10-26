@@ -425,6 +425,7 @@ export const vi: Dictionary = {
   'explorer.scope.tables': 'Bảng',
   'explorer.scope.columns': 'Cột',
   'explorer.matches': { one: '{count} kết quả', other: '{count} kết quả' },
+  'explorer.noMatch': 'Không có bảng hay cột nào khớp “{query}”',
   'explorer.already': { one: '{count} đã có trên canvas', other: '{count} đã có trên canvas' },
   'explorer.showMatches': 'Hiện tất cả {count}',
   'explorer.focusNamed': 'Tập trung {name}',
