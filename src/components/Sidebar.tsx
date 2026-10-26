@@ -27,6 +27,12 @@ export interface SidebarProps {
    */
   rail?: 'explorer' | 'views';
   onRail?: (id: 'schemas' | 'explorer' | 'views') => void;
+  /** Opens the change log. It is a place of its own and not a filter of the schemas, so it is not a `SidebarNav`. */
+  onChanges?: () => void;
+  /** The change log is on screen: its entry is the active one, and no schema nav is. */
+  changesActive?: boolean;
+  /** How many changes still wait on some server; the entry has no number when none do. */
+  changesCount?: number;
   empty?: boolean;
   workspace?: string;
   userName?: string;
@@ -51,6 +57,9 @@ function SidebarBody({
   collapsed = false,
   rail,
   onRail,
+  onChanges,
+  changesActive = false,
+  changesCount = 0,
   empty,
   workspace = t('sidebar.workspace'),
   userName = 'Luong Hoang',
@@ -117,7 +126,7 @@ function SidebarBody({
           <button
             key={n.id}
             type="button"
-            className={cx('ss-nav-item', (rail ? rail === n.id : active === n.id) && 'is-active')}
+            className={cx('ss-nav-item', !changesActive && (rail ? rail === n.id : active === n.id) && 'is-active')}
             title={collapsed || rail ? n.label : undefined}
             onClick={() => goNav(n.id)}
           >
@@ -126,6 +135,19 @@ function SidebarBody({
             {n.count != null && <span className="ss-nav-count">{n.count}</span>}
           </button>
         ))}
+        {onChanges && (
+          <button
+            type="button"
+            className={cx('ss-nav-item', changesActive && 'is-active')}
+            title={collapsed || rail ? t('changes.title') : undefined}
+            aria-current={changesActive || undefined}
+            onClick={onChanges}
+          >
+            <Icon name="list" size={16} />
+            <span className="ss-sb-label">{t('changes.title')}</span>
+            {changesCount > 0 && <span className="ss-nav-count">{changesCount}</span>}
+          </button>
+        )}
       </div>
       <div className="ss-sb-section">
         <span className="ss-caption">{sectionLabel}</span>

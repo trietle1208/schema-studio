@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from './components/AppShell';
 import { Sidebar } from './components/Sidebar';
 import { t } from './core/i18n';
-import { routeSchema, SCHEMAS_ROUTE, type Route } from './core/routes';
+import { pendingChanges } from './core/changes/group';
+import { CHANGES_ROUTE, routeSchema, SCHEMAS_ROUTE, type Route } from './core/routes';
 import { schemaSummary, setSchemaFavorite } from './db/schemas';
+import { useChanges } from './db/useChanges';
 import { useSchemas } from './db/useSchemas';
+import { ChangeLog } from './screens/ChangeLog';
 import { DataMode } from './screens/DataMode';
 import { go } from './screens/navigation';
 import { Overlays } from './screens/Overlays';
@@ -37,6 +40,7 @@ function useNow(): number {
 /** What the tab and the browser's history call a route. */
 function routeTitle(route: Route): string {
   if (route.screen === 'schemas') return `${t('common.schemas')} · ${APP_NAME}`;
+  if (route.screen === 'changes') return `${t('changes.title')} · ${APP_NAME}`;
   if (route.screen === 'workspace') return `${route.schema} · ${APP_NAME}`;
   if (route.screen === 'data') return `${route.table} · ${route.schema} · ${t('mode.data')} · ${APP_NAME}`;
   if (route.screen === 'query') return `${route.schema} · ${t('query.title')} · ${APP_NAME}`;
@@ -56,6 +60,7 @@ export function App() {
 function Screens() {
   const route = useUiStore((s) => s.route);
   const stored = useSchemas();
+  const changes = useChanges();
   const now = useNow();
   const summaries = useMemo(() => (stored ?? []).map((s) => schemaSummary(s, now)), [stored, now]);
   const sidebarCollapsed = useSettingsStore((s) => s.sidebarCollapsed);
@@ -84,9 +89,13 @@ function Screens() {
               else setDiagramRail(id);
             }}
             onCollapse={toggleSidebar}
+            // The change log is no list of schemas: a nav of the list leaves it for the list.
             onNavigate={(id) => {
-              if (id === 'schemas') go(SCHEMAS_ROUTE);
+              if (id === 'schemas' || route.screen === 'changes') go(SCHEMAS_ROUTE);
             }}
+            onChanges={() => go(CHANGES_ROUTE)}
+            changesActive={route.screen === 'changes'}
+            changesCount={changes ? pendingChanges(changes) : 0}
             onSelectSchema={(schema) => go({ screen: 'workspace', schema })}
             onToggleFavorite={(name, favorite) => {
               void setSchemaFavorite(name, favorite);
@@ -101,6 +110,7 @@ function Screens() {
       overlay={<Overlays />}
     >
       {route.screen === 'schemas' && <SchemaList schemas={stored} now={now} />}
+      {route.screen === 'changes' && <ChangeLog changes={changes} schemas={stored} now={now} />}
       {route.screen === 'workspace' && <Workspace />}
       {route.screen === 'data' && <DataMode table={route.table} />}
       {route.screen === 'query' && <QueryMode />}

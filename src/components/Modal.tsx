@@ -1,6 +1,7 @@
 import { useEffect, useRef, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { t } from '../core/i18n';
 import { Button } from './Button';
+import { cx } from './cx';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import type { IconName } from './icons';
@@ -20,6 +21,8 @@ export interface ModalProps {
   footerStart?: ReactNode;
   headerAside?: ReactNode;
   bodyStyle?: CSSProperties;
+  /** Added to the dialog's own classes, for a screen that sets the spacing of its dialog. */
+  className?: string;
   children?: ReactNode;
 }
 
@@ -47,6 +50,7 @@ export function Modal({
   footerStart,
   headerAside,
   bodyStyle,
+  className,
   children,
 }: ModalProps) {
   const dialog = useRef<HTMLDivElement>(null);
@@ -81,7 +85,7 @@ export function Modal({
     >
       <div
         ref={dialog}
-        className="ss-modal"
+        className={cx('ss-modal', className)}
         role="dialog"
         aria-modal
         aria-label={typeof title === 'string' ? title : undefined}

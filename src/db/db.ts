@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable, type Table } from 'dexie';
+import type { Change } from '../core/changes/model';
 import type { Positions, SchemaSnapshot } from '../core/model';
 import type { Row } from '../core/records';
 import type { QuerySpec } from '../core/records/query';
@@ -127,6 +128,11 @@ export interface KnownHostRecord {
   trustedAt: number;
 }
 
+/** One row per change of the change log. `seq` is unique across the whole log, whatever the database. */
+export interface ChangeRecord extends Change {
+  id: number;
+}
+
 export type Database = Dexie & {
   schemas: EntityTable<SchemaRecord, 'id'>;
   versions: EntityTable<VersionRecord, 'id'>;
@@ -135,6 +141,7 @@ export type Database = Dexie & {
   queries: EntityTable<QueryRecord, 'id'>;
   connections: EntityTable<ConnectionRecord, 'schemaId'>;
   views: EntityTable<DiagramViewRecord, 'id'>;
+  changes: EntityTable<ChangeRecord, 'id'>;
 };
 
 export const db = new Dexie('schema-studio') as Database;
@@ -181,4 +188,9 @@ db.version(7).stores({
 // Version 8 adds the saved views of a diagram, one row per view, by schema.
 db.version(8).stores({
   views: '++id, schemaId',
+});
+
+// Version 9 adds the change log: which server is still missing which change. Nothing stored earlier changes.
+db.version(9).stores({
+  changes: '++id, &seq, database, createdAt',
 });

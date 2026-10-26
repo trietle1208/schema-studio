@@ -72,6 +72,9 @@ export const ICONS = {
   sparkle: '<path d="M12 4v4M12 16v4M4 12h4M16 12h4"/>',
   lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
   external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  list: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
+  rocket: '<path d="M5 15c-1.5 1-2 3.5-2 5 1.5 0 4-.5 5-2"/><path d="M9 15l-3-3c1-3.5 4.5-8 12-8 0 7.5-4.5 11-8 12z"/><circle cx="14.5" cy="9.5" r="1.5"/>',
+  git: '<circle cx="12" cy="12" r="3"/><path d="M3 12h6M15 12h6"/>',
 } as const;
 
 export type IconName = keyof typeof ICONS;

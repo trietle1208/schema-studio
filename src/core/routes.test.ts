@@ -5,6 +5,7 @@ import { dataTable, modeRoute, parseRoute, routeMode, routePath, routeSchema, sa
 // The screens, for the ecommerce sample at the versions the prototype compares.
 const routes: [string, Route][] = [
   ['/schemas', { screen: 'schemas' }],
+  ['/changes', { screen: 'changes' }],
   ['/schemas/ecommerce', { screen: 'workspace', schema: 'ecommerce' }],
   ['/schemas/ecommerce/history', { screen: 'history', schema: 'ecommerce' }],
   ['/schemas/ecommerce/diff/v11/v12', { screen: 'diff', schema: 'ecommerce', from: 11, to: 12 }],
@@ -29,7 +30,7 @@ describe('parseRoute', () => {
   });
 
   it('reads what routePath wrote, for any name', () => {
-    for (const schema of ['auth_service', 'a/b c', 'history', 'diff', 'data', 'query', 'đơn_hàng', '100%']) {
+    for (const schema of ['auth_service', 'a/b c', 'history', 'diff', 'data', 'query', 'changes', 'đơn_hàng', '100%']) {
       const route: Route = { screen: 'history', schema };
       expect(parseRoute(routePath(route))).toEqual(route);
       expect(parseRoute(routePath({ screen: 'query', schema }))).toEqual({ screen: 'query', schema });
@@ -44,6 +45,16 @@ describe('parseRoute', () => {
     expect(parseRoute('#/schemas/ecommerce')).toEqual({ screen: 'workspace', schema: 'ecommerce' });
     expect(parseRoute('#/schemas/')).toEqual({ screen: 'schemas' });
     expect(parseRoute('/schemas/ecommerce/history/')).toEqual({ screen: 'history', schema: 'ecommerce' });
+    expect(parseRoute('#/changes')).toEqual({ screen: 'changes' });
+    expect(parseRoute('#/changes/')).toEqual({ screen: 'changes' });
+    expect(parseRoute('/changes/')).toEqual({ screen: 'changes' });
+  });
+
+  it('keeps a schema called changes apart from the change log', () => {
+    expect(parseRoute('#/schemas/changes')).toEqual({ screen: 'workspace', schema: 'changes' });
+    expect(parseRoute('#/schemas/changes/history')).toEqual({ screen: 'history', schema: 'changes' });
+    expect(routePath({ screen: 'workspace', schema: 'changes' })).toBe('/schemas/changes');
+    expect(routePath({ screen: 'changes' })).toBe('/changes');
   });
 
   it.each([
@@ -68,6 +79,11 @@ describe('parseRoute', () => {
     '/schemas/ecommerce/data/%E0%A4%A',
     '/schemas/ecommerce/data/users/rows',
     '/schemas/ecommerce/query/history',
+    '/changes//',
+    '/changes/42',
+    '/changes/schemas',
+    '/Changes',
+    '/changes/ecommerce/history',
   ])('is null for %j', (path) => {
     expect(parseRoute(path)).toBeNull();
   });
@@ -85,12 +101,15 @@ describe('sameRoute', () => {
     expect(sameRoute({ screen: 'data', schema: 'blog', table: 'posts' }, { screen: 'data', schema: 'blog', table: 'posts' })).toBe(true);
     expect(sameRoute({ screen: 'data', schema: 'blog', table: 'posts' }, { screen: 'data', schema: 'blog', table: 'users' })).toBe(false);
     expect(sameRoute({ screen: 'data', schema: 'blog', table: 'posts' }, { screen: 'query', schema: 'blog' })).toBe(false);
+    expect(sameRoute({ screen: 'changes' }, { screen: 'changes' })).toBe(true);
+    expect(sameRoute({ screen: 'changes' }, { screen: 'schemas' })).toBe(false);
+    expect(sameRoute({ screen: 'changes' }, { screen: 'workspace', schema: 'changes' })).toBe(false);
   });
 });
 
 describe('routeMode', () => {
   it('names the mode of the three workspace screens and no other', () => {
-    expect(routes.map(([, route]) => routeMode(route))).toEqual([null, 'diagram', null, null, 'data', 'query']);
+    expect(routes.map(([, route]) => routeMode(route))).toEqual([null, null, 'diagram', null, null, 'data', 'query']);
   });
 });
 
@@ -110,7 +129,7 @@ describe('modeRoute', () => {
   it('leads back to the mode it came from', () => {
     for (const [, route] of routes) {
       const mode = routeMode(route);
-      if (mode && route.screen !== 'schemas') expect(modeRoute(mode, route.schema, route.screen === 'data' ? route.table : 'users')).toEqual(route);
+      if (mode && route.screen !== 'schemas' && route.screen !== 'changes') expect(modeRoute(mode, route.schema, route.screen === 'data' ? route.table : 'users')).toEqual(route);
     }
   });
 });
@@ -133,7 +152,12 @@ describe('dataTable', () => {
 });
 
 describe('routeSchema', () => {
-  it('names the schema of every screen but the list', () => {
-    expect(routes.map(([, route]) => routeSchema(route))).toEqual([null, 'ecommerce', 'ecommerce', 'ecommerce', 'ecommerce', 'ecommerce']);
+  it('names the schema of every screen but the list and the change log', () => {
+    expect(routes.map(([, route]) => routeSchema(route))).toEqual([null, null, 'ecommerce', 'ecommerce', 'ecommerce', 'ecommerce', 'ecommerce']);
+  });
+
+  it('names no schema for the change log, so that showing it never reads one', () => {
+    expect(routeSchema({ screen: 'changes' })).toBeNull();
+    expect(routeSchema({ screen: 'workspace', schema: 'changes' })).toBe('changes');
   });
 });

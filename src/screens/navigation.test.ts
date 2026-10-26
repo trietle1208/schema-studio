@@ -29,6 +29,7 @@ function confirmDiscard() {
 const LIST: Route = { screen: 'schemas' };
 const SHOP: Route = { screen: 'workspace', schema: 'ecommerce' };
 const BLOG: Route = { screen: 'workspace', schema: 'blog' };
+const CHANGES: Route = { screen: 'changes' };
 
 let shop: SchemaRecord;
 let blog: SchemaRecord;
@@ -85,6 +86,16 @@ describe('startRouting', () => {
     expect(names()).toEqual(['users', 'orders']);
     expect(selectDirty(schema())).toBe(false);
     expect(address.entries).toEqual(['#/schemas/blog']);
+  });
+
+  it('starts on the change log, as after a reload, without opening a schema or saying one is missing', async () => {
+    await storeTwoSchemas();
+    await start('#/changes');
+
+    expect(ui().route).toEqual(CHANGES);
+    expect(address.entries).toEqual(['#/changes']);
+    expect(ui().toast).toBeNull();
+    expect(schema().id).toBeNull();
   });
 
   it.each<[string, Route]>([
@@ -144,6 +155,24 @@ describe('go', () => {
     expect(ui().dialog).toBeNull();
     expect(address.entries).toEqual(['#/schemas/ecommerce', '#/schemas']);
     expect(schema().id).toBe(shop.id);
+    expect(selectDirty(schema())).toBe(true);
+  });
+
+  it('shows the change log and keeps the open schema with its unsaved changes, without asking', () => {
+    schema().deleteTable('payments');
+    go(CHANGES);
+
+    expect(ui().route).toEqual(CHANGES);
+    expect(ui().dialog).toBeNull();
+    expect(ui().toast).toBeNull();
+    expect(address.entries).toEqual(['#/schemas/ecommerce', '#/changes']);
+    expect(schema().id).toBe(shop.id);
+    expect(selectDirty(schema())).toBe(true);
+
+    // Back on the schema that is open: nothing is read again, and the changes are still there.
+    go(SHOP);
+    expect(ui().route).toEqual(SHOP);
+    expect(names()).not.toContain('payments');
     expect(selectDirty(schema())).toBe(true);
   });
 
@@ -289,6 +318,21 @@ describe('a change of the address', () => {
     expect(address.entries).toEqual(['#/schemas/ecommerce', '#/schemas', '#/schemas/blog']);
   });
 
+  it('shows the change log that was typed in, and leaves the unsaved changes of the open schema alone', () => {
+    schema().deleteTable('payments');
+    address.visit('/changes');
+
+    expect(ui().route).toEqual(CHANGES);
+    expect(ui().dialog).toBeNull();
+    expect(address.read()).toBe('#/changes');
+    expect(selectDirty(schema())).toBe(true);
+
+    address.back();
+    expect(ui().route).toEqual(SHOP);
+    expect(ui().dialog).toBeNull();
+    expect(names()).not.toContain('payments');
+  });
+
   it('shows an address that was typed in', async () => {
     address.visit('/schemas/blog/diff/v1/v2');
     await shown({ screen: 'diff', schema: 'blog', from: 1, to: 2 });
@@ -351,5 +395,30 @@ describe('a change of the address', () => {
     first.visit('/schemas/blog');
     await settled();
     expect(ui().route).toEqual(LIST);
+  });
+});
+
+describe('the change log with nothing stored', () => {
+  it('is shown without reading a schema, and no schema is said to be missing', async () => {
+    await start();
+    expect(ui().route).toEqual(LIST);
+    go(CHANGES);
+
+    expect(ui().route).toEqual(CHANGES);
+    expect(ui().toast).toBeNull();
+    expect(address.entries).toEqual(['#/schemas', '#/changes']);
+    await settled();
+    expect(ui().route).toEqual(CHANGES);
+    expect(ui().toast).toBeNull();
+  });
+
+  it('is still the screen after a second visit to it, and the list is one step back', async () => {
+    await start('#/changes');
+    expect(ui().route).toEqual(CHANGES);
+    go(CHANGES);
+    expect(address.entries).toEqual(['#/changes']);
+    go(LIST);
+    address.back();
+    expect(ui().route).toEqual(CHANGES);
   });
 });

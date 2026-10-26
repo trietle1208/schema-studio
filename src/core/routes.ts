@@ -1,6 +1,8 @@
-/** A place in the app. Every screen but the schema list is about one schema, named in the route. */
+/** A place in the app. Every screen but the schema list and the change log is about one schema, named in the route. */
 export type Route =
   | { screen: 'schemas' }
+  /** The change log: which server is still missing which change, for every database. */
+  | { screen: 'changes' }
   | { screen: 'workspace'; schema: string }
   | { screen: 'history'; schema: string }
   /** Compares version `from` (the base) with version `to`. */
@@ -16,6 +18,7 @@ export type Screen = Route['screen'];
 export type WorkspaceMode = 'diagram' | 'data' | 'query';
 
 export const SCHEMAS_ROUTE: Route = { screen: 'schemas' };
+export const CHANGES_ROUTE: Route = { screen: 'changes' };
 
 const VERSION = /^v([1-9]\d*)$/;
 
@@ -36,10 +39,11 @@ function decoded(segment: string): string | null {
 /**
  * The path of a route, as it goes in the address bar after the `#`:
  * `/schemas`, `/schemas/ecommerce`, `/schemas/ecommerce/history`, `/schemas/ecommerce/diff/v11/v12`,
- * `/schemas/ecommerce/data/users`, `/schemas/ecommerce/query`.
+ * `/schemas/ecommerce/data/users`, `/schemas/ecommerce/query`, and `/changes` for the change log.
  */
 export function routePath(route: Route): string {
   if (route.screen === 'schemas') return '/schemas';
+  if (route.screen === 'changes') return '/changes';
   const schema = `/schemas/${encodeURIComponent(route.schema)}`;
   if (route.screen === 'workspace') return schema;
   if (route.screen === 'history') return `${schema}/history`;
@@ -56,6 +60,8 @@ export function parseRoute(path: string): Route | null {
   const [lead, ...segments] = path.replace(/^#/, '').split('/');
   if (lead !== '') return null;
   if (segments[segments.length - 1] === '') segments.pop();
+  // The change log is no schema's: it is read before the guard that sends every other path to a schema.
+  if (segments[0] === 'changes') return segments.length === 1 ? CHANGES_ROUTE : null;
   if (segments[0] !== 'schemas') return null;
   if (segments.length === 1) return SCHEMAS_ROUTE;
 
@@ -80,12 +86,12 @@ export function sameRoute(a: Route, b: Route): boolean {
   return routePath(a) === routePath(b);
 }
 
-/** The schema a route is about; null for the schema list. */
+/** The schema a route is about; null for the schema list and the change log, which are about none. */
 export function routeSchema(route: Route): string | null {
-  return route.screen === 'schemas' ? null : route.schema;
+  return route.screen === 'schemas' || route.screen === 'changes' ? null : route.schema;
 }
 
-/** The workspace mode a route is in; null for a screen that is not one (the list, history, a comparison). */
+/** The workspace mode a route is in; null for a screen that is not one (the list, the change log, history, a comparison). */
 export function routeMode(route: Route): WorkspaceMode | null {
   if (route.screen === 'workspace') return 'diagram';
   if (route.screen === 'data' || route.screen === 'query') return route.screen;

@@ -1,0 +1,212 @@
+<!doctype html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Change log</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="bundle.css">
+<style>
+  html, body { margin: 0; background: var(--bg-1); }
+  .ss-root .ss-btn--primary { color: var(--on-accent); }
+  .app { width: 1440px; height: 900px; display: flex; flex-direction: column; overflow: hidden; position: relative; font-family: var(--font-sans); color: var(--ink-1); }
+  .top { height: 44px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px; background: var(--bg-2); border-bottom: 1px solid var(--line-1); }
+  .top b { font-weight: 600; font-size: 13px; }
+  .sp { flex: 1; }
+  .body { flex: 1; display: flex; min-height: 0; }
+  .rail { width: 48px; flex: none; background: var(--bg-0); border-right: 1px solid var(--line-1); display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 10px; }
+  .rail span { width: 32px; height: 32px; border-radius: 6px; display: grid; place-items: center; color: var(--ink-3); position: relative; }
+  .rail span.on { background: var(--bg-5); color: var(--accent-text); }
+  .rail span i { position: absolute; top: 2px; right: 1px; min-width: 14px; height: 14px; border-radius: 7px; background: var(--modified); color: #1a1205; font: 700 9px/14px var(--font-mono); font-style: normal; text-align: center; }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .wrap { width: 1040px; margin: 0 auto; display: flex; flex-direction: column; min-height: 0; flex: 1; }
+  .head { display: flex; align-items: center; gap: 12px; padding: 28px 0 18px; }
+  .head h1 { margin: 0; font: 600 20px/28px var(--font-sans); }
+  .head .db { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 6px; font: 500 12.5px var(--font-mono); color: var(--ink-1); background: var(--bg-2); }
+  .head .ss-btn { height: 32px; }
+
+  /* servers strip: the one place that says what is pending */
+  .strip { display: flex; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-2); overflow: hidden; }
+  .srv { flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-left: 1px solid var(--line-1); }
+  .srv:first-child { border-left: 0; }
+  .srv .nm { font: 500 13px var(--font-sans); color: var(--ink-2); }
+  .srv .n { margin-left: auto; font: 600 18px var(--font-mono); }
+  .srv .n.ok { color: var(--added); font-size: 13px; font-family: var(--font-sans); font-weight: 500; display: inline-flex; gap: 4px; align-items: center; }
+  .srv .n.pend { color: var(--modified); }
+  .srv.on { background: var(--bg-4); box-shadow: inset 0 -2px 0 var(--accent); }
+  .srv .lbl { font-size: 11.5px; color: var(--ink-3); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+  .tools { display: flex; align-items: center; gap: 8px; padding: 18px 0 8px; }
+  .seg { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg-1); }
+  .seg button { height: 26px; padding: 0 12px; border: 0; border-radius: 5px; background: transparent; color: var(--ink-2); font: 500 12px var(--font-sans); }
+  .seg button.on { background: var(--bg-5); color: var(--ink-1); box-shadow: 0 0 0 1px var(--line-2); }
+  .seg button i { font-style: normal; font-family: var(--font-mono); color: var(--ink-3); margin-left: 4px; }
+
+  /* list */
+  .list { flex: 1; overflow: hidden; }
+  .lh, .row { display: grid; grid-template-columns: 64px minmax(0,1fr) 120px 92px 112px; gap: 16px; align-items: center; padding: 0 14px; }
+  .lh { height: 30px; font: 600 10.5px var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); border-bottom: 1px solid var(--line-1); }
+  .lh > span:last-child { display: grid; grid-template-columns: repeat(4, 1fr); justify-items: center; }
+  .grp { padding: 16px 14px 6px; font: 600 11.5px var(--font-sans); color: var(--ink-3); }
+  .row { height: 48px; border-radius: 8px; }
+  .row:hover, .row.hov { background: var(--bg-3); }
+  .row.sel { background: var(--accent-subtle); box-shadow: inset 0 0 0 1px var(--accent-line); }
+  .seq { font: 500 12px var(--font-mono); color: var(--ink-3); }
+  .ttl { display: flex; align-items: center; gap: 8px; min-width: 0; font: 500 13.5px var(--font-sans); white-space: nowrap; }
+  .ttl span.t { overflow: hidden; text-overflow: ellipsis; }
+  .ttl .k { font: 500 11.5px var(--font-mono); color: var(--ink-3); flex: none; }
+  .warn { color: var(--removed); display: inline-flex; flex: none; }
+  .dbn { font: 400 12px var(--font-mono); color: var(--ink-2); }
+  .pr { font: 400 12px var(--font-mono); color: var(--ink-2); display: inline-flex; gap: 6px; align-items: center; }
+  .pr .o { width: 6px; height: 6px; border-radius: 50%; background: var(--added); }
+  .pr .m { width: 6px; height: 6px; border-radius: 50%; background: #b98cff; }
+  .runs { display: grid; grid-template-columns: repeat(4, 1fr); justify-items: center; }
+  .r { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; }
+  .r.ran { background: var(--added); color: var(--bg-1); }
+  .r.pend { border: 1.5px dashed var(--modified); }
+  .r.fail { background: var(--removed); color: var(--bg-1); }
+  .r.na { width: 10px; height: 2px; border-radius: 1px; background: var(--line-3); }
+
+  /* drawer */
+  .drawer { position: absolute; top: 44px; right: 0; bottom: 0; width: 480px; background: var(--bg-2); border-left: 1px solid var(--line-2); box-shadow: -24px 0 48px rgba(0,0,0,.35); display: flex; flex-direction: column; z-index: 20; }
+  .dh { padding: 18px 20px 14px; }
+  .dh .sub { font: 400 12px var(--font-mono); color: var(--ink-3); display: flex; align-items: center; gap: 8px; }
+  .dh h2 { margin: 6px 0 0; font: 600 17px/24px var(--font-sans); }
+  .dbody { flex: 1; overflow: hidden; padding: 0 20px; display: flex; flex-direction: column; gap: 18px; }
+  .kv { display: grid; grid-template-columns: 96px minmax(0,1fr); row-gap: 10px; font-size: 13px; }
+  .kv dt { color: var(--ink-3); }
+  .kv dd { margin: 0; font-family: var(--font-mono); font-size: 12.5px; display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
+  .kv dd a { color: var(--accent-text); text-decoration: none; }
+  .kv dd .ss-icon { color: var(--ink-3); }
+  .cap { font: 600 10.5px var(--font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; display: flex; }
+  .servers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .sv { border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 10px; display: flex; flex-direction: column; gap: 4px; background: var(--bg-1); }
+  .sv .t { font: 500 12px var(--font-sans); display: flex; align-items: center; gap: 6px; }
+  .sv .s { font: 400 11px var(--font-mono); color: var(--ink-3); }
+  .sv.ran { border-color: color-mix(in srgb, var(--added) 40%, transparent); }
+  .sv.ran .s { color: var(--added); }
+  .sv.pend { border-style: dashed; border-color: color-mix(in srgb, var(--modified) 55%, transparent); }
+  .sv.pend .s { color: var(--modified); }
+  .sv.next { box-shadow: 0 0 0 1px var(--accent); border-color: var(--accent); border-style: solid; }
+  .tabs { display: flex; gap: 16px; margin-bottom: 8px; }
+  .tab { font: 500 12.5px var(--font-sans); color: var(--ink-3); padding-bottom: 6px; border-bottom: 2px solid transparent; }
+  .tab.on { color: var(--ink-1); border-bottom-color: var(--accent); }
+  .code { border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-1); font: 400 12px/19px var(--font-mono); padding: 10px 12px; white-space: pre; overflow: hidden; }
+  .kw { color: var(--syn-keyword); } .ty { color: var(--syn-type); } .nu { color: var(--syn-number); } .cm { color: var(--syn-comment); }
+  .note { font-size: 12px; color: var(--ink-3); display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+  .dfoot { padding: 14px 20px; border-top: 1px solid var(--line-1); display: flex; gap: 8px; }
+
+  /* deploy */
+  .ovl { position: absolute; inset: 0; background: var(--overlay); display: grid; place-items: center; z-index: 40; }
+  .mod { width: 620px; background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--shadow-modal); overflow: hidden; }
+  .mh { padding: 20px 22px 4px; }
+  .mh h3 { margin: 0; font: 600 17px/24px var(--font-sans); display: flex; align-items: center; gap: 8px; }
+  .mh p { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); }
+  .mb { padding: 14px 22px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .it { display: grid; grid-template-columns: 18px 44px minmax(0,1fr) auto; gap: 10px; align-items: center; height: 38px; padding: 0 10px; border-radius: 7px; font-size: 13px; }
+  .it + .it { border-top: 1px solid var(--line-1); border-radius: 0; }
+  .it.off { opacity: .5; }
+  .cb { width: 15px; height: 15px; border-radius: 4px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+  .cb.no { background: transparent; border: 1.5px solid var(--line-3); }
+  .flag { font: 500 11px var(--font-sans); display: inline-flex; gap: 4px; align-items: center; }
+  .flag.d { color: var(--removed); } .flag.w { color: var(--modified); } .flag.m { color: var(--ink-3); }
+  .box { border: 1px solid var(--line-2); border-radius: 8px; }
+  .sline { white-space: nowrap; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line-1); font-size: 12.5px; color: var(--ink-2); }
+  .sline .f { font: 400 12px var(--font-mono); color: var(--ink-1); }
+  .mf { padding: 14px 22px; border-top: 1px solid var(--line-1); display: flex; gap: 8px; align-items: center; background: var(--bg-2); }
+  .mf .hint { font-size: 12px; color: var(--ink-3); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="explore-icons.js"></script>
+<script>
+I.clock = '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>';
+I.branch = '<circle cx="6" cy="5.5" r="2.25"/><circle cx="6" cy="18.5" r="2.25"/><circle cx="18" cy="8" r="2.25"/><path d="M6 7.75v8.5M18 10.25c0 4-6 3-11 6.5"/>';
+I.pr = '<circle cx="6" cy="6" r="2.25"/><circle cx="6" cy="18" r="2.25"/><circle cx="18" cy="18" r="2.25"/><path d="M6 8.25v7.5M18 15.75V9a3 3 0 0 0-3-3h-4M13 3.5L10.5 6 13 8.5"/>';
+I.copy = '<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 8.5V5.5a1.5 1.5 0 0 0-1.5-1.5H5.5A1.5 1.5 0 0 0 4 5.5V14a1.5 1.5 0 0 0 1.5 1.5h3"/>';
+I.download = '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>';
+I.warning = '<path d="M12 4L2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17h.01"/>';
+I.rocket = '<path d="M5 15c-1.5 1-2 3.5-2 5 1.5 0 4-.5 5-2"/><path d="M9 15l-3-3c1-3.5 4.5-8 12-8 0 7.5-4.5 11-8 12z"/><circle cx="14.5" cy="9.5" r="1.5"/>';
+I.list = '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>';
+I.more = '<circle cx="5.5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="18.5" cy="12" r="1"/>';
+I.ext = '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>';
+I.git = '<circle cx="12" cy="12" r="3"/><path d="M3 12h6M15 12h6"/>';
+I.user = '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.5 4-5 7-5s6 1.5 7 5"/>';
+var mode = (location.hash || '#list').slice(1);
+var SRV = [['Local', 'var(--ink-3)', 0], ['Demo', '#4cc2b0', 1], ['Staging', '#6b9bff', 3], ['Production', '#ff8f6b', 5]];
+var CH = [
+  ['0047', 'ATA-318', 'Thêm cột mã số thuế cho nhà cung cấp', 'atad5s', '#512', 'o', ['ran', 'pend', 'pend', 'pend'], 0, 'Today'],
+  ['0046', 'ATA-312', 'Đổi kiểu so_tien sang DECIMAL(18,2)', 'atad5s', '#506', 'm', ['ran', 'ran', 'pend', 'pend'], 0, 'This week'],
+  ['0045', 'ATA-312', 'Bảng duyệt chi nhiều cấp', 'atad5s', '#506', 'm', ['ran', 'ran', 'ran', 'pend'], 0],
+  ['0044', 'ATA-309', 'Xoá bảng legacy_cham_cong_tmp', 'atad5s', '#498', 'm', ['ran', 'ran', 'ran', 'pend'], 1],
+  ['0043', 'ACM-77', 'Seed loại chi phí mặc định', 'acm', '#131', 'm', ['ran', 'ran', 'na', 'ran'], 0],
+  ['0042', 'ATA-301', 'Index tìm kiếm chấm công theo ngày', 'atad5s', '#489', 'm', ['ran', 'ran', 'fail', 'pend'], 0, 'Last week'],
+  ['0041', 'ATA-298', 'Thêm trạng thái phiếu kho', 'atad5s', '#480', 'm', ['ran', 'ran', 'ran', 'ran'], 0],
+  ['0040', 'ATA-295', 'Bảng audit văn bản', 'atad5s', '#476', 'm', ['ran', 'ran', 'ran', 'ran'], 0],
+  ['0039', 'ATA-290', 'Bỏ cột ghi_chu_cu ở da_van_ban', 'atad5s', '#471', 'm', ['ran', 'ran', 'ran', 'ran'], 1]
+];
+function rd(s) { return '<span class="r ' + s + '" title="' + s + '">' + (s === 'ran' ? ic('check', 11) : s === 'fail' ? ic('x', 11) : '') + '</span>'; }
+
+function page(sel) {
+  var h = '<header class="top"><b>Schema Studio</b><span style="color:var(--ink-3)">/</span><span>Change log</span><span class="sp"></span>' +
+    '<div class="ss-input-wrap" style="width:260px">' + ic('search', 14) + '<input class="ss-input ss-input--icon ss-input--suffix" style="height:30px" placeholder="Search changes…"><span class="ss-input-suffix">' + kbd(['⌘', 'K']) + '</span></div></header>';
+  h += '<div class="body"><nav class="rail"><span>' + ic('db', 18) + '</span><span class="on">' + ic('list', 18) + '<i>9</i></span><span>' + ic('bookmark', 18) + '</span><span style="margin-top:auto;margin-bottom:10px">' + ic('settings', 18) + '</span></nav><section class="main"><div class="wrap">';
+  h += '<div class="head"><h1>Change log</h1><span class="db"><span class="dot" style="background:#ff8f6b;width:7px;height:7px;border-radius:2px"></span>atad5s ' + ic('chev', 12, 'var(--ink-3)') + '</span><span class="sp"></span>' +
+    '<button class="ss-btn ss-btn--secondary">' + ic('rocket', 14) + 'Prepare deploy</button><button class="ss-btn ss-btn--primary">' + ic('plus', 14) + 'New change</button></div>';
+  h += '<div class="strip">' + SRV.map(function (s, i) {
+    return '<div class="srv' + (i === 3 && mode === 'deploy' ? ' on' : '') + '"><span class="dot" style="background:' + s[1] + '"></span><span class="nm">' + s[0] + '</span>' +
+      (s[2] ? '<span class="n pend">' + s[2] + '</span><span class="lbl">pending</span>' : '<span class="n ok">' + ic('check', 14) + 'Up to date</span>') + '</div>';
+  }).join('') + '</div>';
+  h += '<div class="tools"><div class="seg"><button class="on">All <i>47</i></button><button>Pending <i>6</i></button><button>Failed <i>1</i></button></div><span class="sp"></span>' +
+    '<span style="font-size:12px;color:var(--ink-3);display:inline-flex;gap:6px;align-items:center">' + ic('git', 13) + 'Saved to <span style="font-family:var(--font-mono);color:var(--ink-2)">db/changes/</span></span></div>';
+  h += '<div class="list"><div class="lh"><span>#</span><span>Change</span><span>Database</span><span>PR</span><span><span>L</span><span>D</span><span>S</span><span>P</span></span></div>';
+  CH.forEach(function (c, i) {
+    if (c[8]) h += '<div class="grp">' + c[8] + '</div>';
+    h += '<div class="row' + (sel === i ? ' sel' : '') + (sel == null && i === 2 ? ' hov' : '') + '"><span class="seq">#' + c[0] + '</span>' +
+      '<span class="ttl"><span class="k">' + c[1] + '</span><span class="t">' + c[2] + '</span>' + (c[7] ? '<span class="warn" title="Destructive">' + ic('warning', 14) + '</span>' : '') + '</span>' +
+      '<span class="dbn">' + c[3] + '</span><span class="pr"><span class="' + c[5] + '"></span>' + c[4] + '</span><span class="runs">' + c[6].map(rd).join('') + '</span></div>';
+  });
+  h += '</div></div></section></div>';
+  return h;
+}
+
+function drawer() {
+  var h = '<aside class="drawer"><div class="dh"><div class="sub">#0046 · ATA-312<span class="sp"></span><button class="ss-btn ss-btn--ghost ss-btn--icon" style="height:26px">' + ic('more', 15) + '</button><button class="ss-btn ss-btn--ghost ss-btn--icon" style="height:26px">' + ic('x', 15) + '</button></div>' +
+    '<h2>Đổi kiểu so_tien sang DECIMAL(18,2)</h2></div><div class="dbody">';
+  h += '<dl class="kv" style="margin:0"><dt>Date</dt><dd>21 Oct 2026 · 16:20</dd><dt>Database</dt><dd>atad5s <span style="color:var(--ink-3)">· MySQL</span></dd>' +
+    '<dt>Branch</dt><dd>feature/ATA-312-thanh-toan ' + ic('copy', 13) + '</dd><dt>Pull request</dt><dd><a>atad-erp#506</a><span style="width:6px;height:6px;border-radius:50%;background:#b98cff"></span><span style="font-family:var(--font-sans);color:var(--ink-3);font-size:12px">merged</span></dd></dl>';
+  h += '<div><div class="cap">Servers<span class="sp"></span><span style="text-transform:none;letter-spacing:0;font-weight:400">click to mark as run</span></div><div class="servers">' +
+    [['Local', 'ran', '21/10'], ['Demo', 'ran', '22/10'], ['Staging', 'pend next', 'Pending'], ['Production', 'pend', 'Pending']].map(function (s, i) {
+      return '<div class="sv ' + s[1] + '"><span class="t"><span class="dot" style="background:' + SRV[i][1] + '"></span>' + s[0] + '</span><span class="s">' + (s[1] === 'ran' ? '✓ ' : '') + s[2] + '</span></div>';
+    }).join('') + '</div></div>';
+  h += '<div><div class="tabs"><span class="tab on">SQL</span><span class="tab">Rollback</span><span class="tab">Notes</span></div>' +
+    '<div class="code"><span class="cm">-- số tiền vượt 13 chữ số với hoá đơn tổng</span>\n<span class="kw">ALTER TABLE</span> da_thanh_toan\n  <span class="kw">MODIFY</span> so_tien <span class="ty">DECIMAL</span>(<span class="nu">18</span>,<span class="nu">2</span>) <span class="kw">NOT NULL DEFAULT</span> <span class="nu">0</span>;\n\n<span class="kw">ALTER TABLE</span> da_thanh_toan_chi_tien\n  <span class="kw">MODIFY</span> so_tien <span class="ty">DECIMAL</span>(<span class="nu">18</span>,<span class="nu">2</span>) <span class="kw">NOT NULL DEFAULT</span> <span class="nu">0</span>;</div>' +
+    '<div class="note">' + ic('warning', 13, 'var(--modified)') + 'Rewrites da_thanh_toan (~1.2M rows) — run off-hours.</div></div>';
+  h += '</div><div class="dfoot"><button class="ss-btn ss-btn--secondary">' + ic('copy', 14) + 'Copy SQL</button><span class="sp"></span><button class="ss-btn ss-btn--primary">' + ic('check', 14) + 'Mark as run on Staging</button></div></aside>';
+  return h;
+}
+
+function deploy() {
+  var its = [['0042', 'Index tìm kiếm chấm công theo ngày', 'w', 'failed on Staging'], ['0044', 'Xoá bảng legacy_cham_cong_tmp', 'd', 'drops a table'], ['0045', 'Bảng duyệt chi nhiều cấp', '', ''], ['0046', 'Đổi kiểu so_tien sang DECIMAL(18,2)', 'w', 'rewrites table'], ['0047', 'Thêm cột mã số thuế cho nhà cung cấp', 'm', 'PR not merged']];
+  var h = '<div class="ovl"><div class="mod"><div class="mh"><h3>' + ic('rocket', 17, '#ff8f6b') + 'Deploy to Production</h3><p><span style="font-family:var(--font-mono)">atad5s</span> · 4 of 5 pending changes, in this order</p></div><div class="mb"><div class="box">';
+  its.forEach(function (t, i) {
+    var off = t[2] === 'm';
+    h += '<div class="it' + (off ? ' off' : '') + '"><span class="cb' + (off ? ' no' : '') + '">' + (off ? '' : ic('check', 10)) + '</span><span class="seq">#' + t[0] + '</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + t[1] + '</span>' +
+      (t[2] ? '<span class="flag ' + t[2] + '">' + (t[2] !== 'm' ? ic('warning', 12) : '') + t[3] + '</span>' : '<span></span>') + '</div>';
+  });
+  h += '<div class="sline">' + ic('download', 14, 'var(--ink-3)') + '<span class="f">atad5s_production_2026-10-24.sql</span><span style="color:var(--ink-3)">38 lines</span><span class="sp"></span>' +
+    '<button class="ss-btn ss-btn--ghost" style="height:26px;font-size:12px">' + ic('copy', 13) + 'Copy</button><button class="ss-btn ss-btn--ghost" style="height:26px;font-size:12px">' + ic('download', 13) + 'Download</button></div></div>';
+  h += '<div class="note" style="margin:0">' + ic('warning', 13, 'var(--removed)') + '<span>Back up <span style="font-family:var(--font-mono);color:var(--ink-2)">legacy_cham_cong_tmp</span> before #0044.</span></div></div>';
+  h += '<div class="mf"><span class="hint">Run the script on the server, then record it here.</span><span class="sp"></span><button class="ss-btn ss-btn--secondary">Cancel</button><button class="ss-btn ss-btn--primary">' + ic('check', 14) + 'Mark 4 as run</button></div></div></div>';
+  return h;
+}
+
+var html = '<div class="app ss-root">' + page(mode === 'detail' ? 1 : null);
+if (mode === 'detail') html += drawer();
+if (mode === 'deploy') html += deploy();
+document.getElementById('app').innerHTML = html + '</div>';
+</script>
+</body>
+</html>
