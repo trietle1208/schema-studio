@@ -750,8 +750,8 @@ export function shortestPath(tables: readonly Table[], a: string, b: string): Sc
   // Each side remembers the hop and the steps that reached a table, so the two halves join when they meet.
   const fromA = new Map<string, Mark>([[a, { hop: null, depth: 0 }]]);
   const fromB = new Map<string, Mark>([[b, { hop: null, depth: 0 }]]);
-  let layerA = [a];
-  let layerB = [b];
+  const layerA = [a];
+  const layerB = [b];
 
   const meet = (side: Map<string, Mark>, other: Map<string, Mark>, layer: string[]): string | null => {
     const next: string[] = [];

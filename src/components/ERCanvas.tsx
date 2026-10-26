@@ -863,7 +863,7 @@ export function ERCanvas({
     const d = drag.current;
     if (!d?.origins || !d.moved) return;
     paintNodeDrag(layerRef.current, d.origins, d.liveMx ?? 0, d.liveMy ?? 0);
-  }, [dragged]);
+  }, [dragged, layerRef]);
 
   const closeMenu = () => setMenu(null);
   const menuSchema = (menu && tables.find((t) => t.name === menu.table)?.schema) || 'public';

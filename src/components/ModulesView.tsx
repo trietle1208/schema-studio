@@ -73,6 +73,11 @@ export function ModulesView({
   const skipBlur = useRef(false);
   const cards = useMemo(() => moduleCards(tables, modules), [tables, modules]);
   const chosen = cards.some((card) => card.name === selected) ? selected : null;
+  const [draftFor, setDraftFor] = useState(chosen);
+  if (draftFor !== chosen) {
+    setDraftFor(chosen);
+    setDraft(null);
+  }
   const edges = useMemo(
     () => moduleEdges(tables, cards, { hideHubs, inferredOnly }),
     [tables, cards, hideHubs, inferredOnly],
@@ -116,10 +121,6 @@ export function ModulesView({
     observer.observe(bar);
     return () => observer.disconnect();
   }, []);
-
-  useEffect(() => {
-    setDraft(null);
-  }, [chosen]);
 
   const open = (name: string) => {
     const card = cards.find((item) => item.name === name);

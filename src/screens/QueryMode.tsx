@@ -42,24 +42,23 @@ export function QueryMode() {
   const searchRef = useRef<HTMLInputElement>(null);
   useWorkspaceShortcuts(searchRef, 'query');
   // Undefined while the profile is being read: a connected schema does not load every local table.
-  const [profile, setProfile] = useState<ConnectionRecord | null | undefined>(undefined);
+  const [loaded, setLoaded] = useState<{ id: number; profile: ConnectionRecord | null } | null>(null);
   useEffect(() => {
-    if (schemaId === null) {
-      setProfile(null);
-      return;
-    }
+    if (schemaId === null) return;
     let current = true;
-    getConnection(schemaId).then(
-      (found) => current && setProfile(found ?? null),
+    const id = schemaId;
+    getConnection(id).then(
+      (found) => current && setLoaded({ id, profile: found ?? null }),
       (error) => {
         console.error(error);
-        if (current) setProfile(null);
+        if (current) setLoaded({ id, profile: null });
       },
     );
     return () => {
       current = false;
     };
   }, [schemaId]);
+  const profile = schemaId === null ? null : loaded?.id === schemaId ? loaded.profile : undefined;
   const password = useSessionStore((s) => (schemaId === null ? undefined : s.secrets[schemaId]?.password));
   const live = profile != null;
   const records = useAllRecords(profile === null ? schemaId : null);

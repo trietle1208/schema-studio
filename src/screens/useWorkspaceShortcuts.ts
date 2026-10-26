@@ -40,7 +40,9 @@ export function useWorkspaceShortcuts(
   extras?: { onSavedView?: (index: number) => void },
 ) {
   const extrasRef = useRef(extras);
-  extrasRef.current = extras;
+  useEffect(() => {
+    extrasRef.current = extras;
+  }, [extras]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const shortcut = matchShortcut(e);

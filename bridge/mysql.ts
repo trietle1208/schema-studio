@@ -113,7 +113,7 @@ export async function readMysqlQuery(
     return await reading(async () => {
       await db.query('START TRANSACTION READ ONLY');
       const [listed, fields] = await db.query(sql.sql, sql.params);
-      let plan: string[] = [];
+      let plan: string[];
       try {
         const [explained] = await db.query(`EXPLAIN ${sql.sql}`, sql.params);
         plan = (explained as Record<string, unknown>[]).map(explainLine).filter(Boolean);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { t } from '../core/i18n';
 import type { SchemaSummary } from '../core/model';
 import { filterSidebarSchemas, type SidebarNav } from '../core/sidebar';
@@ -33,7 +33,11 @@ export interface SidebarProps {
   userInitials?: string;
 }
 
-export function Sidebar({
+export function Sidebar(props: SidebarProps) {
+  return <SidebarBody key={props.active ?? 'schemas'} {...props} />;
+}
+
+function SidebarBody({
   active: activeProp = 'schemas',
   onNavigate,
   schemas = [],
@@ -53,7 +57,6 @@ export function Sidebar({
   userInitials = 'LH',
 }: SidebarProps) {
   const [active, setActive] = useState<SidebarNav>(activeProp);
-  useEffect(() => setActive(activeProp), [activeProp]);
 
   const isEmpty = empty || schemas.length === 0;
   const favorites = isEmpty ? 0 : schemas.filter((s) => s.favorite).length;

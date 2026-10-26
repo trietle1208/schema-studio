@@ -165,18 +165,17 @@ export interface FilterBuilderProps {
 }
 
 /** A filter written by choosing: the table, groups of conditions that nest, and the WHERE it writes. */
-export function FilterBuilder({ tables, value: spec, onChange, rows, showErrors, actions, onEditSql, onApply }: FilterBuilderProps) {
+export function FilterBuilder(props: FilterBuilderProps) {
+  return <FilterBuilderBody key={props.value.table} {...props} />;
+}
+
+function FilterBuilderBody({ tables, value: spec, onChange, rows, showErrors, actions, onEditSql, onApply }: FilterBuilderProps) {
   const table = tables.find((item) => item.name === spec.table) ?? tables[0];
   const group = toFilterGroup(spec.where);
   const [clearing, setClearing] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const baseline = useRef(spec);
-  const baselineTable = useRef(spec.table);
-  if (baselineTable.current !== spec.table) {
-    baselineTable.current = spec.table;
-    baseline.current = spec;
-  }
 
   const joins = spec.joins ?? [];
   const scope = [table, ...joins.flatMap((join) => {
